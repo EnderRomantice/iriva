@@ -397,3 +397,18 @@
   .sp-chat-welcome h2 { font-size:23px; }
   .sp-chat-compose-tools>span { font-size:10px; }
 }
+
+/* Reserve the account controls before distributing navigation slots. */
+.sp-rail-links { flex:1; min-height:58px; width:100%; overflow:hidden; }
+.sp-rail .sp-rail-item { flex:none; height:58px; }
+.sp-rail-bottom { flex:none; margin-top:0; }
+.sp-context-title { padding:12px 10px 4px; font-size:18px; font-weight:700; }
+@media(min-width:761px) {
+  .sp-without-sidebar>.sp-sidebar { display:none; }
+  .sp-without-sidebar>.sp-main { border-radius:7px; }
+  .sp-topbar.sp-without-sidebar { padding-left:var(--sp-rail-width); }
+}
+@media(max-height:520px) and (min-width:761px) {
+  .sp-rail .sp-organization-avatar { margin-bottom:8px; }
+  .sp-rail-bottom { gap:6px; padding-top:8px; }
+}
