@@ -1,0 +1,25 @@
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { SqliteRepository, tables } from "../server/repositories/sqlite-repository";
+import type { State } from "../domain/models";
+
+const source = process.argv[2];
+const destination = process.argv[3];
+if (!source || !destination) throw new Error("Usage: npm run db:import -- export.json new.sqlite");
+if (existsSync(destination)) throw new Error("Restore only into a new database file; existing databases are never overwritten.");
+const backup = JSON.parse(readFileSync(source, "utf8"));
+if (backup.format !== "iriva-portable-v1" || backup.schemaVersion !== 1) throw new Error("Unsupported export format");
+mkdirSync(path.dirname(destination), { recursive: true });
+const repo = new SqliteRepository(destination);
+try {
+  repo.atomic(() => {
+    for (const table of tables) {
+      if (!Array.isArray(backup.data?.[table])) throw new Error(`Missing table ${table}`);
+      for (const row of (backup.data as State)[table]) repo.put(table, row);
+    }
+    for (const row of backup.mutationReceipts || []) repo.db.prepare("INSERT INTO mutation_receipts VALUES (?,?,?,?)").run(row.actor_id, row.command_id, row.version, row.created_at);
+    for (const row of backup.auditEvents || []) repo.db.prepare("INSERT INTO audit_events VALUES (?,?,?,?,?)").run(row.id, row.actor_id, row.kind, row.entity_id, row.created_at);
+    if (repo.db.prepare("PRAGMA foreign_key_check").all().length) throw new Error("Foreign key validation failed");
+  });
+  console.log(`Restored schema v1 to ${destination}`);
+} finally { repo.db.close(); }

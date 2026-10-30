@@ -50,7 +50,7 @@ function CtaButton({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   };
   return (
     <a
-      href="#apply"
+      href="/apply"
       className={`inline-flex items-center rounded-full bg-sand font-bold text-ink no-underline ${sizes[size]}`}
     >
       {ctaLabel}
@@ -72,6 +72,7 @@ function Header() {
               {n.label}
             </a>
           ))}
+          <a href="/learn" className="text-mist no-underline">进入学习空间</a>
           <CtaButton size="sm" />
         </nav>
       </div>

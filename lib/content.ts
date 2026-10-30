@@ -208,4 +208,4 @@ export const applySteps = [
 ];
 
 /** 报名入口与联系方式：上线前替换 */
-export const contactPlaceholder = "[报名入口：表单或小程序链接] · [微信号 / 联系邮箱]";
+export const contactPlaceholder = "提交你的目标与可用时间，从认识彼此开始。";
