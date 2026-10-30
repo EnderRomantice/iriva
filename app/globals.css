@@ -1,0 +1,55 @@
+@import "@fontsource/noto-sans-sc/chinese-simplified-400.css";
+@import "@fontsource/noto-sans-sc/chinese-simplified-500.css";
+@import "@fontsource/noto-sans-sc/chinese-simplified-700.css";
+@import "@fontsource/noto-serif-sc/chinese-simplified-600.css";
+@import "@fontsource/noto-serif-sc/chinese-simplified-900.css";
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-serif: "Noto Serif SC", "Songti SC", "Source Han Serif SC", "STSong", serif;
+
+  /* 品牌色 */
+  --color-sand: #f4ede1;
+  --color-paper: #fbf8f2;
+  --color-line: #e2d8c9;
+  --color-ink: #1e3442;
+  --color-muted: #5a6670;
+  --color-sea: #2f5b72;
+  --color-sea-2: #3b6c86;
+  --color-sea-3: #477c99;
+  --color-mist: #e8eef2;
+  --color-mist-2: #d3dfe6;
+  --color-frost: #a9c3d2;
+  --color-foot: #c6d2da;
+  --color-sage: #879f90;
+  --color-clay: #b77b58;
+  --color-clay-soft: #efdfd3;
+  --color-clay-text: #9a5f3e;
+  --color-clay-ink: #7a4a2f;
+  --color-clay-deep: #4a3426;
+  --color-peach: #f1c9ae;
+}
+
+@layer base {
+  html {
+    background: var(--color-sand);
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    line-height: 1.65;
+  }
+  button {
+    font: inherit;
+  }
+  a {
+    color: var(--color-clay-text);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-clay);
+    outline-offset: 2px;
+  }
+}
