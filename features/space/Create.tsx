@@ -10,7 +10,7 @@ export type CreateKind = "practice" | "assignment" | "session" | "household";
 export const createLabels: Record<CreateKind, string> = { practice: "写练习", assignment: "建立任务", session: "安排圆桌", household: "建立小组" };
 interface Props {
   kind: CreateKind; data: Snapshot; householdId: string; onClose: () => void;
-  openPractice: (assignment: Assignment) => void; save: (command: Command) => Promise<void>;
+  openPractice: (assignment: Assignment) => void; save: (command: Command) => Promise<unknown>;
   onCreated: (kind: CreateKind, householdId: string) => void;
 }
 export function Create(props: Props) {

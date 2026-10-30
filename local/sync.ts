@@ -60,7 +60,7 @@ export async function resolveConflict(role: WorkspaceScope, entityId: string, ch
     await localDb.snapshots.put({ role, data: fresh });
     for (const entry of entries) await localDb.outbox.delete(entry.seq!);
     if (choice === "local" && latest) {
-      const records = latest.command.kind === "submission.save" ? fresh.submissions : fresh.feedback;
+      const records = latest.command.kind === "message.send" ? fresh.messages : latest.command.kind === "submission.save" ? fresh.submissions : fresh.feedback;
       const baseVersion = records.find(item => item.id === entityId)?.version ?? 0;
       const id = crypto.randomUUID();
       await localDb.outbox.add({ ...latest, seq: undefined, id, status: "pending", error: undefined, command: { ...latest.command, id, baseVersion } });

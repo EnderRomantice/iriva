@@ -1,5 +1,5 @@
 import { defaultOrganizationId } from "../../domain/workspace";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Actor, Entity, Snapshot, State } from "../../domain/models";
 import { DomainError, type Command, applicationSchema } from "../../domain/commands";
 import type { WorkspaceRepository } from "../repositories/workspace-repository";
@@ -21,8 +21,10 @@ export class WorkspaceService {
     const organizationMemberships = state.organizationMemberships.filter(m => m.organizationId === id);
     const applications = state.applications.filter(a => (a.organizationId || defaultOrganizationId) === id);
     const userIds = new Set([...organizationMemberships.map(m => m.userId), ...applications.map(a => a.userId)]);
+    const channels = state.channels.filter(c => c.organizationId === id && (c.kind === "public" || c.kind === "private" && c.ownerId === actor.userId || c.kind === "direct" && state.channelParticipants.some(p => p.channelId === c.id && p.userId === actor.userId)));
+    const channelIds = new Set(channels.map(c => c.id));
     const accessible = new Set(state.organizationMemberships.filter(m => m.userId === actor.userId && m.role === actor.role).map(m => m.organizationId));
-    return { organizations: state.organizations.filter(o => accessible.has(o.id)), organizationMemberships, households, assignments, submissions, applications,
+    return { channels, channelParticipants: state.channelParticipants.filter(p => channelIds.has(p.channelId)), messages: state.messages.filter(m => channelIds.has(m.channelId)), organizations: state.organizations.filter(o => accessible.has(o.id)), organizationMemberships, households, assignments, submissions, applications,
       users: state.users.filter(u => userIds.has(u.id)), terms: state.terms.filter(t => households.some(h => h.termId === t.id)),
       memberships: state.memberships.filter(m => householdIds.has(m.householdId)), sessions: state.sessions.filter(s => householdIds.has(s.householdId)),
       feedback: state.feedback.filter(f => submissionIds.has(f.submissionId)), enrollments: state.enrollments.filter(e => householdIds.has(e.householdId)) };
@@ -41,9 +43,10 @@ export class WorkspaceService {
     const assignmentIds = new Set(assignments.map(a => a.id));
     const submissions = state.submissions.filter(s => assignmentIds.has(s.assignmentId) && (actor.role === "learn" ? s.learnerId === actor.userId : s.status === "submitted"));
     const submissionIds = new Set(submissions.map(s => s.id));
-    const userIds = new Set([...memberships.map(m => m.userId), actor.userId, ...households.map(h => h.hostId)]);
+    const userIds = new Set(state.organizationMemberships.map(m => m.userId));
     return {
       organizations: state.organizations, organizationMemberships: state.organizationMemberships.filter(m => m.userId === actor.userId),
+      channels: state.channels, channelParticipants: state.channelParticipants, messages: state.messages,
       actor, serverTime: new Date().toISOString(), households, memberships, assignments, submissions,
       users: state.users.filter(u => userIds.has(u.id)).map(u => u.id === actor.userId ? u : { ...u, email: "" }),
       terms: state.terms.filter(t => households.some(h => h.termId === t.id)),
@@ -52,18 +55,49 @@ export class WorkspaceService {
       applications: [], enrollments: state.enrollments.filter(e => e.userId === actor.userId),
     };
   }
-  execute(actor: Actor, command: Command): Promise<{ version: number }> {
+  execute(actor: Actor, command: Command): Promise<{ version: number; entityId?: string }> {
+    if (command.kind === "conversation.open") {
+      const pair = [actor.userId, command.payload.userId].sort().join(":");
+      const hash = createHash("sha256").update(`${actor.organizationId || defaultOrganizationId}:${pair}`).digest("hex");
+      command = { ...command, entityId: `${hash.slice(0,8)}-${hash.slice(8,12)}-5${hash.slice(13,16)}-8${hash.slice(17,20)}-${hash.slice(20,32)}` };
+    }
     return this.repo.transaction(tx => {
       const raw = tx.read();
       const state = this.organizationState(raw, actor);
-      const table = command.kind === "submission.save" ? "submissions" : command.kind === "feedback.save" ? "feedback" : (command.kind === "session.reschedule" || command.kind === "session.create") ? "sessions" : command.kind === "assignment.create" ? "assignments" : command.kind === "household.create" ? "households" : "applications";
+      const table = command.kind === "message.send" ? "messages" : (command.kind === "channel.create" || command.kind === "conversation.open") ? "channels" : command.kind === "submission.save" ? "submissions" : command.kind === "feedback.save" ? "feedback" : (command.kind === "session.reschedule" || command.kind === "session.create") ? "sessions" : command.kind === "assignment.create" ? "assignments" : command.kind === "household.create" ? "households" : "applications";
       requireRule(!raw[table].some(e => e.id === command.entityId) || state[table].some(e => e.id === command.entityId));
       const receipt = tx.receipt(actor.userId, command.id);
-      if (receipt) return receipt;
+      if (receipt) return command.kind === "conversation.open" ? { ...receipt, entityId: command.entityId } : receipt;
       requireRule(state.users.some(u => u.id === actor.userId), "身份不存在。", 401);
       let version = 0;
       const checkVersion = (value?: Entity) => { requireRule((value?.version ?? 0) === command.baseVersion, "这条记录已在其他设备更新。你的输入已保留，请查看最新版本。", 409); version = (value?.version ?? 0) + 1; };
       switch (command.kind) {
+        case "channel.create": {
+          requireRule(command.payload.kind === "private" || actor.role === "host", "只有 Host 可以建立公开频道。", 403);
+          requireRule(!state.channels.some(c => c.id === command.entityId), "频道已存在，请刷新后查看。", 409);
+          requireRule(!state.channels.some(c => c.kind === command.payload.kind && c.name.toLowerCase() === command.payload.name.toLowerCase() && (c.kind === "public" || c.ownerId === actor.userId)), "已有同名频道。", 409);
+          checkVersion();
+          tx.saveChannel({ ...meta(command.entityId), ...command.payload, organizationId: actor.organizationId || defaultOrganizationId, ownerId: actor.userId, directKey: "" });
+          break;
+        }
+        case "conversation.open": {
+          const peer = command.payload.userId;
+          requireRule(peer !== actor.userId && state.organizationMemberships.some(m => m.userId === peer), "请选择当前工作区的另一位成员。", 422);
+          const existing = state.channels.find(c => c.id === command.entityId);
+          if (existing) { requireRule(existing.kind === "direct"); version = existing.version; break; }
+          checkVersion();
+          tx.saveChannel({ ...meta(command.entityId), organizationId: actor.organizationId || defaultOrganizationId, ownerId: actor.userId, name: "", description: "", kind: "direct", directKey: [actor.userId, peer].sort().join(":") });
+          for (const userId of [actor.userId, peer]) tx.saveChannelParticipant({ ...meta(randomUUID()), channelId: command.entityId, userId });
+          break;
+        }
+        case "message.send": {
+          requireRule(state.channels.some(c => c.id === command.payload.channelId), "你无法向这个频道发送消息。", 403);
+          requireRule(command.payload.body.trim().length > 0 && command.payload.body.length <= 12000, "请填写消息，最多 12000 个字符。", 422);
+          requireRule(!state.messages.some(m => m.id === command.entityId), "这条消息已经发送。", 409);
+          checkVersion();
+          tx.saveMessage({ ...meta(command.entityId), ...command.payload, body: command.payload.body.trim(), authorId: actor.userId });
+          break;
+        }
         case "assignment.create": {
           const household = state.households.find(h => h.id === command.payload.householdId);
           requireRule(actor.role === "host" && household?.hostId === actor.userId);
@@ -154,7 +188,7 @@ export class WorkspaceService {
       }
       tx.acknowledge(actor.userId, command.id, version);
       tx.audit(actor.userId, command.kind, command.entityId);
-      return { version };
+      return command.kind === "conversation.open" ? { version, entityId: command.entityId } : { version };
     });
   }
   apply(input: unknown, organizationId = defaultOrganizationId) {

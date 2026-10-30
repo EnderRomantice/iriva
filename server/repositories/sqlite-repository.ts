@@ -2,10 +2,10 @@ import Database from "better-sqlite3";
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import type { Assignment, Household, OrganizationMembership, State, Submission, Feedback, Application, Session, Membership, Enrollment, User } from "../../domain/models";
+import type { Channel, ChannelParticipant, Message, Assignment, Household, OrganizationMembership, State, Submission, Feedback, Application, Session, Membership, Enrollment, User } from "../../domain/models";
 import type { WorkspaceRepository, WorkspaceUnitOfWork } from "./workspace-repository";
 
-export const tables = ["organizations", "users", "organizationMemberships", "terms", "households", "memberships", "sessions", "assignments", "submissions", "feedback", "applications", "enrollments"] as const;
+export const tables = ["organizations", "users", "organizationMemberships", "terms", "households", "memberships", "sessions", "assignments", "submissions", "feedback", "applications", "enrollments", "channels", "channelParticipants", "messages"] as const;
 const snake = (key: string) => key.replace(/[A-Z]/g, c => `_${c.toLowerCase()}`);
 const camel = (key: string) => key.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
 
@@ -17,7 +17,7 @@ export class SqliteRepository implements WorkspaceRepository, WorkspaceUnitOfWor
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("busy_timeout = 5000");
     this.db.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
-    for (const [index, file] of ["001_initial.sql", "002_user_city.sql", "003_organizations.sql"].entries()) {
+    for (const [index, file] of ["001_initial.sql", "002_user_city.sql", "003_organizations.sql", "004_chat.sql"].entries()) {
       const version = index + 1;
       if (this.db.prepare("SELECT version FROM schema_migrations WHERE version = ?").get(version)) continue;
       // SQLite requires FK enforcement off while adding a referenced column with
@@ -48,6 +48,9 @@ export class SqliteRepository implements WorkspaceRepository, WorkspaceUnitOfWor
   receipt(actorId: string, commandId: string) { return this.db.prepare("SELECT version FROM mutation_receipts WHERE actor_id=? AND command_id=?").get(actorId, commandId) as { version: number } | undefined; }
   acknowledge(actorId: string, commandId: string, version: number) { this.db.prepare("INSERT INTO mutation_receipts VALUES (?,?,?,?)").run(actorId, commandId, version, new Date().toISOString()); }
   audit(actorId: string, kind: string, entityId: string) { this.db.prepare("INSERT INTO audit_events VALUES (?,?,?,?,?)").run(randomUUID(), actorId, kind, entityId, new Date().toISOString()); }
+  saveChannel(v: Channel) { this.put("channels", v); }
+  saveChannelParticipant(v: ChannelParticipant) { this.put("channelParticipants", v); }
+  saveMessage(v: Message) { this.put("messages", v); }
   saveSubmission(v: Submission) { this.put("submissions", v); }
   saveFeedback(v: Feedback) { this.put("feedback", v); }
   saveApplication(v: Application) { this.put("applications", v); }

@@ -53,7 +53,7 @@ erDiagram
 5. 服务端在同一事务中校验权限、版本、业务规则，并写入实体、mutation receipt 和审计事件。
 6. 客户端取得确认及新快照后，原子替换快照并删除该命令。若确认响应丢失，使用同一 command ID 重试，不重复执行。
 7. 409 或其他确定的客户端错误保留命令并暂停该记录后续操作；用户可比较服务器与本地内容，再明确选择保留哪份。
-8. 同一浏览器跨 tab 使用 Web Locks 协调同步；15 秒轮询、回到窗口和恢复网络触发刷新。
+8. 同一浏览器跨 tab 使用 Web Locks 协调同步；3 秒可见页面轮询、回到窗口和恢复网络触发刷新。
 
 本地数据库按演示身份隔离。正式登录时必须改用真实用户 ID 作为隔离键，并在退出/切换账号时清理其私有缓存；旧的离线副本无法获知即时权限撤销，正式环境需增加会话期限与缓存保留策略。删除功能尚未实现：增加前必须引入 tombstone 与增量同步游标，不能直接删除服务器记录后仍保留旧本地视图。
 
@@ -63,7 +63,7 @@ Service Worker 只缓存访问过的工作区 HTML 外壳与 Next 静态资源�
 
 1. 暂停写入并完成 outbox 同步；执行 `npm run db:export` 获取一致快照、幂等记录及审计事件。
 2. 建立 PostgreSQL 独立 migration history。SQLite 的驱动、PRAGMA、建库迁移不能直接用于 PostgreSQL。
-3. 按 users → terms → households → memberships → sessions → assignments → submissions → feedback → applications → enrollments 导入，保持 UUID、版本、时间和金额不变。布尔字段在适配器转换为数据库 boolean。
+3. 按 users → organizations → organization_memberships → terms → households → memberships → sessions → assignments → submissions → feedback → applications → enrollments → channels → channel_participants → messages 导入，保持 UUID、版本、时间和金额不变。布尔字段在适配器转换为数据库 boolean。
 4. 实现同一 repository 合同，并在涉及容量/时间冲突的事务内提供正确的锁和条件写入；并发提交的唯一约束错误应映射为 409。
 5. 保持 `/api/workspace`、`/api/mutations` 的 DTO 与命令格式不变，浏览器本地数据库无需因为换库重建。
 6. 对比各表计数、外键、金额合计及关键记录；重放本项目的 repository/service 合同测试后切换连接配置。
@@ -80,7 +80,7 @@ Service Worker 只缓存访问过的工作区 HTML 外壳与 Next 静态资源�
 
 ## 成员城市与时区
 
-`users.city` 保存城市当地官方语言的名称（中国城市如“上海”，美国城市如“New York”，英国城市如“London”），界面直接显示，不随 UI 语言翻译。它独立于 IANA `timezone`。002 迁移为旧数据补空城市，演示种子补充明确的示例城市，真实用户不从时区推断所在地。成员列表按设备当前时刻换算各时区，每分钟与窗口恢复焦点时更新，自动处理夏令时。导出 schemaVersion 为 3，导入兼容 v1/v2/v3。
+`users.city` 保存城市当地官方语言的名称（中国城市如“上海”，美国城市如“New York”，英国城市如“London”），界面直接显示，不随 UI 语言翻译。它独立于 IANA `timezone`。002 迁移为旧数据补空城市，演示种子补充明确的示例城市，真实用户不从时区推断所在地。成员列表按设备当前时刻换算各时区，每分钟与窗口恢复焦点时更新，自动处理夏令时。导出 schemaVersion 为 4，导入兼容 v1/v2/v3/v4。
 
 ## 独立机构工作区
 
@@ -89,3 +89,14 @@ Service Worker 只缓存访问过的工作区 HTML 外壳与 Next 静态资源�
 HTTP 演示身份适配器读取 x-workspace-id，服务层验证该身份在机构内的角色。读取和命令都按机构隔离；运营权限只在所属机构有效，跨机构实体 UUID 也不能用于覆盖数据。原有实际报名记录保留在 IRIVA。第二个机构 Common Ground 仅为本地演示。
 
 IndexedDB 的历史 role 键扩展为 role:organizationId，默认 IRIVA 仍使用旧 role 键，以保留离线草稿和待同步命令。网络请求由同一 scope 推导角色与机构，不随界面切换而把旧队列发往新机构。外观和星标按机构保存。浏览历史记录机构、小组和视图，支持返回、前进、刷新与历史菜单。
+
+
+## 独立聊天（004 迁移）
+
+`channels` 独立于课程和练习，保存机构、创建者、名称、介绍和类型。`public` 对当前机构所有成员可见，仅 Host 可创建；`private` 是仅创建者可见的个人频道；`direct` 由 `channel_participants` 限定两位参与者。服务层先按机构和参与者裁剪频道，再裁剪消息，即使运营也不能读取他人的个人频道和私聊。
+
+`conversation.open` 以机构 UUID 和排序后的两个用户 UUID 派生稳定频道 UUID，数据库同时约束 `(organization_id,direct_key)` 唯一，保证两人从任一方向发起都打开同一对话。双方必须是当前机构成员，不能给自己发起私聊。
+
+`messages` 保存频道、作者和正文，独立于 `submissions`。`message.send` 追加消息，作者由服务端身份决定；客户端通过 IndexedDB outbox 乐观显示，保留排队时间，收到确认与快照后移除待发送状态。正文最多 12000 字符，消息搜索在有权访问的当前对话中执行。草稿按身份、机构、频道隔离。
+
+当前是本地 MVP：消息通过可见页面每 3 秒轮询刷新；未实现已读回执、打字状态、附件、线程回复或历史分页。生产规模需将全量快照替换为按授权频道分页和增量消息同步。新建频道及首次打开私聊需联网，已有对话可离线写入队列。v4 导出包括聊天的三张表，旧版备份仍可导入，保留原 UUID 与记录。

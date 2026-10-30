@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { localDb, enqueue, projectSnapshot, saveDraft } from "../local/database";
 import type { Snapshot } from "../domain/models";
 import type { Command } from "../domain/commands";
-const snapshot: Snapshot = { organizations: [], organizationMemberships: [], actor: { role: "learn", userId: randomUUID() }, serverTime: new Date().toISOString(), users: [], terms: [], households: [], memberships: [], sessions: [], assignments: [], submissions: [], feedback: [], applications: [], enrollments: [] };
+const snapshot: Snapshot = { organizations: [], organizationMemberships: [], channels: [], channelParticipants: [], messages: [], actor: { role: "learn", userId: randomUUID() }, serverTime: new Date().toISOString(), users: [], terms: [], households: [], memberships: [], sessions: [], assignments: [], submissions: [], feedback: [], applications: [], enrollments: [] };
 
 test("durable outbox keeps ordering, overlays changes and survives reopen without corrupting server snapshot", async () => {
   await localDb.delete(); await localDb.open();
@@ -44,5 +44,28 @@ test("durable outbox keeps ordering, overlays changes and survives reopen withou
   assert.equal((await localDb.drafts.get(`${other}:assignment-test`))?.body, "Other organization draft");
   assert.equal((await localDb.outbox.where("role").equals(other).toArray()).length, 1);
   assert.equal((await localDb.outbox.where("role").equals("learn").toArray()).length, 1);
+  await localDb.delete();
+});
+
+test("offline chat messages remain separate, retain timestamps and survive reload", async () => {
+  await localDb.delete(); await localDb.open();
+  await localDb.snapshots.put({ role: "learn", data:snapshot });
+  const command: Command = { id:randomUUID(),entityId:randomUUID(),baseVersion:0,kind:"message.send",payload:{channelId:randomUUID(),body:"First hello"} };
+  await enqueue("learn",command);
+  await enqueue("learn",{...command,id:randomUUID(),entityId:randomUUID(),payload:{...command.payload,body:"Second hello"}});
+  await saveDraft("learn",`message-${command.payload.channelId}`,"Still writing");
+  localDb.close(); await localDb.open();
+  const pending = await localDb.outbox.where("role").equals("learn").sortBy("seq");
+  const optimistic = projectSnapshot(snapshot,pending);
+  assert.equal(optimistic.messages.length,2);
+  assert.notEqual(optimistic.messages[0].id,optimistic.messages[1].id);
+  assert.equal(optimistic.messages[0].createdAt,pending[0].queuedAt);
+  assert.equal(optimistic.messages[0].authorId,snapshot.actor.userId);
+  assert.equal(snapshot.messages.length,0);
+  assert.equal((await localDb.drafts.get(`learn:message-${command.payload.channelId}`))?.body,"Still writing");
+  assert.equal((await localDb.outbox.where("role").equals("host").toArray()).length,0);
+  const oldCache = { ...snapshot } as Partial<Snapshot>;
+  delete oldCache.channels; delete oldCache.channelParticipants; delete oldCache.messages;
+  assert.deepEqual(projectSnapshot(oldCache as Snapshot,[]).channels,[]);
   await localDb.delete();
 });

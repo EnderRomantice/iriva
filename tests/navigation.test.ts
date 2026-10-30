@@ -37,3 +37,10 @@ test("organization navigation leaves a group while group tabs retain their scope
   assert.equal(readRoute("/ops?household=group-2&view=applications", "ops").householdId, "");
   assert.notEqual(routeHref("host", viewRoute(group, "calendar", "organization")), routeHref("host", viewRoute(group, "calendar", "household")));
 });
+
+test("chat history restores channel and organization, then exits cleanly to groups", () => {
+  const route = {organizationId:demoOrganizationId,householdId:"",channelId:"dm-1",view:"direct" as const};
+  assert.deepEqual(readRoute(routeHref("learn",route),"learn"),route);
+  assert.equal(viewRoute(route,"calendar","organization").channelId,undefined);
+  assert.equal(readRoute("/learn?view=channels&channel=room-1&household=group-2","learn").householdId,"");
+});

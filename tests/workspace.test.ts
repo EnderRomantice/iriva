@@ -28,7 +28,7 @@ test("schema and seed are repeatable; foreign keys are valid", t => {
   const second = new SqliteRepository(file);
   assert.equal(second.read().users.length, 9);
   assert.deepEqual(second.db.prepare("PRAGMA foreign_key_check").all(), []);
-  assert.equal((second.db.prepare("SELECT COUNT(*) AS n FROM schema_migrations").get() as { n: number }).n, 3);
+  assert.equal((second.db.prepare("SELECT COUNT(*) AS n FROM schema_migrations").get() as { n: number }).n, 4);
   second.db.close();
 });
 
@@ -172,7 +172,9 @@ test("organizations isolate snapshots and reject cross-workspace mutations for e
   assert.equal(first.organizations.length, 2);
   assert.deepEqual(second.households.map(h => h.name), ["City Stories"]);
   assert.ok(!second.assignments.some(a => first.assignments.some(old => old.id === a.id)));
-  assert.ok(second.users.every(u => [seedId(1),seedId(5)].includes(u.id)));
+  const secondMemberIds = repo.read().organizationMemberships.filter(m => m.organizationId === secondId).map(m => m.userId);
+  assert.deepEqual(second.users.map(u => u.id).sort(), secondMemberIds.sort());
+  assert.ok(second.users.filter(u => u.id !== secondLearner.userId).every(u => u.email === ""));
   await assert.rejects(service.execute(secondLearner, submissionCommand()), { status: 403 });
   await assert.rejects(service.snapshot({ ...demoActors.learn, organizationId: randomUUID() }), { status: 403 });
   const secondOps = { ...demoActors.ops, organizationId: secondId };
@@ -280,4 +282,79 @@ test("creation rejects stale IDs, expired deadlines, overlapping sessions and in
   await assert.rejects(service.execute(demoActors.ops, { ...group, payload: { ...group.payload, hostId: seedId(5), name: "The Sunday Club" } }), { status: 409 });
   assert.equal(commandSchema.safeParse({ ...group, payload: { ...group.payload, capacity: 0 } }).success, false);
   assert.equal(commandSchema.safeParse({ ...task, payload: { ...task.payload, title: "   " } }).success, false);
+});
+
+const createChannel = (kind: "public" | "private", name = "Coffee chat"): Command => ({ id: randomUUID(), entityId: randomUUID(), baseVersion: 0, kind: "channel.create", payload: { name, description: "Just a conversation", kind } });
+const sendMessage = (channelId: string, body = " Hello there! "): Command => ({ id: randomUUID(), entityId: randomUUID(), baseVersion: 0, kind: "message.send", payload: { channelId, body } });
+const openDM = (userId: string): Command => ({ id: randomUUID(), entityId: randomUUID(), baseVersion: 0, kind: "conversation.open", payload: { userId } });
+
+test("only Hosts create public channels; every member in that organization can chat", async t => {
+  const { service, repo, file } = fixture(t);
+  const channel = createChannel("public");
+  await assert.rejects(service.execute(demoActors.learn, channel), { status:403 });
+  await assert.rejects(service.execute(demoActors.ops, channel), { status:403 });
+  await service.execute(demoActors.host, channel);
+  assert.ok((await service.snapshot(demoActors.learn)).channels.some(c => c.id === channel.entityId));
+  const message = sendMessage(channel.entityId);
+  await service.execute(demoActors.learn, message);
+  await service.execute(demoActors.learn, message);
+  assert.equal(repo.read().messages.filter(m => m.id === message.entityId).length, 1);
+  const received = (await service.snapshot(demoActors.host)).messages.find(m => m.id === message.entityId)!;
+  assert.equal(received.body, "Hello there!");
+  assert.equal(received.authorId, demoActors.learn.userId);
+  assert.equal(repo.read().submissions.length, 3, "chat must never create a practice submission");
+  await assert.rejects(service.execute(demoActors.learn, sendMessage(channel.entityId, "  ")), { status:422 });
+  await assert.rejects(service.execute(demoActors.learn, sendMessage(channel.entityId, "x".repeat(12001))), { status:422 });
+  await assert.rejects(service.execute(demoActors.host, createChannel("public")), { status:409 });
+  const second = { ...demoActors.learn, organizationId:seedId(1002) };
+  assert.ok(!(await service.snapshot(second)).channels.some(c => c.id === channel.entityId));
+  await assert.rejects(service.execute(second, sendMessage(channel.entityId)), { status:403 });
+  await assert.rejects(service.execute(second, { ...createChannel("private"), entityId:channel.entityId }), { status:403 });
+  const reopened = new SqliteRepository(file);
+  assert.equal((await new WorkspaceService(reopened).snapshot(demoActors.host)).messages.find(m => m.id === message.entityId)?.body, "Hello there!");
+  reopened.db.close();
+});
+
+test("personal channels and their messages stay private even from Hosts and ops", async t => {
+  const { service } = fixture(t);
+  for (const owner of Object.values(demoActors)) {
+    const channel = createChannel("private", `${owner.role} notes`);
+    await service.execute(owner, channel);
+    const message = sendMessage(channel.entityId, "Private thought");
+    await service.execute(owner, message);
+    assert.ok((await service.snapshot(owner)).messages.some(m => m.id === message.entityId));
+    for (const outsider of Object.values(demoActors).filter(a => a.userId !== owner.userId)) {
+      const snapshot = await service.snapshot(outsider);
+      assert.ok(!snapshot.channels.some(c => c.id === channel.entityId));
+      assert.ok(!snapshot.messages.some(m => m.id === message.entityId));
+      await assert.rejects(service.execute(outsider, sendMessage(channel.entityId)), { status:403 });
+      await assert.rejects(service.execute(outsider, { ...createChannel("private"), entityId:channel.entityId }), { status:403 });
+    }
+  }
+});
+
+test("DMs deduplicate both directions and isolate both participants from every outsider", async t => {
+  const { service, repo } = fixture(t);
+  const command = openDM(demoActors.host.userId);
+  const opened = await service.execute(demoActors.learn, command);
+  assert.ok(opened.entityId);
+  assert.deepEqual(await service.execute(demoActors.learn, command), opened);
+  assert.deepEqual(await service.execute(demoActors.host, openDM(demoActors.learn.userId)), opened);
+  const participants = repo.read().channelParticipants.filter(p => p.channelId === opened.entityId);
+  assert.deepEqual(participants.map(p => p.userId).sort(), [demoActors.learn.userId,demoActors.host.userId].sort());
+  await service.execute(demoActors.learn, sendMessage(opened.entityId!, "A question"));
+  await service.execute(demoActors.host, sendMessage(opened.entityId!, "A reply"));
+  for (const actor of [demoActors.learn,demoActors.host]) assert.equal((await service.snapshot(actor)).messages.filter(m => m.channelId === opened.entityId).length, 2);
+  const outside = await service.snapshot(demoActors.ops);
+  assert.ok(!outside.channels.some(c => c.id === opened.entityId));
+  assert.ok(!outside.channelParticipants.some(p => p.channelId === opened.entityId));
+  assert.ok(!outside.messages.some(m => m.channelId === opened.entityId));
+  await assert.rejects(service.execute(demoActors.ops, sendMessage(opened.entityId!)), { status:403 });
+  await assert.rejects(service.execute(demoActors.learn, openDM(demoActors.learn.userId)), { status:422 });
+  await assert.rejects(service.execute(demoActors.learn, openDM(randomUUID())), { status:422 });
+  const second = { ...demoActors.learn, organizationId:seedId(1002) };
+  await assert.rejects(service.execute(second, openDM(seedId(2))), { status:422 });
+  const otherOrg = await service.execute(second, openDM(demoActors.host.userId));
+  assert.notEqual(otherOrg.entityId, opened.entityId);
+  assert.equal((await service.snapshot(second)).messages.length, 0);
 });

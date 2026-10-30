@@ -3,7 +3,7 @@ import Dexie, { type EntityTable } from "dexie";
 import type { Snapshot } from "@/domain/models";
 import type { Command } from "@/domain/commands";
 
-export interface PendingOperation { seq?: number; id: string; role: WorkspaceScope; entityId: string; command: Command; status: "pending" | "conflict"; error?: string }
+export interface PendingOperation { seq?: number; id: string; role: WorkspaceScope; entityId: string; command: Command; status: "pending" | "conflict"; error?: string; queuedAt?: string }
 export interface Draft { key: string; role: WorkspaceScope; body: string; savedAt: string }
 export const localDb = new Dexie("iriva-workspace-v1") as Dexie & {
   snapshots: EntityTable<{ role: WorkspaceScope; data: Snapshot }, "role">;
@@ -14,9 +14,13 @@ localDb.version(1).stores({ snapshots: "role", outbox: "++seq,&id,role,entityId"
 
 export function projectSnapshot(snapshot: Snapshot, operations: PendingOperation[]): Snapshot {
   const data = structuredClone(snapshot);
-  for (const { command } of operations) {
-    const meta = { id: command.entityId, version: command.baseVersion + 1, createdAt: data.serverTime, updatedAt: data.serverTime };
-    if (command.kind === "submission.save") {
+  data.channels ??= []; data.channelParticipants ??= []; data.messages ??= [];
+  for (const { command, queuedAt } of operations) {
+    const meta = { id: command.entityId, version: command.baseVersion + 1, createdAt: queuedAt || data.serverTime, updatedAt: queuedAt || data.serverTime };
+    if (command.kind === "message.send") {
+      const value = { ...meta, ...command.payload, authorId: data.actor.userId };
+      data.messages = [...data.messages.filter(m => m.id !== value.id), value];
+    } else if (command.kind === "submission.save") {
       const value = { ...meta, ...command.payload, learnerId: data.actor.userId };
       data.submissions = [...data.submissions.filter(s => s.id !== value.id), value];
     } else if (command.kind === "feedback.save") {
@@ -44,7 +48,7 @@ export async function enqueue(role: WorkspaceScope, command: Command) {
     if (chain.some(item => item.status === "conflict")) throw new Error("这条记录有同步冲突，请先在同步状态中处理。你的草稿已保留。");
     const version = logical && logical.id !== command.entityId ? logical.version : command.baseVersion;
     const baseVersion = chain.length ? chain.at(-1)!.command.baseVersion + 1 : version;
-    await localDb.outbox.add({ id: command.id, role, entityId, command: { ...command, entityId, baseVersion }, status: "pending" });
+    await localDb.outbox.add({ id: command.id, role, entityId, command: { ...command, entityId, baseVersion }, status: "pending", queuedAt: new Date().toISOString() });
   });
 }
 

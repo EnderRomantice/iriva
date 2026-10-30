@@ -23,7 +23,7 @@ export function useWorkspace(role: WorkspaceScope) {
   useEffect(() => {
     const update = () => { setMode(networkMode()); setConnected(navigator.onLine); void refresh(); };
     update();
-    const interval = setInterval(() => { if (document.visibilityState === "visible") void refresh(); }, 15000);
+    const interval = setInterval(() => { if (document.visibilityState === "visible") void refresh(); }, 3000);
     window.addEventListener("online", update); window.addEventListener("offline", update); window.addEventListener("iriva-network", update); window.addEventListener("focus", update);
     let stopped = false;
     const warm = () => {
@@ -47,7 +47,9 @@ export function useWorkspace(role: WorkspaceScope) {
   const onlineMutation = async (command: Command) => {
     const response = await request(role, "/api/mutations", command);
     if (!response.ok) throw new Error((await response.json()).error);
+    const result = await response.json() as { version: number; entityId?: string };
     await refresh();
+    return result;
   };
   return { data: cache ? projectSnapshot(cache.data, operations) : undefined, operations, error, busy, offline: mode === "offline" || !connected, mode, shellStatus, refresh, mutate, onlineMutation };
 }

@@ -2,6 +2,9 @@ import { z } from "zod";
 
 const base = { id: z.uuid(), entityId: z.uuid(), baseVersion: z.number().int().nonnegative() };
 export const commandSchema = z.discriminatedUnion("kind", [
+  z.object({ ...base, kind: z.literal("channel.create"), payload: z.object({ name: z.string().trim().min(1).max(80), description: z.string().trim().max(1000), kind: z.enum(["public", "private"]) }).strict() }),
+  z.object({ ...base, kind: z.literal("conversation.open"), payload: z.object({ userId: z.uuid() }).strict() }),
+  z.object({ ...base, kind: z.literal("message.send"), payload: z.object({ channelId: z.uuid(), body: z.string().trim().min(1).max(12000) }).strict() }),
   z.object({ ...base, kind: z.literal("assignment.create"), payload: z.object({ householdId: z.uuid(), title: z.string().trim().min(1).max(120), description: z.string().trim().min(1).max(4000), category: z.enum(["prepare", "practice", "reflect"]), dueAt: z.iso.datetime(), week: z.number().int().min(1).max(6) }).strict() }),
   z.object({ ...base, kind: z.literal("session.create"), payload: z.object({ householdId: z.uuid(), title: z.string().trim().min(1).max(120), description: z.string().trim().max(4000), startsAt: z.iso.datetime(), endsAt: z.iso.datetime() }).strict() }),
   z.object({ ...base, kind: z.literal("household.create"), payload: z.object({ name: z.string().trim().min(1).max(80), theme: z.string().trim().min(1).max(1000), termId: z.uuid(), hostId: z.uuid(), capacity: z.number().int().min(1).max(12) }).strict() }),

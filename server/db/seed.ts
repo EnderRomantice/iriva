@@ -12,6 +12,7 @@ export function seedDemo(repo: SqliteRepository) {
       repo.db.prepare("UPDATE users SET city = 'London' WHERE id = ? AND email = 'emma@example.test' AND city = '伦敦'").run(seedId(5));
     });
     seedOrganizations(repo);
+    seedChats(repo);
     return;
   }
   const now = new Date();
@@ -19,7 +20,7 @@ export function seedDemo(repo: SqliteRepository) {
   const base = (n: number): Entity => ({ id: seedId(n), version: 1, createdAt: now.toISOString(), updatedAt: now.toISOString() });
   const householdId = seedId(201);
   const state: State = {
-    organizations: [], organizationMemberships: [],
+    organizations: [], organizationMemberships: [], channels: [], channelParticipants: [], messages: [],
     users: [
       { ...base(1), name: "林小满", email: "xiaoman@example.test", city: "上海", timezone: "Asia/Shanghai", avatar: "coral" },
       { ...base(2), name: "陈一舟", email: "yizhou@example.test", city: "北京", timezone: "Asia/Shanghai", avatar: "blue" },
@@ -63,6 +64,7 @@ export function seedDemo(repo: SqliteRepository) {
   };
   repo.atomic(() => { for (const table of tables) for (const item of state[table]) repo.put(table, item); });
   seedOrganizations(repo);
+  seedChats(repo);
 }
 
 
@@ -80,5 +82,18 @@ function seedOrganizations(repo: SqliteRepository) {
     repo.put("households", { ...base(1201), organizationId: demoOrganizationId, name: "City Stories", termId: seedId(1101), hostId: seedId(5), timezone: "Europe/London", capacity: 4, theme: "分享你所在城市的一件小事。" });
     for (const [index, userId, role] of [[1211,1,"learner"], [1215,5,"host"]] as const) repo.put("memberships", { ...base(index), householdId: seedId(1201), userId: seedId(userId), role });
     repo.put("assignments", { ...base(1401), householdId: seedId(1201), title: "A place you call home", description: "用几句话介绍你所在城市中最喜欢的一个地方。", category: "practice", dueAt: new Date(Date.now()+3*86400000).toISOString(), week: 1 });
+  });
+}
+
+function seedChats(repo: SqliteRepository) {
+  repo.atomic(() => {
+    const state = repo.read();
+    for (const [organizationId, n] of [[seedId(1001), 4001], [seedId(1002), 4002]] as const) {
+      if (!state.organizations.some(o => o.id === organizationId) || state.channels.some(c => c.organizationId === organizationId && c.kind === "public")) continue;
+      const host = state.organizationMemberships.find(m => m.organizationId === organizationId && m.role === "host");
+      if (!host) continue;
+      const now = new Date().toISOString();
+      repo.saveChannel({ id: seedId(n), version: 1, createdAt: now, updatedAt: now, organizationId, ownerId: host.userId, name: "大厅", description: "打个招呼，分享日常，让对话自然发生。", kind: "public", directKey: "" });
+    }
   });
 }

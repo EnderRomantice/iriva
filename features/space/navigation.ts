@@ -3,15 +3,16 @@ import { useEffect, useState } from "react";
 import type { Role } from "@/domain/models";
 import { defaultOrganizationId } from "@/domain/workspace";
 import { viewLabels, type View } from "./preferences";
-export interface SpaceRoute { organizationId: string; householdId: string; view: View }
+export interface SpaceRoute { organizationId: string; householdId: string; channelId?: string; view: View }
 export function viewRoute(route: SpaceRoute, view: View, scope: "organization" | "household"): SpaceRoute {
-  return { ...route, view, householdId: scope === "organization" || view === "applications" ? "" : route.householdId };
+  return { ...route, channelId: undefined, view, householdId: scope === "organization" || view === "applications" ? "" : route.householdId };
 }
 export interface Visit { href: string; title: string; at: number }
 interface NavigationState { entries: Visit[]; index: number }
 export function routeHref(role: Role, route: SpaceRoute) {
   const query = new URLSearchParams();
   if (route.organizationId !== defaultOrganizationId) query.set("org", route.organizationId);
+  if (route.channelId && (route.view === "channels" || route.view === "direct")) query.set("channel", route.channelId);
   if (route.householdId) query.set("household", route.householdId);
   if (route.view !== "overview") query.set("view", route.view);
   return `/${role}${query.size ? `?${query}` : ""}`;
@@ -21,7 +22,7 @@ export function readRoute(href: string, role: Role): SpaceRoute {
   const value = url.searchParams.get("view") || "overview";
   const householdId = url.searchParams.get("household") || "";
   const valid = (value !== "journey" || !!householdId) && Object.hasOwn(viewLabels, value) && (role === "ops" ? value !== "tasks" : value !== "applications");
-  return { organizationId: url.searchParams.get("org") || defaultOrganizationId, householdId: value === "applications" ? "" : householdId, view: valid ? value as View : "overview" };
+  return { organizationId: url.searchParams.get("org") || defaultOrganizationId, ...((value === "channels" || value === "direct") && url.searchParams.get("channel") ? { channelId: url.searchParams.get("channel")! } : {}), householdId: ["applications", "channels", "direct"].includes(value) ? "" : householdId, view: valid ? value as View : "overview" };
 }
 export function appendVisit(state: NavigationState, visit: Visit): NavigationState {
   if (state.entries[state.index]?.href === visit.href) return state;

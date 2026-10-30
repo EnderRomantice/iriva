@@ -13,7 +13,10 @@ export interface Submission extends Entity { assignmentId: string; learnerId: st
 export interface Feedback extends Entity { submissionId: string; authorId: string; body: string; status: "draft" | "published" }
 export interface Application extends Entity { organizationId?: string; userId: string; goal: string; availability: string; status: "new" | "contacted" | "enrolled" }
 export interface Enrollment extends Entity { userId: string; termId: string; householdId: string; plan: string; amountMinor: number; currency: string; paymentStatus: "pending" | "paid" }
-export interface State { organizations: Organization[]; organizationMemberships: OrganizationMembership[]; users: User[]; terms: Term[]; households: Household[]; memberships: Membership[]; sessions: Session[]; assignments: Assignment[]; submissions: Submission[]; feedback: Feedback[]; applications: Application[]; enrollments: Enrollment[] }
+export interface Channel extends Entity { organizationId: string; ownerId: string; name: string; description: string; kind: "public" | "private" | "direct"; directKey: string }
+export interface ChannelParticipant extends Entity { channelId: string; userId: string }
+export interface Message extends Entity { channelId: string; authorId: string; body: string }
+export interface State { channels: Channel[]; channelParticipants: ChannelParticipant[]; messages: Message[]; organizations: Organization[]; organizationMemberships: OrganizationMembership[]; users: User[]; terms: Term[]; households: Household[]; memberships: Membership[]; sessions: Session[]; assignments: Assignment[]; submissions: Submission[]; feedback: Feedback[]; applications: Application[]; enrollments: Enrollment[] }
 export interface Actor { organizationId?: string; userId: string; role: Role }
 export interface Snapshot extends State { actor: Actor; serverTime: string }
 export const demoActors: Record<Role, Actor> = {

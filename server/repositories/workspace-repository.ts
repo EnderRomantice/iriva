@@ -1,8 +1,11 @@
-import type { Assignment, Household, OrganizationMembership, Application, Enrollment, Feedback, Membership, Session, State, Submission, User } from "../../domain/models";
+import type { Channel, ChannelParticipant, Message, Assignment, Household, OrganizationMembership, Application, Enrollment, Feedback, Membership, Session, State, Submission, User } from "../../domain/models";
 
 /** Domain-facing port. Only the adapter knows SQLite, SQL names, and driver types. */
 export interface WorkspaceUnitOfWork {
   read(): State;
+  saveChannel(value: Channel): void;
+  saveChannelParticipant(value: ChannelParticipant): void;
+  saveMessage(value: Message): void;
   receipt(actorId: string, commandId: string): { version: number } | undefined;
   acknowledge(actorId: string, commandId: string, version: number): void;
   saveSubmission(value: Submission): void;
