@@ -17,10 +17,12 @@ export class SqliteRepository implements WorkspaceRepository, WorkspaceUnitOfWor
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("busy_timeout = 5000");
     this.db.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
-    if (!this.db.prepare("SELECT version FROM schema_migrations WHERE version = 1").get()) {
+    for (const [index, file] of ["001_initial.sql", "002_user_city.sql"].entries()) {
+      const version = index + 1;
+      if (this.db.prepare("SELECT version FROM schema_migrations WHERE version = ?").get(version)) continue;
       this.atomic(() => {
-        this.db.exec(readFileSync(path.join(process.cwd(), "server/db/migrations/001_initial.sql"), "utf8"));
-        this.db.prepare("INSERT INTO schema_migrations VALUES (1,?)").run(new Date().toISOString());
+        this.db.exec(readFileSync(path.join(process.cwd(), "server/db/migrations", file), "utf8"));
+        this.db.prepare("INSERT INTO schema_migrations VALUES (?,?)").run(version, new Date().toISOString());
       });
     }
   }

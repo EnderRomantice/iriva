@@ -196,3 +196,9 @@
 .sp-presence-dot[data-presence="offline"]::after { content:""; position:absolute; inset:1px; border:2px solid var(--sp-muted); border-radius:50%; }
 .sp-profile .sp-avatar-presence { --sp-presence-surround:var(--sp-brand); }
 .sp-profile .sp-presence-dot[data-presence="offline"]::after { border-color:var(--sp-on-brand); opacity:.75; }
+
+.sp-member-info { flex:1; min-width:0; }
+.sp-member-info strong { display:block; }
+.sp-member-location { display:flex; align-items:baseline; flex-wrap:wrap; gap:6px; margin-top:3px; color:var(--sp-muted); font-size:12px; line-height:1.5; }
+.sp-member-location time { font-variant-numeric:tabular-nums; }
+.sp-member>small { flex:none; }

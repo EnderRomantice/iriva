@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
+import Database from "better-sqlite3";
+import { readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { SqliteRepository } from "../server/repositories/sqlite-repository";
@@ -25,7 +27,7 @@ test("schema and seed are repeatable; foreign keys are valid", t => {
   const second = new SqliteRepository(file);
   assert.equal(second.read().users.length, 9);
   assert.deepEqual(second.db.prepare("PRAGMA foreign_key_check").all(), []);
-  assert.equal((second.db.prepare("SELECT COUNT(*) AS n FROM schema_migrations").get() as { n: number }).n, 1);
+  assert.equal((second.db.prepare("SELECT COUNT(*) AS n FROM schema_migrations").get() as { n: number }).n, 2);
   second.db.close();
 });
 
@@ -134,4 +136,28 @@ test("demo identities are restricted to local same-origin requests", () => {
   assert.throws(() => actorFromRequest(new Request("http://public.example/api/workspace", { headers: { "x-demo-role": "ops" } })), { status: 403 });
   assert.throws(() => actorFromRequest(new Request("http://localhost/api/workspace", { headers: { "x-demo-role": "ops", origin: "https://foreign.example" } })), { status: 403 });
   assert.throws(() => actorFromRequest(new Request("http://localhost/api/workspace", { headers: { "x-demo-role": "constructor" } })), { status: 401 });
+});
+
+
+test("city migration preserves existing users and accepts old rows without city", t => {
+  const folder = mkdtempSync(path.join(os.tmpdir(), "iriva-city-migration-"));
+  const filename = path.join(folder, "legacy.sqlite");
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  const legacy = new Database(filename);
+  legacy.exec(readFileSync("server/db/migrations/001_initial.sql", "utf8"));
+  legacy.exec("CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL); INSERT INTO schema_migrations VALUES (1, '2026-10-30T00:00:00Z')");
+  legacy.prepare("INSERT INTO users VALUES (?,?,?,?,?,?,?,?)").run("legacy-user", "Existing member", "member@example.test", "Asia/Shanghai", "blue", 3, "2026-10-30T00:00:00Z", "2026-10-30T00:00:00Z");
+  legacy.close();
+  const repo = new SqliteRepository(filename);
+  try {
+    const user = repo.read().users[0];
+    assert.equal(user.city, "");
+    assert.equal(user.timezone, "Asia/Shanghai");
+    assert.equal(user.version, 3);
+    const { city: _city, ...oldRow } = user;
+    repo.put("users", { ...oldRow, id: "imported-v1", email: "imported@example.test" });
+    assert.equal(repo.read().users.find(u => u.id === "imported-v1")?.city, "");
+    repo.saveUser({ ...user, city: "北京" });
+    assert.equal(repo.read().users.find(u => u.id === user.id)?.city, "北京");
+  } finally { repo.db.close(); }
 });

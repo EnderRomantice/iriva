@@ -1,9 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Application, Assignment, Role, Session, Snapshot } from "@/domain/models";
 import type { Command } from "@/domain/commands";
 import { Avatar, dateLabel, timeLabel, Sheet, Empty } from "./primitives";
 import { Practice } from "./Practice";
+import { memberTime } from "./member-time";
 export interface ViewProps {
   data: Snapshot; role: Role; pending: Set<string>; navigate: (view: string) => void;
   openPractice: (assignment: Assignment, submissionId?: string) => void; openSession: (session: Session) => void;
@@ -45,7 +46,20 @@ export function Calendar({ data, openSession }: ViewProps) {
   return <section className="sp-page-section"><div className="sp-section-head"><h1>日程</h1><div className="sp-filters"><button aria-pressed={scope === "upcoming"} onClick={() => setScope("upcoming")}>即将开始</button><button aria-pressed={scope === "all"} onClick={() => setScope("all")}>全部</button></div></div><p className="sp-caption">北京时间 · 课程详情包含 Host 当地时间</p><div className="sp-list">{sessions.map(s => <button className="sp-schedule-row" key={s.id} onClick={() => openSession(s)}><span>{dateLabel(s.startsAt)}<small>{timeLabel(s.startsAt)}–{timeLabel(s.endsAt)}</small></span><span><strong>{s.title}</strong><small>{data.households.find(h => h.id === s.householdId)?.name}</small></span><small>{s.status === "completed" ? "已结束" : s.status === "cancelled" ? "已取消" : "查看安排"}</small></button>)}{!sessions.length && <Empty>还没有排定的圆桌。</Empty>}</div></section>;
 }
 export function Members({ data, activeId }: ViewProps & { activeId?: string }) {
-  return <section className="sp-page-section"><h1>Household 伙伴</h1>{data.households.map(h => <details className="sp-household" key={h.id} open={data.households.length === 1 || h.id === activeId}><summary><strong>{h.name}</strong><span>{data.memberships.filter(m => m.householdId === h.id && m.role === "learner").length}/{h.capacity} 位学员</span></summary><p>{h.theme}</p>{data.memberships.filter(m => m.householdId === h.id).map(m => { const user = data.users.find(u => u.id === m.userId); return <div className="sp-member" key={m.id}><Avatar user={user} /><strong>{user?.name}</strong><small>{m.role === "host" ? "Host" : "学员"}</small></div>; })}</details>)}</section>;
+  const [now, setNow] = useState<Date>();
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      clearTimeout(timer);
+      setNow(new Date());
+      timer = setTimeout(tick, 60000 - Date.now() % 60000 + 20);
+    };
+    tick();
+    window.addEventListener("focus", tick);
+    document.addEventListener("visibilitychange", tick);
+    return () => { clearTimeout(timer); window.removeEventListener("focus", tick); document.removeEventListener("visibilitychange", tick); };
+  }, []);
+  return <section className="sp-page-section"><h1>Household 伙伴</h1>{data.households.map(h => <details className="sp-household" key={h.id} open={data.households.length === 1 || h.id === activeId}><summary><strong>{h.name}</strong><span>{data.memberships.filter(m => m.householdId === h.id && m.role === "learner").length}/{h.capacity} 位学员</span></summary><p>{h.theme}</p>{data.memberships.filter(m => m.householdId === h.id).map(m => { const user = data.users.find(u => u.id === m.userId); const local = now && memberTime(user?.timezone, now); return <div className="sp-member" key={m.id}><Avatar user={user} /><div className="sp-member-info"><strong>{user?.name}</strong><p className="sp-member-location"><span>{user?.city || "城市未填写"}</span><span aria-hidden="true">·</span>{local ? <><time dateTime={now?.toISOString()} title={`${local.date} · ${user?.timezone}`}>{local.time}</time><span title={user?.timezone}>{local.offset}</span></> : <span>{now ? "时区未设置" : "读取当地时间…"}</span>}</p></div><small>{m.role === "host" ? "Host" : "学员"}</small></div>; })}</details>)}</section>;
 }
 export function Journey({ data }: ViewProps) {
   const start = data.terms[0]?.startsOn;

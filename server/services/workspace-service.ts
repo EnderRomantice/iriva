@@ -107,7 +107,7 @@ export class WorkspaceService {
     return this.repo.transaction(tx => {
       const email = data.email.toLowerCase();
       requireRule(!tx.read().users.some(u => u.email === email), "这个邮箱已有报名记录，请联系运营确认。", 409);
-      const user = { ...meta(randomUUID()), name: data.name, email, timezone: "Asia/Shanghai", avatar: "blue" };
+      const user = { ...meta(randomUUID()), name: data.name, email, city: "", timezone: "Asia/Shanghai", avatar: "blue" };
       tx.saveUser(user);
       const application = { ...meta(randomUUID()), userId: user.id, goal: data.goal, availability: data.availability, status: "new" as const };
       tx.saveApplication(application);

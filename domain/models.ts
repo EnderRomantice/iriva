@@ -1,6 +1,6 @@
 export type Role = "learn" | "host" | "ops";
 export interface Entity { id: string; version: number; createdAt: string; updatedAt: string }
-export interface User extends Entity { name: string; email: string; timezone: string; avatar: string }
+export interface User extends Entity { name: string; email: string; city?: string; timezone: string; avatar: string }
 export interface Term extends Entity { name: string; startsOn: string; endsOn: string }
 export interface Household extends Entity { name: string; termId: string; hostId: string; timezone: string; capacity: number; theme: string }
 export interface Membership extends Entity { householdId: string; userId: string; role: "learner" | "host" }

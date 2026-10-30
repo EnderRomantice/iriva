@@ -3,22 +3,26 @@ import { SqliteRepository, tables } from "../repositories/sqlite-repository";
 
 export const seedId = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 export function seedDemo(repo: SqliteRepository) {
-  if (repo.db.prepare("SELECT id FROM users LIMIT 1").get()) return;
+  if (repo.db.prepare("SELECT id FROM users LIMIT 1").get()) {
+    const cities = ["上海", "北京", "杭州", "深圳", "伦敦", "上海", "成都", "广州", "南京"];
+    repo.atomic(() => cities.forEach((city, index) => repo.db.prepare("UPDATE users SET city = ? WHERE id = ? AND email LIKE '%@example.test' AND city = ''").run(city, seedId(index + 1))));
+    return;
+  }
   const now = new Date();
   const at = (days: number, hour = 12) => { const date = new Date(now); date.setUTCDate(date.getUTCDate() + days); date.setUTCHours(hour, 0, 0, 0); return date.toISOString(); };
   const base = (n: number): Entity => ({ id: seedId(n), version: 1, createdAt: now.toISOString(), updatedAt: now.toISOString() });
   const householdId = seedId(201);
   const state: State = {
     users: [
-      { ...base(1), name: "林小满", email: "xiaoman@example.test", timezone: "Asia/Shanghai", avatar: "coral" },
-      { ...base(2), name: "陈一舟", email: "yizhou@example.test", timezone: "Asia/Shanghai", avatar: "blue" },
-      { ...base(3), name: "许知夏", email: "zhixia@example.test", timezone: "Asia/Shanghai", avatar: "lilac" },
-      { ...base(4), name: "周亦安", email: "yian@example.test", timezone: "Asia/Shanghai", avatar: "sage" },
-      { ...base(5), name: "Emma Wilson", email: "emma@example.test", timezone: "Europe/London", avatar: "amber" },
-      { ...base(6), name: "IRIVA 运营", email: "ops@example.test", timezone: "Asia/Shanghai", avatar: "blue" },
-      { ...base(7), name: "沈可心", email: "kexin@example.test", timezone: "Asia/Shanghai", avatar: "lilac" },
-      { ...base(8), name: "张予宁", email: "yuning@example.test", timezone: "Asia/Shanghai", avatar: "sage" },
-      { ...base(9), name: "李沐阳", email: "muyang@example.test", timezone: "Asia/Shanghai", avatar: "coral" },
+      { ...base(1), name: "林小满", email: "xiaoman@example.test", city: "上海", timezone: "Asia/Shanghai", avatar: "coral" },
+      { ...base(2), name: "陈一舟", email: "yizhou@example.test", city: "北京", timezone: "Asia/Shanghai", avatar: "blue" },
+      { ...base(3), name: "许知夏", email: "zhixia@example.test", city: "杭州", timezone: "Asia/Shanghai", avatar: "lilac" },
+      { ...base(4), name: "周亦安", email: "yian@example.test", city: "深圳", timezone: "Asia/Shanghai", avatar: "sage" },
+      { ...base(5), name: "Emma Wilson", email: "emma@example.test", city: "伦敦", timezone: "Europe/London", avatar: "amber" },
+      { ...base(6), name: "IRIVA 运营", email: "ops@example.test", city: "上海", timezone: "Asia/Shanghai", avatar: "blue" },
+      { ...base(7), name: "沈可心", email: "kexin@example.test", city: "成都", timezone: "Asia/Shanghai", avatar: "lilac" },
+      { ...base(8), name: "张予宁", email: "yuning@example.test", city: "广州", timezone: "Asia/Shanghai", avatar: "sage" },
+      { ...base(9), name: "李沐阳", email: "muyang@example.test", city: "南京", timezone: "Asia/Shanghai", avatar: "coral" },
     ],
     terms: [{ ...base(101), name: "秋日同行 · 第一期", startsOn: at(-8).slice(0,10), endsOn: at(34).slice(0,10) }],
     households: [
