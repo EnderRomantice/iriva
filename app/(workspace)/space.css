@@ -187,5 +187,12 @@
 @media(prefers-reduced-motion:reduce) { .sp-app *,.sp-apply * { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
 
 .sp-avatar-photo { object-fit:cover; display:block; }
-.sp-rail-bottom .sp-profile { width:38px; height:38px; background:none; overflow:hidden; border-radius:8px; }
+.sp-rail-bottom .sp-profile { width:38px; height:38px; background:none; overflow:visible; border-radius:8px; }
 .sp-profile .sp-avatar { width:38px; height:38px; border-radius:8px; }
+
+.sp-avatar-presence { position:relative; display:inline-flex; flex:none; --sp-presence-surround:var(--sp-paper); }
+.sp-presence-dot { position:absolute; right:-2px; bottom:-2px; width:11px; height:11px; border:2px solid var(--sp-presence-surround); border-radius:50%; background:#2bac76; box-sizing:content-box; }
+.sp-presence-dot[data-presence="offline"] { background:var(--sp-presence-surround); }
+.sp-presence-dot[data-presence="offline"]::after { content:""; position:absolute; inset:1px; border:2px solid var(--sp-muted); border-radius:50%; }
+.sp-profile .sp-avatar-presence { --sp-presence-surround:var(--sp-brand); }
+.sp-profile .sp-presence-dot[data-presence="offline"]::after { border-color:var(--sp-on-brand); opacity:.75; }
