@@ -1,5 +1,6 @@
 export type Role = "learn" | "host" | "ops";
 export interface Entity { id: string; version: number; createdAt: string; updatedAt: string }
+// city stores the local official name (上海, New York, London), independent of UI language.
 export interface User extends Entity { name: string; email: string; city?: string; timezone: string; avatar: string }
 export interface Term extends Entity { name: string; startsOn: string; endsOn: string }
 export interface Household extends Entity { name: string; termId: string; hostId: string; timezone: string; capacity: number; theme: string }
