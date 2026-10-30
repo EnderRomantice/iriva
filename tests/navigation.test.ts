@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { appendVisit, rememberVisit, readRoute, routeHref } from "../features/space/navigation";
+import { appendVisit, rememberVisit, readRoute, routeHref, viewRoute } from "../features/space/navigation";
 import { defaultOrganizationId, demoOrganizationId, workspaceScope, scopeIdentity } from "../domain/workspace";
 test("history routes restore organization, household and view together", () => {
   const route = { organizationId: demoOrganizationId, householdId: "group-2", view: "household" as const };
@@ -24,4 +24,16 @@ test("recent history retains visited pages after branching and deduplicates revi
   const a = { href:"/learn", title:"A", at:1 }, b = { href:"/learn?view=tasks", title:"B", at:2 }, c = { href:"/learn?view=calendar", title:"C", at:3 };
   assert.deepEqual(rememberVisit([b,a], c).map(v => v.title), ["C","B","A"]);
   assert.deepEqual(rememberVisit([c,b,a], a).map(v => v.title), ["A","C","B"]);
+});
+
+
+test("organization navigation leaves a group while group tabs retain their scope", () => {
+  const group = { organizationId: demoOrganizationId, householdId: "group-2", view: "overview" as const };
+  assert.equal(viewRoute(group, "calendar", "organization").householdId, "");
+  assert.equal(viewRoute(group, "calendar", "household").householdId, "group-2");
+  assert.equal(viewRoute(group, "applications", "household").householdId, "");
+  assert.equal(viewRoute(group, "overview", "organization").organizationId, demoOrganizationId);
+  assert.equal(readRoute("/host?view=journey", "host").view, "overview");
+  assert.equal(readRoute("/ops?household=group-2&view=applications", "ops").householdId, "");
+  assert.notEqual(routeHref("host", viewRoute(group, "calendar", "organization")), routeHref("host", viewRoute(group, "calendar", "household")));
 });

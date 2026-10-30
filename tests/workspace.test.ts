@@ -11,6 +11,7 @@ import { WorkspaceService } from "../server/services/workspace-service";
 import { seedDemo, seedId } from "../server/db/seed";
 import { demoActors } from "../domain/models";
 import { commandSchema, type Command } from "../domain/commands";
+import { householdSnapshot } from "../features/space/content-scope";
 import { actorFromRequest } from "../server/http";
 
 function fixture(t: { after: (fn: () => void) => void }) {
@@ -208,4 +209,27 @@ test("organization migration preserves populated households and restores FK enfo
     assert.deepEqual(repo.db.pragma("foreign_key_check"), []);
     assert.throws(() => repo.put("households", { ...repo.read().households[0], organizationId: "missing" }));
   } finally { repo.db.close(); }
+});
+
+
+test("group content narrows every role without falling back to the first group", async t => {
+  const { service } = fixture(t);
+  for (const role of ["host", "ops", "learn"] as const) {
+    const organization = await service.snapshot(demoActors[role]);
+    assert.equal(householdSnapshot(organization, ""), organization);
+    assert.equal(householdSnapshot(organization, "missing-group"), undefined);
+    if (role !== "learn") assert.equal(organization.households.length, 2);
+    for (const household of organization.households) {
+      const group = householdSnapshot(organization, household.id)!;
+      assert.deepEqual(group.households.map(h => h.id), [household.id]);
+      assert.deepEqual(group.terms.map(t => t.id), [household.termId]);
+      assert.deepEqual(group.sessions, organization.sessions.filter(s => s.householdId === household.id));
+      assert.deepEqual(group.assignments, organization.assignments.filter(a => a.householdId === household.id));
+      assert.deepEqual(group.memberships, organization.memberships.filter(m => m.householdId === household.id));
+      assert.deepEqual(group.enrollments, organization.enrollments.filter(e => e.householdId === household.id));
+      assert.deepEqual(group.submissions, organization.submissions.filter(s => group.assignments.some(a => a.id === s.assignmentId)));
+      assert.deepEqual(group.feedback, organization.feedback.filter(f => group.submissions.some(s => s.id === f.submissionId)));
+      assert.deepEqual(group.applications, []);
+    }
+  }
 });

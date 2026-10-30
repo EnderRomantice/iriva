@@ -7,8 +7,10 @@ import { localDb } from "@/local/database";
 import { resolveConflict } from "@/local/sync";
 import { accentInk, onColor, usePreferences, viewLabels, type View } from "./preferences";
 import { Chrome } from "./Chrome";
-import { useSpaceNavigation, type SpaceNavigation } from "./navigation";
+import { useSpaceNavigation, viewRoute, type SpaceNavigation } from "./navigation";
 import { workspaceScope, type WorkspaceScope } from "@/domain/workspace";
+import { householdSnapshot } from "./content-scope";
+import { OrganizationHome } from "./OrganizationHome";
 import { Settings } from "./Settings";
 import { Sheet } from "./primitives";
 import { Practice } from "./Practice";
@@ -38,32 +40,33 @@ function SpaceContent({ role, navigation }: { role: Role; navigation: SpaceNavig
     return () => { window.removeEventListener("keydown", key); clearTimeout(timer.current); };
   }, []);
   useEffect(() => { setQuery(""); setPractice(undefined); setSession(undefined); scroll.current?.scrollTo({ top: 0 }); }, [route.view, route.householdId]);
-  function navigate(value: string) {
+  function navigate(value: string, level: "organization" | "household" = "household") {
     if (!allowed(value)) return;
     const organization = data?.organizations?.find(o => o.id === route.organizationId);
-    navigation.go({ ...route, view: value }, `${organization?.name || "IRIVA"} / ${household?.name || "工作区"} / ${viewLabels[value]}`);
+    const next = viewRoute(route, value, level);
+    navigation.go(next, `${organization?.name || "IRIVA"} / ${next.householdId ? household?.name || "小组" : "全部小组"} / ${value === "overview" && !next.householdId ? "主页" : viewLabels[value]}`);
     setQuery("");
   }
   function notify(message: string) { clearTimeout(timer.current); setToast(message); timer.current = setTimeout(() => setToast(""), 4500); }
-  const user = data?.users.find(u => u.id === data.actor.userId), household = data?.households.find(h => h.id === route.householdId) || data?.households[0];
+  const user = data?.users.find(u => u.id === data.actor.userId), household = data?.households.find(h => h.id === route.householdId);
   const failed = operations.filter(o => o.status === "conflict");
   const status = failed.length ? "有更改需要处理" : offline ? "离线 · 已存本机" : error ? "连接中断 · 已存本机" : operations.length ? `${operations.length} 项待同步` : busy && !data ? "连接中…" : "所有更改已同步";
   const props = data ? { data, role, pending: new Set(operations.map(o => o.entityId)), navigate, openPractice: (assignment: Assignment, submissionId?: string) => setPractice({ assignment, submissionId }), openSession: setSession, mutate, onlineMutation, notify } : undefined;
-  // Household selection scopes the learning content; operations retain their complete queue.
-  const assignments = data?.assignments.filter(a => a.householdId === household?.id) ?? [];
-  const assignmentIds = new Set(assignments.map(a => a.id));
-  const submissions = data?.submissions.filter(s => assignmentIds.has(s.assignmentId)) ?? [];
-  const submissionIds = new Set(submissions.map(s => s.id));
-  const scoped = props && household && role !== "ops" ? { ...props, data: { ...props.data, households: [household], sessions: props.data.sessions.filter(s => s.householdId === household.id), assignments, submissions, feedback: props.data.feedback.filter(f => submissionIds.has(f.submissionId)), memberships: props.data.memberships.filter(m => m.householdId === household.id) } } : props;
+  const content = data && householdSnapshot(data, route.householdId);
+  const scoped = props && content ? { ...props, data: content } : undefined;
+  function selectHousehold(id: string) {
+    const h = data?.households.find(h => h.id === id);
+    if (h) navigation.go({ ...route, householdId: id, view: "overview" }, `${data?.organizations.find(o => o.id === route.organizationId)?.name} / ${h.name} / 本周`);
+  }
   async function resolve(entityId: string, choice: "local" | "server") { setResolving(true); setSyncError(""); try { await resolveConflict(scope, entityId, choice); await refresh(); } catch(e) { setSyncError(e instanceof Error ? e.message : "无法同步"); } finally { setResolving(false); } }
   return <div className="sp-app" data-dark={preferences.dark} data-compact={preferences.compact} data-collapsed={preferences.collapsed} style={{ "--sp-brand": preferences.color, "--sp-on-brand": onColor(preferences.color), "--sp-action-ink": accentInk(preferences.color) } as CSSProperties}>
-    <Chrome role={role} data={data} user={user} household={household} navigation={navigation} preferences={preferences} setPreferences={setPreferences} view={view} query={query} setQuery={setQuery} search={search} navigate={navigate}
-      selectOrganization={id => { const org = data?.organizations?.find(o => o.id === id); if (id !== route.organizationId) navigation.go({ organizationId: id, householdId: "", view: "overview" }, `${org?.name || "工作区"} / 本周`); }}
-      selectHousehold={id => { const h = data?.households.find(h => h.id === id); navigation.go({ ...route, householdId: id, view: "overview" }, `${data?.organizations?.find(o => o.id === route.organizationId)?.name} / ${h?.name} / 本周`); }}
+    <Chrome role={role} data={data} user={user} household={household} navigation={navigation} preferences={preferences} setPreferences={setPreferences} view={view} query={query} setQuery={setQuery} search={search} navigate={navigate} navigateOrganization={value => navigate(value, "organization")}
+      selectOrganization={id => { const org = data?.organizations?.find(o => o.id === id); if (id !== route.organizationId) navigation.go({ organizationId: id, householdId: "", view: "overview" }, `${org?.name || "工作区"} / 主页`); }}
+      selectHousehold={selectHousehold}
       settings={() => setSettings(true)} offline={offline || !!error}>
-        <main className="sp-scroll" ref={scroll}>{!data || !props || !scoped ? <div className="sp-loading"><h1>正在打开你的空间</h1><p>{error || "读取本机内容…"}</p>{error && <button onClick={() => void refresh()}>重试</button>}</div> : <div className="sp-content" key={`${query ? "search" : view}:${household?.id}`}>
+        <main className="sp-scroll" ref={scroll}>{!data || !props ? <div className="sp-loading"><h1>正在打开你的空间</h1><p>{error || "读取本机内容…"}</p>{error && <button onClick={() => void refresh()}>重试</button>}</div> : <div className="sp-content" key={`${query ? "search" : view}:${household?.id}`}>
           {offline && <p className="sp-offline">当前离线。草稿留在本机，恢复连接后同步。</p>}
-          {query ? role === "ops" ? <Applications {...props} query={query} /> : <Tasks {...scoped} query={query} /> : view === "overview" ? <Overview {...scoped} /> : view === "tasks" ? <Tasks {...scoped} /> : view === "calendar" ? <Calendar {...scoped} /> : view === "household" ? <Members {...props} activeId={household?.id} /> : view === "journey" ? <Journey {...scoped} /> : <Applications {...props} />}
+          {query ? role === "ops" ? <Applications {...props} query={query} /> : <Tasks {...props} query={query} /> : !scoped ? <div className="sp-page-section"><h1>无法打开这个小组</h1><p>小组不存在，或你当前没有访问权限。</p><button onClick={() => navigate("overview", "organization")}>返回工作区主页</button></div> : view === "overview" ? household ? <Overview {...scoped} /> : <OrganizationHome {...props} selectHousehold={selectHousehold} /> : view === "tasks" ? <Tasks {...scoped} /> : view === "calendar" ? <Calendar {...scoped} /> : view === "household" ? <Members {...scoped} activeId={household?.id} /> : view === "journey" ? <Journey {...scoped} /> : <Applications {...props} />}
         </div>}</main><footer className="sp-statusbar"><button onClick={() => setSync(true)}>{status}</button></footer>
     </Chrome>
     {toast && <div className="sp-toast" role="status">{toast}<button onClick={() => setToast("")}>关闭</button></div>}
