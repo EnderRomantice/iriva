@@ -11,6 +11,7 @@ import { useSpaceNavigation, viewRoute, type SpaceNavigation } from "./navigatio
 import { workspaceScope, type WorkspaceScope } from "@/domain/workspace";
 import { householdSnapshot } from "./content-scope";
 import { OrganizationHome } from "./OrganizationHome";
+import { Create, createLabels, type CreateKind } from "./Create";
 import { Settings } from "./Settings";
 import { Sheet } from "./primitives";
 import { Practice } from "./Practice";
@@ -28,6 +29,7 @@ function SpaceContent({ role, navigation }: { role: Role; navigation: SpaceNavig
   const view = route.view;
   const [query, setQuery] = useState("");
   const [settings, setSettings] = useState(false), [sync, setSync] = useState(false);
+  const [creating, setCreating] = useState<CreateKind>();
   const [practice, setPractice] = useState<{ assignment: Assignment; submissionId?: string }>();
   const [session, setSession] = useState<Session>();
   const [toast, setToast] = useState(""), [resolving, setResolving] = useState(false), [syncError, setSyncError] = useState("");
@@ -63,7 +65,7 @@ function SpaceContent({ role, navigation }: { role: Role; navigation: SpaceNavig
     <Chrome role={role} data={data} user={user} household={household} navigation={navigation} preferences={preferences} setPreferences={setPreferences} view={view} query={query} setQuery={setQuery} search={search} navigate={navigate} navigateOrganization={value => navigate(value, "organization")}
       selectOrganization={id => { const org = data?.organizations?.find(o => o.id === id); if (id !== route.organizationId) navigation.go({ organizationId: id, householdId: "", view: "overview" }, `${org?.name || "工作区"} / 主页`); }}
       selectHousehold={selectHousehold}
-      settings={() => setSettings(true)} offline={offline || !!error}>
+      create={setCreating} settings={() => setSettings(true)} offline={offline || !!error}>
         <main className="sp-scroll" ref={scroll}>{!data || !props ? <div className="sp-loading"><h1>正在打开你的空间</h1><p>{error || "读取本机内容…"}</p>{error && <button onClick={() => void refresh()}>重试</button>}</div> : <div className="sp-content" key={`${query ? "search" : view}:${household?.id}`}>
           {offline && <p className="sp-offline">当前离线。草稿留在本机，恢复连接后同步。</p>}
           {query ? role === "ops" ? <Applications {...props} query={query} /> : <Tasks {...props} query={query} /> : !scoped ? <div className="sp-page-section"><h1>无法打开这个小组</h1><p>小组不存在，或你当前没有访问权限。</p><button onClick={() => navigate("overview", "organization")}>返回工作区主页</button></div> : view === "overview" ? household ? <Overview {...scoped} /> : <OrganizationHome {...props} selectHousehold={selectHousehold} /> : view === "tasks" ? <Tasks {...scoped} /> : view === "calendar" ? <Calendar {...scoped} /> : view === "household" ? <Members {...scoped} activeId={household?.id} /> : view === "journey" ? <Journey {...scoped} /> : <Applications {...props} />}
@@ -71,6 +73,7 @@ function SpaceContent({ role, navigation }: { role: Role; navigation: SpaceNavig
     </Chrome>
     {toast && <div className="sp-toast" role="status">{toast}<button onClick={() => setToast("")}>关闭</button></div>}
     {settings && <Settings role={role} preferences={preferences} setPreferences={setPreferences} mode={mode} error={preferenceError} onClose={() => setSettings(false)} />}
+    {creating && data && <Create key={creating} kind={creating} data={data} householdId={route.householdId} save={onlineMutation} onClose={() => setCreating(undefined)} openPractice={assignment => { setCreating(undefined); setPractice({ assignment }); }} onCreated={(kind, householdId) => { setCreating(undefined); notify(`${createLabels[kind]}成功。`); navigation.go({ ...route, householdId, view: kind === "session" ? "calendar" : kind === "assignment" ? "tasks" : "household" }, `${createLabels[kind]} / ${data.organizations.find(o => o.id === route.organizationId)?.name}`); }} />}
     {practice && props && <Sheet title={role === "host" ? "练习反馈" : "我的练习"} wide onClose={() => setPractice(undefined)}><Practice key={practice.submissionId || practice.assignment.id} {...props} assignment={practice.assignment} submissionId={practice.submissionId} onSaved={() => setPractice(undefined)} /></Sheet>}
     {session && props && <SessionDetail {...props} session={session} onClose={() => setSession(undefined)} />}
     {sync && <Sheet title="同步详情" onClose={() => setSync(false)}><h2>{status}</h2><p className="sp-caption">{shellStatus}</p>{error && <p className="sp-notice">{error}</p>}{operations.map(operation => <div className="sp-sync-operation" key={operation.id}><strong>{operation.command.kind === "feedback.save" ? "Host 反馈" : "练习"}</strong><span>{operation.status === "conflict" ? "需要处理" : "待同步"}</span>{operation.status === "conflict" && <><p>{operation.error}</p><Conflict scope={scope} id={operation.entityId} body={"body" in operation.command.payload ? operation.command.payload.body : ""} /><div className="sp-actions"><button disabled={resolving} onClick={() => void resolve(operation.entityId, "server")}>采用服务器版本</button><button className="sp-primary" disabled={resolving} onClick={() => void resolve(operation.entityId, "local")}>保留我的版本</button></div></>}</div>)}{syncError && <p className="sp-error">{syncError}</p>}<div className="sp-actions"><button className="sp-primary" disabled={busy || resolving} onClick={() => void refresh()}>立即同步</button></div></Sheet>}

@@ -1,4 +1,4 @@
-import type { OrganizationMembership, Application, Enrollment, Feedback, Membership, Session, State, Submission, User } from "../../domain/models";
+import type { Assignment, Household, OrganizationMembership, Application, Enrollment, Feedback, Membership, Session, State, Submission, User } from "../../domain/models";
 
 /** Domain-facing port. Only the adapter knows SQLite, SQL names, and driver types. */
 export interface WorkspaceUnitOfWork {
@@ -9,6 +9,8 @@ export interface WorkspaceUnitOfWork {
   saveFeedback(value: Feedback): void;
   saveApplication(value: Application): void;
   saveSession(value: Session): void;
+  saveAssignment(value: Assignment): void;
+  saveHousehold(value: Household): void;
   saveMembership(value: Membership): void;
   saveEnrollment(value: Enrollment): void;
   saveUser(value: User): void;

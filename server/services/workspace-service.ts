@@ -56,7 +56,7 @@ export class WorkspaceService {
     return this.repo.transaction(tx => {
       const raw = tx.read();
       const state = this.organizationState(raw, actor);
-      const table = command.kind === "submission.save" ? "submissions" : command.kind === "feedback.save" ? "feedback" : command.kind === "session.reschedule" ? "sessions" : "applications";
+      const table = command.kind === "submission.save" ? "submissions" : command.kind === "feedback.save" ? "feedback" : (command.kind === "session.reschedule" || command.kind === "session.create") ? "sessions" : command.kind === "assignment.create" ? "assignments" : command.kind === "household.create" ? "households" : "applications";
       requireRule(!raw[table].some(e => e.id === command.entityId) || state[table].some(e => e.id === command.entityId));
       const receipt = tx.receipt(actor.userId, command.id);
       if (receipt) return receipt;
@@ -64,6 +64,38 @@ export class WorkspaceService {
       let version = 0;
       const checkVersion = (value?: Entity) => { requireRule((value?.version ?? 0) === command.baseVersion, "这条记录已在其他设备更新。你的输入已保留，请查看最新版本。", 409); version = (value?.version ?? 0) + 1; };
       switch (command.kind) {
+        case "assignment.create": {
+          const household = state.households.find(h => h.id === command.payload.householdId);
+          requireRule(actor.role === "host" && household?.hostId === actor.userId);
+          requireRule(!state.assignments.some(a => a.id === command.entityId), "任务已建立，请刷新后查看。", 409);
+          requireRule(Date.parse(command.payload.dueAt) > Date.now(), "截止时间必须晚于当前时间。", 422);
+          checkVersion();
+          tx.saveAssignment({ ...meta(command.entityId), ...command.payload });
+          break;
+        }
+        case "session.create": {
+          const household = state.households.find(h => h.id === command.payload.householdId);
+          requireRule(actor.role === "host" && household?.hostId === actor.userId);
+          requireRule(!state.sessions.some(s => s.id === command.entityId), "圆桌已建立，请刷新后查看。", 409);
+          const { startsAt, endsAt } = command.payload;
+          requireRule(Date.parse(endsAt) > Date.parse(startsAt) && Date.parse(startsAt) > Date.now(), "请选择未来的时间，结束时间必须晚于开始时间。", 422);
+          const conflict = raw.sessions.some(s => s.status === "scheduled" && raw.households.some(h => h.id === s.householdId && h.hostId === actor.userId) && s.startsAt < endsAt && s.endsAt > startsAt);
+          requireRule(!conflict, "该时间与 Host 的其他圆桌冲突。", 409);
+          checkVersion();
+          tx.saveSession({ ...meta(command.entityId), ...command.payload, status: "scheduled", meetingUrl: "" });
+          break;
+        }
+        case "household.create": {
+          requireRule(actor.role === "ops");
+          requireRule(!state.households.some(h => h.id === command.entityId), "小组已建立，请刷新后查看。", 409);
+          requireRule(state.terms.some(t => t.id === command.payload.termId), "请选择当前机构的学期。", 422);
+          requireRule(state.organizationMemberships.some(m => m.userId === command.payload.hostId && m.role === "host"), "请选择当前机构的 Host。", 422);
+          requireRule(!state.households.some(h => h.termId === command.payload.termId && h.name.toLowerCase() === command.payload.name.toLowerCase()), "这个学期已有同名小组。", 409);
+          checkVersion();
+          tx.saveHousehold({ ...meta(command.entityId), ...command.payload, organizationId: actor.organizationId || defaultOrganizationId, timezone: "Asia/Shanghai" });
+          tx.saveMembership({ ...meta(randomUUID()), householdId: command.entityId, userId: command.payload.hostId, role: "host" });
+          break;
+        }
         case "submission.save": {
           const assignment = state.assignments.find(a => a.id === command.payload.assignmentId);
           requireRule(actor.role === "learn" && assignment && this.householdAccess(state, actor, assignment.householdId));

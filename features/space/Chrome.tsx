@@ -5,6 +5,8 @@ import type { Household, Role, Snapshot, User } from "@/domain/models";
 import { viewLabels, type Preferences, type View } from "./preferences";
 import { readRoute, type SpaceNavigation } from "./navigation";
 import { Avatar } from "./primitives";
+import { createLabels, type CreateKind } from "./Create";
+import { RailIcon } from "./RailIcon";
 import { Popover } from "./Popover";
 const icons = { overview: Home, tasks: ListTodo, calendar: CalendarDays, household: UsersRound, applications: ContactRound, journey: Map };
 interface Props {
@@ -12,10 +14,10 @@ interface Props {
   preferences: Preferences; setPreferences: Dispatch<SetStateAction<Preferences>>;
   view: View; query: string; setQuery: (query: string) => void; search: RefObject<HTMLInputElement | null>;
   navigate: (view: string) => void; navigateOrganization: (view: string) => void; selectHousehold: (id: string) => void; selectOrganization: (id: string) => void;
-  settings: () => void; offline: boolean; children: ReactNode;
+  create: (kind: CreateKind) => void; settings: () => void; offline: boolean; children: ReactNode;
 }
-export function Chrome({ role, data, user, household, navigation, preferences, setPreferences, view, query, setQuery, search, navigate, navigateOrganization, selectHousehold, selectOrganization, settings, offline, children }: Props) {
-  const [mobile, setMobile] = useState(false), [menu, setMenu] = useState<"organizations" | "history" | "more" | "profile" | "help" | "channel">();
+export function Chrome({ role, data, user, household, navigation, preferences, setPreferences, view, query, setQuery, search, navigate, navigateOrganization, selectHousehold, selectOrganization, create, settings, offline, children }: Props) {
+  const [mobile, setMobile] = useState(false), [menu, setMenu] = useState<"organizations" | "history" | "more" | "profile" | "help" | "channel" | "create">();
   const [groupQuery, setGroupQuery] = useState("");
   const anchor = useRef<HTMLElement | null>(null);
   useEffect(() => {
@@ -52,12 +54,12 @@ export function Chrome({ role, data, user, household, navigation, preferences, s
       <aside className="sp-rail" aria-label="主导航">
         <button className="sp-organization-avatar" title="切换工作区" aria-label="切换工作区" aria-expanded={menu === "organizations"} onClick={e => open("organizations", e.currentTarget)}><span>{organization?.initials || "I"}</span></button>
         <div className="sp-rail-links">
-          {navItems.map(item => { const Icon = icons[item]; return <button key={item} className="sp-rail-item" aria-current={!navigation.route?.householdId && !query && view === item ? "page" : undefined} onClick={() => go(item, true)}><span><Icon /></span><strong>{globalLabels[item]}</strong></button>; })}
+          {navItems.map(item => { const Icon = icons[item]; return <button key={item} className="sp-rail-item" aria-current={!navigation.route?.householdId && !query && view === item ? "page" : undefined} onClick={() => go(item, true)}><span><RailIcon view={item} icon={Icon} selected={!navigation.route?.householdId && !query && view === item} /></span><strong>{globalLabels[item]}</strong></button>; })}
           <button className="sp-rail-item" aria-expanded={menu === "more"} onClick={e => open("more", e.currentTarget)}><span><MoreHorizontal /></span><strong>更多</strong></button>
         </div>
         <button className="sp-rail-item sp-rail-admin" onClick={settings}><span><Settings /></span><strong>设置</strong></button>
         <div className="sp-rail-bottom">
-          <button className="sp-rail-circle" aria-label="查看所有工作区" title="查看所有工作区" onClick={e => open("organizations", e.currentTarget)}><Plus /></button>
+          <button className="sp-rail-circle" aria-label="建立" title="建立" aria-expanded={menu === "create"} onClick={e => open("create", e.currentTarget)}><Plus /></button>
           <button className="sp-rail-circle" aria-label={preferences.dark ? "切换浅色模式" : "切换深色模式"} title={preferences.dark ? "切换浅色模式" : "切换深色模式"} onClick={() => setPreferences(p => ({ ...p, dark: !p.dark }))}>{preferences.dark ? <Sun /> : <Moon />}</button>
           <button className="sp-profile" aria-label="个人资料与身份" onClick={e => open("profile", e.currentTarget)}><Avatar user={user} presence={offline ? "offline" : data ? "online" : undefined} /></button>
         </div>
@@ -66,7 +68,7 @@ export function Chrome({ role, data, user, household, navigation, preferences, s
       <aside className={`sp-sidebar ${mobile ? "is-open" : ""}`} aria-label="工作区侧栏">
         <div className="sp-workspace-title"><button className="sp-workspace-name" aria-label={`${title} 工作区菜单`} aria-expanded={menu === "organizations"} onClick={e => open("organizations", e.currentTarget)}><strong>{title}</strong><ChevronDown /></button><button className="sp-icon-button" aria-label="自定义工作区" title="自定义工作区" onClick={settings}><Settings /></button><button className="sp-mobile-close sp-icon-button" aria-label="关闭导航" onClick={() => setMobile(false)}><X /></button></div>
         <div className="sp-sidebar-scroll">
-          <nav className="sp-mobile-global" aria-label="移动端主导航">{navItems.map(item => { const Icon = icons[item]; return <button key={item} aria-current={!navigation.route?.householdId && view === item ? "page" : undefined} onClick={() => go(item, true)}><Icon /><span>{globalLabels[item]}</span></button>; })}<button onClick={e => open("more", e.currentTarget)}><MoreHorizontal /><span>更多</span></button></nav>
+          <nav className="sp-mobile-global" aria-label="移动端主导航">{navItems.map(item => { const Icon = icons[item]; return <button key={item} aria-current={!navigation.route?.householdId && view === item ? "page" : undefined} onClick={() => go(item, true)}><Icon /><span>{globalLabels[item]}</span></button>; })}<button onClick={e => open("more", e.currentTarget)}><MoreHorizontal /><span>更多</span></button><button onClick={e => open("create", e.currentTarget)}><Plus /><span>建立</span></button></nav>
           <label className="sp-find"><Search /><input aria-label="查找小组" placeholder="查找小组…" value={groupQuery} onChange={e => setGroupQuery(e.target.value)} /></label>
           <details className="sp-sidebar-section" open><summary><ChevronDown /><span>已加星标</span></summary>{groups.filter(h => favorite.includes(h.id)).map(h => <button key={h.id} onClick={() => { selectHousehold(h.id); setMobile(false); }}><Hash /><span>{h.name}</span></button>)}{!data?.households.some(h => favorite.includes(h.id)) && <p>给常用的小组加个星标</p>}</details>
           <details className="sp-sidebar-section sp-channel-section" open><summary><ChevronDown /><span>Households</span></summary>{groups.map(h => <button key={h.id} aria-pressed={household?.id === h.id} onClick={() => { selectHousehold(h.id); setMobile(false); }}><Hash /><span>{h.name}</span></button>)}</details>
@@ -80,7 +82,8 @@ export function Chrome({ role, data, user, household, navigation, preferences, s
         {children}
       </div>
     </div>
-    {menu && <Popover key={menu} anchor={anchor} label={{ organizations: "切换工作区", history: "历史记录", more: "更多功能", profile: "个人资料", help: "帮助", channel: "小组菜单" }[menu]} onClose={() => setMenu(undefined)} className={menu === "organizations" ? "sp-workspace-picker" : ""}>
+    {menu && <Popover key={menu} anchor={anchor} placement={menu === "create" ? "side" : "below"} label={{ organizations: "切换工作区", history: "历史记录", more: "更多功能", profile: "个人资料", help: "帮助", channel: "小组菜单", create: "建立" }[menu]} onClose={() => setMenu(undefined)} className={menu === "organizations" ? "sp-workspace-picker" : ""}>
+      {menu === "create" && <><div className="sp-popover-heading"><strong>建立</strong><small>{title}</small></div>{(role === "learn" ? ["practice"] : role === "host" ? ["assignment", "session"] : ["household"]).map(value => { const kind = value as CreateKind; const Icon = kind === "session" ? CalendarDays : kind === "household" ? UsersRound : ListTodo; return <button key={kind} onClick={() => menuAction(() => { setMobile(false); create(kind); })}><Icon />{createLabels[kind]}</button>; })}</>}
       {menu === "organizations" && <><div className="sp-popover-heading"><strong>工作区</strong><small>切换机构</small></div>{(data?.organizations || []).map(org => <button className="sp-workspace-option" key={org.id} aria-pressed={org.id === organization?.id} onClick={() => menuAction(() => selectOrganization(org.id))}><span className="sp-workspace-tile" style={{ background: org.color }}>{org.initials}</span><span><strong>{org.name}</strong><small>{org.id === organization?.id ? "当前工作区" : "打开工作区"}</small></span>{org.id === organization?.id && <Check />}</button>)}<div className="sp-popover-divider" /><button onClick={() => menuAction(settings)}><Settings />工作区偏好设置</button></>}
       {menu === "history" && <><div className="sp-popover-heading"><strong>历史记录</strong><small>最近访问</small></div>{navigation.recent.map(visit => <button key={visit.href} onClick={() => menuAction(() => navigation.go(readRoute(visit.href, role), visit.title))}><Clock3 /><span>{visit.title}</span></button>)}</>}
       {menu === "more" && <>{preferences.order.filter(v => v !== "journey" && allowed(v) && preferences.hidden.includes(v)).map(item => { const Icon = icons[item]; return <button key={item} onClick={() => go(item, true)}><Icon />{globalLabels[item]}</button>; })}<button onClick={() => menuAction(settings)}><Settings />工作区设置</button></>}

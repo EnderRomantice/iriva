@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import type { OrganizationMembership, State, Submission, Feedback, Application, Session, Membership, Enrollment, User } from "../../domain/models";
+import type { Assignment, Household, OrganizationMembership, State, Submission, Feedback, Application, Session, Membership, Enrollment, User } from "../../domain/models";
 import type { WorkspaceRepository, WorkspaceUnitOfWork } from "./workspace-repository";
 
 export const tables = ["organizations", "users", "organizationMemberships", "terms", "households", "memberships", "sessions", "assignments", "submissions", "feedback", "applications", "enrollments"] as const;
@@ -51,6 +51,8 @@ export class SqliteRepository implements WorkspaceRepository, WorkspaceUnitOfWor
   saveSubmission(v: Submission) { this.put("submissions", v); }
   saveFeedback(v: Feedback) { this.put("feedback", v); }
   saveApplication(v: Application) { this.put("applications", v); }
+  saveAssignment(v: Assignment) { this.put("assignments", v); }
+  saveHousehold(v: Household) { this.put("households", v); }
   saveSession(v: Session) { this.put("sessions", v); }
   saveMembership(v: Membership) { this.put("memberships", v); }
   saveEnrollment(v: Enrollment) { this.put("enrollments", v); }

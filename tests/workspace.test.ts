@@ -233,3 +233,51 @@ test("group content narrows every role without falling back to the first group",
     }
   }
 });
+
+test("create menu commands persist tasks, sessions and groups with role and organization boundaries", async t => {
+  const { service, file } = fixture(t);
+  const future = (hours: number) => new Date(Date.now() + hours * 3600000).toISOString();
+  const task: Command = { id: randomUUID(), entityId: randomUUID(), baseVersion: 0, kind: "assignment.create", payload: { householdId: seedId(201), title: "A new story", description: "Share a memory", category: "practice", dueAt: future(72), week: 3 } };
+  const session: Command = { id: randomUUID(), entityId: randomUUID(), baseVersion: 0, kind: "session.create", payload: { householdId: seedId(201), title: "A new roundtable", description: "Meet together", startsAt: future(240), endsAt: future(242) } };
+  const group: Command = { id: randomUUID(), entityId: randomUUID(), baseVersion: 0, kind: "household.create", payload: { name: "New Household", theme: "Daily stories", hostId: seedId(5), termId: seedId(101), capacity: 4 } };
+  for (const command of [task, session, group]) {
+    assert.equal(commandSchema.safeParse(command).success, true);
+    await assert.rejects(service.execute(demoActors.learn, command), { status: 403 });
+  }
+  await assert.rejects(service.execute(demoActors.ops, task), { status: 403 });
+  await assert.rejects(service.execute(demoActors.host, group), { status: 403 });
+  await assert.rejects(service.execute({ ...demoActors.host, organizationId: seedId(1002) }, task), { status: 403 });
+  await assert.rejects(service.execute({ ...demoActors.host, organizationId: seedId(1002) }, session), { status: 403 });
+  await assert.rejects(service.execute({ ...demoActors.ops, organizationId: seedId(1002) }, group), { status: 422 });
+  assert.deepEqual(await service.execute(demoActors.host, task), { version: 1 });
+  assert.deepEqual(await service.execute(demoActors.host, task), { version: 1 });
+  await service.execute(demoActors.host, session);
+  await service.execute(demoActors.ops, group);
+  await service.execute(demoActors.ops, group);
+  assert.ok((await service.snapshot(demoActors.learn)).assignments.some(a => a.id === task.entityId));
+  assert.ok(!(await service.snapshot({ ...demoActors.learn, organizationId: seedId(1002) })).assignments.some(a => a.id === task.entityId));
+  const reopened = new SqliteRepository(file);
+  const host = await new WorkspaceService(reopened).snapshot(demoActors.host);
+  assert.equal(host.assignments.filter(a => a.id === task.entityId).length, 1);
+  assert.ok(host.sessions.some(s => s.id === session.entityId && s.status === "scheduled"));
+  assert.ok(host.households.some(h => h.id === group.entityId));
+  assert.equal(host.memberships.filter(m => m.householdId === group.entityId && m.userId === seedId(5)).length, 1);
+  reopened.db.close();
+});
+
+test("creation rejects stale IDs, expired deadlines, overlapping sessions and invalid group ownership", async t => {
+  const { service } = fixture(t);
+  const state = await service.snapshot(demoActors.ops);
+  const scheduled = state.sessions.find(s => s.status === "scheduled")!;
+  const task: Command = { id: randomUUID(), entityId: randomUUID(), baseVersion: 0, kind: "assignment.create", payload: { householdId: seedId(201), title: "Story", description: "Share", category: "practice", dueAt: "2000-01-01T00:00:00.000Z", week: 1 } };
+  await assert.rejects(service.execute(demoActors.host, task), { status: 422 });
+  await assert.rejects(service.execute(demoActors.host, { ...task, entityId: seedId(401) }), { status: 409 });
+  const session: Command = { id: randomUUID(), entityId: randomUUID(), baseVersion: 0, kind: "session.create", payload: { householdId: seedId(202), title: "Overlap", description: "", startsAt: scheduled.startsAt, endsAt: scheduled.endsAt } };
+  await assert.rejects(service.execute(demoActors.host, session), { status: 409 });
+  await assert.rejects(service.execute(demoActors.host, { ...session, payload: { ...session.payload, endsAt: session.payload.startsAt } }), { status: 422 });
+  const group: Command = { id: randomUUID(), entityId: randomUUID(), baseVersion: 0, kind: "household.create", payload: { name: "Other", theme: "Stories", hostId: seedId(1), termId: seedId(101), capacity: 4 } };
+  await assert.rejects(service.execute(demoActors.ops, group), { status: 422 });
+  await assert.rejects(service.execute(demoActors.ops, { ...group, payload: { ...group.payload, hostId: seedId(5), name: "The Sunday Club" } }), { status: 409 });
+  assert.equal(commandSchema.safeParse({ ...group, payload: { ...group.payload, capacity: 0 } }).success, false);
+  assert.equal(commandSchema.safeParse({ ...task, payload: { ...task.payload, title: "   " } }).success, false);
+});

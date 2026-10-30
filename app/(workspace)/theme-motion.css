@@ -1,0 +1,34 @@
+/* Reveal the new theme over an unchanged snapshot, from one randomly chosen corner. */
+html[data-theme-reveal] { --theme-reveal-duration:1000ms; }
+html[data-theme-reveal="top-left"] {
+  --theme-reveal-from:polygon(0 0,0 0,0 0);
+  --theme-reveal-to:polygon(0 0,200% 0,0 200%);
+}
+html[data-theme-reveal="top-right"] {
+  --theme-reveal-from:polygon(100% 0,100% 0,100% 0);
+  --theme-reveal-to:polygon(100% 0,-100% 0,100% 200%);
+}
+html[data-theme-reveal="bottom-right"] {
+  --theme-reveal-from:polygon(100% 100%,100% 100%,100% 100%);
+  --theme-reveal-to:polygon(100% 100%,-100% 100%,100% -100%);
+}
+html[data-theme-reveal="bottom-left"] {
+  --theme-reveal-from:polygon(0 100%,0 100%,0 100%);
+  --theme-reveal-to:polygon(0 100%,200% 100%,0 -100%);
+}
+html[data-theme-reveal]::view-transition-group(root) { animation:none; }
+html[data-theme-reveal]::view-transition-old(root),
+html[data-theme-reveal]::view-transition-new(root) { mix-blend-mode:normal; }
+html[data-theme-reveal]::view-transition-old(root) { animation:none; z-index:1; }
+html[data-theme-reveal]::view-transition-new(root) {
+  z-index:2;
+  animation:sp-theme-reveal var(--theme-reveal-duration) cubic-bezier(.45,0,.25,1) both;
+}
+html[data-theme-reveal]::view-transition { pointer-events:none; }
+@keyframes sp-theme-reveal {
+  from { clip-path:var(--theme-reveal-from); }
+  to { clip-path:var(--theme-reveal-to); }
+}
+@media(prefers-reduced-motion:reduce) {
+  html[data-theme-reveal]::view-transition-new(root) { animation:none; }
+}

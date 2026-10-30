@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-export function Popover({ anchor, label, onClose, children, className = "" }: { anchor: RefObject<HTMLElement | null>; label: string; onClose: () => void; children: ReactNode; className?: string }) {
+export function Popover({ anchor, label, onClose, children, className = "", placement = "below" }: { anchor: RefObject<HTMLElement | null>; label: string; onClose: () => void; children: ReactNode; className?: string; placement?: "below" | "side" }) {
   const ref = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ left: 76, top: 50 });
   const [phase, setPhase] = useState("");
@@ -17,7 +17,8 @@ export function Popover({ anchor, label, onClose, children, className = "" }: { 
     const align = () => {
       const trigger = anchor.current?.getBoundingClientRect();
       const width = ref.current?.offsetWidth || 320;
-      if (trigger) setPosition({ left: Math.max(8, Math.min(trigger.left, innerWidth - width - 8)), top: Math.max(8, Math.min(trigger.bottom + 7, innerHeight - (ref.current?.offsetHeight || 300) - 8)) });
+      const height = ref.current?.offsetHeight || 300;
+      if (trigger) setPosition({ left: Math.max(8, Math.min(placement === "side" ? trigger.right + 8 : trigger.left, innerWidth - width - 8)), top: Math.max(8, Math.min(placement === "side" ? trigger.bottom - height : trigger.bottom + 7, innerHeight - height - 8)) });
     };
     align(); const frame = requestAnimationFrame(() => { setPhase("is-open"); ref.current?.querySelector<HTMLElement>("button:not(:disabled),input,select,a")?.focus(); });
     const outside = (event: PointerEvent) => { if (!ref.current?.contains(event.target as Node) && !anchor.current?.contains(event.target as Node)) close(); };
@@ -35,5 +36,5 @@ export function Popover({ anchor, label, onClose, children, className = "" }: { 
     // Anchor and callbacks are stable for the lifetime of an open popover.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  return <div ref={ref} role="dialog" aria-label={label} className={`sp-popover t-dropdown ${phase} ${className}`} data-origin="top-left" style={position} onBlur={event => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node) && !anchor.current?.contains(event.relatedTarget as Node)) close(); }}>{children}</div>;
+  return <div ref={ref} role="dialog" aria-label={label} className={`sp-popover t-dropdown ${phase} ${className}`} data-origin={placement === "side" ? "bottom-left" : "top-left"} style={position} onBlur={event => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node) && !anchor.current?.contains(event.relatedTarget as Node)) close(); }}>{children}</div>;
 }

@@ -23,6 +23,14 @@ export function Overview(props: ViewProps) {
   </div>;
 }
 export function Tasks(props: ViewProps & { query?: string; onlyWaiting?: boolean }) {
+  return props.role === "host" && !props.onlyWaiting ? <HostTasks {...props} /> : <TaskResponses {...props} />;
+}
+function HostTasks(props: ViewProps & { query?: string }) {
+  const [tab, setTab] = useState("tasks"), [selected, setSelected] = useState<Assignment>();
+  const assignments = props.data.assignments.filter(a => !props.query || `${a.title} ${a.description}`.toLowerCase().includes(props.query.toLowerCase()));
+  return <section className="sp-page-section"><div className="sp-section-head"><h2>{props.query ? `“${props.query}” 的搜索结果` : "任务与反馈"}</h2><div className="sp-filters"><button aria-pressed={tab === "tasks"} onClick={() => setTab("tasks")}>已发布任务</button><button aria-pressed={tab === "feedback"} onClick={() => setTab("feedback")}>学员反馈</button></div></div>{tab === "feedback" ? <TaskResponses {...props} /> : <div className="sp-list">{assignments.map(a => <button className="sp-create-task" key={a.id} onClick={() => setSelected(a)}><strong>{a.title}</strong><small>{props.data.households.find(h => h.id === a.householdId)?.name} / 第 {a.week} 周 / {dateLabel(a.dueAt)}截止</small></button>)}{!assignments.length && <Empty>{props.query ? "没有找到相关任务。" : "还没有任务，使用“建立”发布第一项任务。"}</Empty>}</div>}{selected && <Sheet title="任务详情" onClose={() => setSelected(undefined)}><h2>{selected.title}</h2><p>{selected.description}</p><p className="sp-caption">第 {selected.week} 周 / {dateLabel(selected.dueAt)} {timeLabel(selected.dueAt)} 截止（北京时间）</p></Sheet>}</section>;
+}
+function TaskResponses(props: ViewProps & { query?: string; onlyWaiting?: boolean }) {
   const { data, role, pending, openPractice, mutate, notify, query = "", onlyWaiting = false } = props;
   const [filter, setFilter] = useState(onlyWaiting ? "todo" : "all");
   const assignments = data.assignments.filter(a => `${a.title} ${a.description}`.toLowerCase().includes(query.toLowerCase()));

@@ -1,4 +1,5 @@
 import { defaultOrganizationId, demoOrganizationId } from "@/domain/workspace";
+import { useThemeTransition } from "./theme-transition";
 import { useEffect, useState } from "react";
 export const viewLabels = { overview: "本周", tasks: "练习与反馈", calendar: "日程", household: "伙伴", applications: "报名与组班", journey: "六周旅程" };
 export type View = keyof typeof viewLabels;
@@ -15,10 +16,11 @@ export function parsePreferences(raw: string | null): Preferences {
 export function usePreferences(organizationId = defaultOrganizationId) {
   const key = organizationId === defaultOrganizationId ? preferenceKey : `${preferenceKey}:${organizationId}`;
   const initial = organizationId === demoOrganizationId ? { ...defaults, color: "#5d3c63" } : defaults;
-  const [preferences, setPreferences] = useState(initial);
+  const [preferences, commitPreferences] = useState(initial);
+  const setPreferences = useThemeTransition(preferences, commitPreferences);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
-  useEffect(() => { try { const saved = localStorage.getItem(key); setPreferences(saved ? parsePreferences(saved) : initial); } catch { setError("外观设置无法写入此浏览器，当前更改仅在本次打开期间生效。"); } setReady(true); }, [key]);
+  useEffect(() => { try { const saved = localStorage.getItem(key); commitPreferences(saved ? parsePreferences(saved) : initial); } catch { setError("外观设置无法写入此浏览器，当前更改仅在本次打开期间生效。"); } setReady(true); }, [key]);
   useEffect(() => { if (ready) try { localStorage.setItem(key, JSON.stringify(preferences)); } catch { setError("外观设置无法保存，当前更改仅在本次打开期间生效。"); } }, [preferences, ready, key]);
   return { preferences, setPreferences, preferenceError: error };
 }
