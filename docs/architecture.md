@@ -80,4 +80,12 @@ Service Worker 只缓存访问过的工作区 HTML 外壳与 Next 静态资源�
 
 ## 成员城市与时区
 
-`users.city` 保存城市当地官方语言的名称（中国城市如“上海”，美国城市如“New York”，英国城市如“London”），界面直接显示，不随 UI 语言翻译。它独立于 IANA `timezone`。002 迁移为旧数据补空城市，演示种子补充明确的示例城市，真实用户不从时区推断所在地。成员列表按设备当前时刻换算各时区，每分钟与窗口恢复焦点时更新，自动处理夏令时。导出 schemaVersion 为 2，导入兼容 v1/v2。
+`users.city` 保存城市当地官方语言的名称（中国城市如“上海”，美国城市如“New York”，英国城市如“London”），界面直接显示，不随 UI 语言翻译。它独立于 IANA `timezone`。002 迁移为旧数据补空城市，演示种子补充明确的示例城市，真实用户不从时区推断所在地。成员列表按设备当前时刻换算各时区，每分钟与窗口恢复焦点时更新，自动处理夏令时。导出 schemaVersion 为 3，导入兼容 v1/v2/v3。
+
+## 独立机构工作区
+
+003 迁移增加 organizations、organization_memberships，以及 Household 和报名的 organization_id。旧数据归入 IRIVA，不删除或覆盖。SQLite 在事务外短暂关闭本连接外键校验以添加带默认值的引用列，提交前执行 foreign_key_check，finally 恢复校验。
+
+HTTP 演示身份适配器读取 x-workspace-id，服务层验证该身份在机构内的角色。读取和命令都按机构隔离；运营权限只在所属机构有效，跨机构实体 UUID 也不能用于覆盖数据。原有实际报名记录保留在 IRIVA。第二个机构 Common Ground 仅为本地演示。
+
+IndexedDB 的历史 role 键扩展为 role:organizationId，默认 IRIVA 仍使用旧 role 键，以保留离线草稿和待同步命令。网络请求由同一 scope 推导角色与机构，不随界面切换而把旧队列发往新机构。外观和星标按机构保存。浏览历史记录机构、小组和视图，支持返回、前进、刷新与历史菜单。

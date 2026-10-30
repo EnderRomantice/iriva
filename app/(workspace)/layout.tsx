@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./space.css";
+import "./popover-motion.css";
 const slackLato = localFont({
   src: [
     { path: "../fonts/slack-lato-regular.woff2", weight: "400", style: "normal" },

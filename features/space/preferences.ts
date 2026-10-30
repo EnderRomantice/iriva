@@ -1,3 +1,4 @@
+import { defaultOrganizationId, demoOrganizationId } from "@/domain/workspace";
 import { useEffect, useState } from "react";
 export const viewLabels = { overview: "本周", tasks: "练习与反馈", calendar: "日程", household: "伙伴", applications: "报名与组班", journey: "六周旅程" };
 export type View = keyof typeof viewLabels;
@@ -11,12 +12,14 @@ export function parsePreferences(raw: string | null): Preferences {
     return { color: /^#[0-9a-f]{6}$/i.test(p.color) ? p.color : defaults.color, dark: p.dark === true, compact: p.compact === true, collapsed: p.collapsed === true, hidden: Array.isArray(p.hidden) ? p.hidden.filter((v: View) => v !== "overview" && Object.hasOwn(viewLabels, v)) : defaults.hidden, order: [...order, ...defaults.order.filter(v => !order.includes(v))] };
   } catch { return defaults; }
 }
-export function usePreferences() {
-  const [preferences, setPreferences] = useState(defaults);
+export function usePreferences(organizationId = defaultOrganizationId) {
+  const key = organizationId === defaultOrganizationId ? preferenceKey : `${preferenceKey}:${organizationId}`;
+  const initial = organizationId === demoOrganizationId ? { ...defaults, color: "#5d3c63" } : defaults;
+  const [preferences, setPreferences] = useState(initial);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
-  useEffect(() => { try { setPreferences(parsePreferences(localStorage.getItem(preferenceKey))); } catch { setError("外观设置无法写入此浏览器，当前更改仅在本次打开期间生效。"); } setReady(true); }, []);
-  useEffect(() => { if (ready) try { localStorage.setItem(preferenceKey, JSON.stringify(preferences)); } catch { setError("外观设置无法保存，当前更改仅在本次打开期间生效。"); } }, [preferences, ready]);
+  useEffect(() => { try { const saved = localStorage.getItem(key); setPreferences(saved ? parsePreferences(saved) : initial); } catch { setError("外观设置无法写入此浏览器，当前更改仅在本次打开期间生效。"); } setReady(true); }, [key]);
+  useEffect(() => { if (ready) try { localStorage.setItem(key, JSON.stringify(preferences)); } catch { setError("外观设置无法保存，当前更改仅在本次打开期间生效。"); } }, [preferences, ready, key]);
   return { preferences, setPreferences, preferenceError: error };
 }
 export function onColor(hex: string) {

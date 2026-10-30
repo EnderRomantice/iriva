@@ -1,12 +1,12 @@
 "use client";
+import type { WorkspaceScope } from "@/domain/workspace";
 import { useCallback, useEffect, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import type { Role } from "@/domain/models";
 import type { Command } from "@/domain/commands";
 import { enqueue, localDb, projectSnapshot } from "./database";
 import { networkMode, request, synchronize, type NetworkMode } from "./sync";
 
-export function useWorkspace(role: Role) {
+export function useWorkspace(role: WorkspaceScope) {
   const cache = useLiveQuery(() => localDb.snapshots.get(role), [role]);
   const operations = useLiveQuery(() => localDb.outbox.where("role").equals(role).sortBy("seq"), [role]) ?? [];
   const [error, setError] = useState("");

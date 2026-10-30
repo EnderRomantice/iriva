@@ -1,22 +1,23 @@
-import type { Role, Snapshot } from "@/domain/models";
+import { scopeIdentity, type WorkspaceScope } from "@/domain/workspace";
+import type { Snapshot } from "@/domain/models";
 import type { Command } from "@/domain/commands";
 import { localDb } from "./database";
 
 export type NetworkMode = "online" | "offline" | "slow";
 export function networkMode(): NetworkMode { return (localStorage.getItem("iriva-network") as NetworkMode) || "online"; }
 export function setNetworkMode(value: NetworkMode) { localStorage.setItem("iriva-network", value); window.dispatchEvent(new Event("iriva-network")); }
-export async function request(role: Role, path: string, command?: Command): Promise<Response> {
+export async function request(role: WorkspaceScope, path: string, command?: Command): Promise<Response> {
   if (networkMode() === "offline" || !navigator.onLine) throw new Error("当前离线，内容已保存在本机。");
   if (networkMode() === "slow") await new Promise(resolve => setTimeout(resolve, 1800));
-  return fetch(path, { method: command ? "POST" : "GET", headers: { "x-demo-role": role, ...(command ? { "Content-Type": "application/json" } : {}) }, body: command ? JSON.stringify(command) : undefined, cache: "no-store", signal: AbortSignal.timeout(15000) });
+  return fetch(path, { method: command ? "POST" : "GET", headers: { "x-demo-role": scopeIdentity(role).role, "x-workspace-id": scopeIdentity(role).organizationId, ...(command ? { "Content-Type": "application/json" } : {}) }, body: command ? JSON.stringify(command) : undefined, cache: "no-store", signal: AbortSignal.timeout(15000) });
 }
-export async function fetchSnapshot(role: Role): Promise<Snapshot> {
+export async function fetchSnapshot(role: WorkspaceScope): Promise<Snapshot> {
   const response = await request(role, "/api/workspace");
   if (!response.ok) throw new Error((await response.json()).error);
   return response.json();
 }
-const running = new Map<Role, Promise<void>>();
-export function synchronize(role: Role): Promise<void> {
+const running = new Map<WorkspaceScope, Promise<void>>();
+export function synchronize(role: WorkspaceScope): Promise<void> {
   const active = running.get(role);
   if (active) return active;
   const work = async () => {
@@ -51,7 +52,7 @@ export function synchronize(role: Role): Promise<void> {
 }
 
 /** Rebase only after an explicit user choice; never silently overwrite another device. */
-export async function resolveConflict(role: Role, entityId: string, choice: "local" | "server") {
+export async function resolveConflict(role: WorkspaceScope, entityId: string, choice: "local" | "server") {
   const fresh = await fetchSnapshot(role);
   await localDb.transaction("rw", localDb.snapshots, localDb.outbox, localDb.drafts, async () => {
     const entries = (await localDb.outbox.where("role").equals(role).sortBy("seq")).filter(o => o.entityId === entityId);

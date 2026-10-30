@@ -17,7 +17,8 @@ export function actorFromRequest(request: Request): Actor {
   requireLocalDemo(request);
   const role = request.headers.get("x-demo-role") as Role;
   if (!Object.hasOwn(demoActors, role ?? "")) throw new DomainError(401, "请选择一个本地演示身份。");
-  return demoActors[role];
+  const organizationId = request.headers.get("x-workspace-id");
+  return organizationId ? { ...demoActors[role], organizationId } : demoActors[role];
 }
 export function errorResponse(error: unknown) {
   if (error instanceof DomainError) return Response.json({ error: error.message }, { status: error.status });

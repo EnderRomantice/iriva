@@ -1,3 +1,4 @@
+import { demoOrganizationId } from "../../domain/workspace";
 import type { Entity, State } from "../../domain/models";
 import { SqliteRepository, tables } from "../repositories/sqlite-repository";
 
@@ -10,6 +11,7 @@ export function seedDemo(repo: SqliteRepository) {
       // Update the original demo translation without overwriting edited locations.
       repo.db.prepare("UPDATE users SET city = 'London' WHERE id = ? AND email = 'emma@example.test' AND city = '伦敦'").run(seedId(5));
     });
+    seedOrganizations(repo);
     return;
   }
   const now = new Date();
@@ -17,6 +19,7 @@ export function seedDemo(repo: SqliteRepository) {
   const base = (n: number): Entity => ({ id: seedId(n), version: 1, createdAt: now.toISOString(), updatedAt: now.toISOString() });
   const householdId = seedId(201);
   const state: State = {
+    organizations: [], organizationMemberships: [],
     users: [
       { ...base(1), name: "林小满", email: "xiaoman@example.test", city: "上海", timezone: "Asia/Shanghai", avatar: "coral" },
       { ...base(2), name: "陈一舟", email: "yizhou@example.test", city: "北京", timezone: "Asia/Shanghai", avatar: "blue" },
@@ -59,4 +62,23 @@ export function seedDemo(repo: SqliteRepository) {
     enrollments: [1,2,3,4].map(n => ({ ...base(800 + n), userId: seedId(n), termId: seedId(101), householdId, plan: "母语档 · 每周 1 次", amountMinor: 318000, currency: "CNY", paymentStatus: "paid" })),
   };
   repo.atomic(() => { for (const table of tables) for (const item of state[table]) repo.put(table, item); });
+  seedOrganizations(repo);
+}
+
+
+function seedOrganizations(repo: SqliteRepository) {
+  const now = new Date().toISOString();
+  const base = (n: number): Entity => ({ id: seedId(n), version: 1, createdAt: now, updatedAt: now });
+  repo.atomic(() => {
+    // Existing users belong to the original institution; never reassign their data.
+    repo.db.exec("INSERT OR IGNORE INTO organization_memberships SELECT 'org-' || id, '10000000-0000-4000-8000-000000001001', id, CASE WHEN id='10000000-0000-4000-8000-000000000006' THEN 'ops' WHEN id IN (SELECT host_id FROM households WHERE organization_id='10000000-0000-4000-8000-000000001001') THEN 'host' ELSE 'learn' END, 1, created_at, updated_at FROM users WHERE id NOT IN (SELECT user_id FROM organization_memberships)");
+    if (repo.read().organizations.some(o => o.id === demoOrganizationId)) return;
+    if (![1,5,6].every(n => repo.read().users.some(u => u.id === seedId(n) && u.email.endsWith("@example.test")))) return;
+    repo.put("organizations", { ...base(1002), name: "Common Ground", initials: "C", color: "#5d3c63" });
+    for (const [index, userId, role] of [[1051, 1, "learn"], [1055, 5, "host"], [1056, 6, "ops"]] as const) repo.put("organizationMemberships", { ...base(index), organizationId: demoOrganizationId, userId: seedId(userId), role });
+    repo.put("terms", { ...base(1101), name: "Common Ground · 城市交流", startsOn: now.slice(0,10), endsOn: new Date(Date.now()+42*86400000).toISOString().slice(0,10) });
+    repo.put("households", { ...base(1201), organizationId: demoOrganizationId, name: "City Stories", termId: seedId(1101), hostId: seedId(5), timezone: "Europe/London", capacity: 4, theme: "分享你所在城市的一件小事。" });
+    for (const [index, userId, role] of [[1211,1,"learner"], [1215,5,"host"]] as const) repo.put("memberships", { ...base(index), householdId: seedId(1201), userId: seedId(userId), role });
+    repo.put("assignments", { ...base(1401), householdId: seedId(1201), title: "A place you call home", description: "用几句话介绍你所在城市中最喜欢的一个地方。", category: "practice", dueAt: new Date(Date.now()+3*86400000).toISOString(), week: 1 });
+  });
 }

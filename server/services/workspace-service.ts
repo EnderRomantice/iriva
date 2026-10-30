@@ -1,3 +1,4 @@
+import { defaultOrganizationId } from "../../domain/workspace";
 import { randomUUID } from "node:crypto";
 import type { Actor, Entity, Snapshot, State } from "../../domain/models";
 import { DomainError, type Command, applicationSchema } from "../../domain/commands";
@@ -8,11 +9,29 @@ const meta = (id: string, current?: Entity): Entity => ({ id, version: (current?
 
 export class WorkspaceService {
   constructor(private repo: WorkspaceRepository) {}
+  private organizationState(state: State, actor: Actor): State {
+    const id = actor.organizationId || defaultOrganizationId;
+    requireRule(state.organizationMemberships.some(m => m.organizationId === id && m.userId === actor.userId && m.role === actor.role), "你没有访问这个工作区的权限。", 403);
+    const households = state.households.filter(h => (h.organizationId || defaultOrganizationId) === id);
+    const householdIds = new Set(households.map(h => h.id));
+    const assignments = state.assignments.filter(a => householdIds.has(a.householdId));
+    const assignmentIds = new Set(assignments.map(a => a.id));
+    const submissions = state.submissions.filter(s => assignmentIds.has(s.assignmentId));
+    const submissionIds = new Set(submissions.map(s => s.id));
+    const organizationMemberships = state.organizationMemberships.filter(m => m.organizationId === id);
+    const applications = state.applications.filter(a => (a.organizationId || defaultOrganizationId) === id);
+    const userIds = new Set([...organizationMemberships.map(m => m.userId), ...applications.map(a => a.userId)]);
+    const accessible = new Set(state.organizationMemberships.filter(m => m.userId === actor.userId && m.role === actor.role).map(m => m.organizationId));
+    return { organizations: state.organizations.filter(o => accessible.has(o.id)), organizationMemberships, households, assignments, submissions, applications,
+      users: state.users.filter(u => userIds.has(u.id)), terms: state.terms.filter(t => households.some(h => h.termId === t.id)),
+      memberships: state.memberships.filter(m => householdIds.has(m.householdId)), sessions: state.sessions.filter(s => householdIds.has(s.householdId)),
+      feedback: state.feedback.filter(f => submissionIds.has(f.submissionId)), enrollments: state.enrollments.filter(e => householdIds.has(e.householdId)) };
+  }
   private householdAccess(state: State, actor: Actor, householdId: string) {
     return actor.role === "ops" || (actor.role === "host" ? state.households.some(h => h.id === householdId && h.hostId === actor.userId) : state.memberships.some(m => m.householdId === householdId && m.userId === actor.userId && m.role === "learner"));
   }
   async snapshot(actor: Actor): Promise<Snapshot> {
-    const state = await this.repo.snapshot();
+    const state = this.organizationState(await this.repo.snapshot(), actor);
     requireRule(state.users.some(u => u.id === actor.userId), "身份不存在。", 401);
     if (actor.role === "ops") return { ...state, actor, serverTime: new Date().toISOString() };
     const households = state.households.filter(h => this.householdAccess(state, actor, h.id));
@@ -24,6 +43,7 @@ export class WorkspaceService {
     const submissionIds = new Set(submissions.map(s => s.id));
     const userIds = new Set([...memberships.map(m => m.userId), actor.userId, ...households.map(h => h.hostId)]);
     return {
+      organizations: state.organizations, organizationMemberships: state.organizationMemberships.filter(m => m.userId === actor.userId),
       actor, serverTime: new Date().toISOString(), households, memberships, assignments, submissions,
       users: state.users.filter(u => userIds.has(u.id)).map(u => u.id === actor.userId ? u : { ...u, email: "" }),
       terms: state.terms.filter(t => households.some(h => h.termId === t.id)),
@@ -34,9 +54,12 @@ export class WorkspaceService {
   }
   execute(actor: Actor, command: Command): Promise<{ version: number }> {
     return this.repo.transaction(tx => {
+      const raw = tx.read();
+      const state = this.organizationState(raw, actor);
+      const table = command.kind === "submission.save" ? "submissions" : command.kind === "feedback.save" ? "feedback" : command.kind === "session.reschedule" ? "sessions" : "applications";
+      requireRule(!raw[table].some(e => e.id === command.entityId) || state[table].some(e => e.id === command.entityId));
       const receipt = tx.receipt(actor.userId, command.id);
       if (receipt) return receipt;
-      const state = tx.read();
       requireRule(state.users.some(u => u.id === actor.userId), "身份不存在。", 401);
       let version = 0;
       const checkVersion = (value?: Entity) => { requireRule((value?.version ?? 0) === command.baseVersion, "这条记录已在其他设备更新。你的输入已保留，请查看最新版本。", 409); version = (value?.version ?? 0) + 1; };
@@ -102,14 +125,16 @@ export class WorkspaceService {
       return { version };
     });
   }
-  apply(input: unknown) {
+  apply(input: unknown, organizationId = defaultOrganizationId) {
     const data = applicationSchema.parse(input);
     return this.repo.transaction(tx => {
+      requireRule(tx.read().organizations.some(o => o.id === organizationId), "工作区不存在。", 404);
       const email = data.email.toLowerCase();
       requireRule(!tx.read().users.some(u => u.email === email), "这个邮箱已有报名记录，请联系运营确认。", 409);
       const user = { ...meta(randomUUID()), name: data.name, email, city: "", timezone: "Asia/Shanghai", avatar: "blue" };
       tx.saveUser(user);
-      const application = { ...meta(randomUUID()), userId: user.id, goal: data.goal, availability: data.availability, status: "new" as const };
+      tx.saveOrganizationMembership({ ...meta(randomUUID()), organizationId, userId: user.id, role: "learn" });
+      const application = { ...meta(randomUUID()), organizationId, userId: user.id, goal: data.goal, availability: data.availability, status: "new" as const };
       tx.saveApplication(application);
       return { id: application.id };
     });

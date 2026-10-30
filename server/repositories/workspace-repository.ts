@@ -1,4 +1,4 @@
-import type { Application, Enrollment, Feedback, Membership, Session, State, Submission, User } from "../../domain/models";
+import type { OrganizationMembership, Application, Enrollment, Feedback, Membership, Session, State, Submission, User } from "../../domain/models";
 
 /** Domain-facing port. Only the adapter knows SQLite, SQL names, and driver types. */
 export interface WorkspaceUnitOfWork {
@@ -12,6 +12,7 @@ export interface WorkspaceUnitOfWork {
   saveMembership(value: Membership): void;
   saveEnrollment(value: Enrollment): void;
   saveUser(value: User): void;
+  saveOrganizationMembership(value: OrganizationMembership): void;
   audit(actorId: string, kind: string, entityId: string): void;
 }
 

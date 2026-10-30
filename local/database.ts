@@ -1,11 +1,12 @@
+import type { WorkspaceScope } from "@/domain/workspace";
 import Dexie, { type EntityTable } from "dexie";
-import type { Role, Snapshot } from "@/domain/models";
+import type { Snapshot } from "@/domain/models";
 import type { Command } from "@/domain/commands";
 
-export interface PendingOperation { seq?: number; id: string; role: Role; entityId: string; command: Command; status: "pending" | "conflict"; error?: string }
-export interface Draft { key: string; role: Role; body: string; savedAt: string }
+export interface PendingOperation { seq?: number; id: string; role: WorkspaceScope; entityId: string; command: Command; status: "pending" | "conflict"; error?: string }
+export interface Draft { key: string; role: WorkspaceScope; body: string; savedAt: string }
 export const localDb = new Dexie("iriva-workspace-v1") as Dexie & {
-  snapshots: EntityTable<{ role: Role; data: Snapshot }, "role">;
+  snapshots: EntityTable<{ role: WorkspaceScope; data: Snapshot }, "role">;
   outbox: EntityTable<PendingOperation, "seq">;
   drafts: EntityTable<Draft, "key">;
 };
@@ -26,7 +27,7 @@ export function projectSnapshot(snapshot: Snapshot, operations: PendingOperation
   return data;
 }
 
-export async function enqueue(role: Role, command: Command) {
+export async function enqueue(role: WorkspaceScope, command: Command) {
   await localDb.transaction("rw", localDb.outbox, localDb.snapshots, async () => {
     const existing = await localDb.outbox.where("role").equals(role).toArray();
     const cached = await localDb.snapshots.get(role);
@@ -47,6 +48,6 @@ export async function enqueue(role: Role, command: Command) {
   });
 }
 
-export async function saveDraft(role: Role, entityId: string, body: string) {
+export async function saveDraft(role: WorkspaceScope, entityId: string, body: string) {
   await localDb.drafts.put({ key: `${role}:${entityId}`, role, body, savedAt: new Date().toISOString() });
 }

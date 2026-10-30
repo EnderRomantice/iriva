@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { localDb, enqueue, projectSnapshot, saveDraft } from "../local/database";
 import type { Snapshot } from "../domain/models";
 import type { Command } from "../domain/commands";
-const snapshot: Snapshot = { actor: { role: "learn", userId: randomUUID() }, serverTime: new Date().toISOString(), users: [], terms: [], households: [], memberships: [], sessions: [], assignments: [], submissions: [], feedback: [], applications: [], enrollments: [] };
+const snapshot: Snapshot = { organizations: [], organizationMemberships: [], actor: { role: "learn", userId: randomUUID() }, serverTime: new Date().toISOString(), users: [], terms: [], households: [], memberships: [], sessions: [], assignments: [], submissions: [], feedback: [], applications: [], enrollments: [] };
 
 test("durable outbox keeps ordering, overlays changes and survives reopen without corrupting server snapshot", async () => {
   await localDb.delete(); await localDb.open();
@@ -36,5 +36,13 @@ test("durable outbox keeps ordering, overlays changes and survives reopen withou
   await localDb.snapshots.put({ role: "learn", data: changed });
   await enqueue("learn", command);
   assert.equal((await localDb.outbox.toArray())[0].command.baseVersion, 0, "never silently rebase an old editor onto a newer server version");
+  const other = "learn:second-workspace" as const;
+  await localDb.snapshots.put({ role: other, data: snapshot });
+  await saveDraft(other, "assignment-test", "Other organization draft");
+  await enqueue(other, { ...command, id: randomUUID() });
+  assert.equal((await localDb.drafts.get("learn:assignment-test"))?.body, "unsent text");
+  assert.equal((await localDb.drafts.get(`${other}:assignment-test`))?.body, "Other organization draft");
+  assert.equal((await localDb.outbox.where("role").equals(other).toArray()).length, 1);
+  assert.equal((await localDb.outbox.where("role").equals("learn").toArray()).length, 1);
   await localDb.delete();
 });

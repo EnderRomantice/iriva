@@ -3,11 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import type { Assignment, Role, Snapshot } from "@/domain/models";
 import type { Command } from "@/domain/commands";
 import { localDb, saveDraft } from "@/local/database";
+import { workspaceScope } from "@/domain/workspace";
 import { Avatar } from "./primitives";
 
 interface Props { data: Snapshot; role: Role; assignment: Assignment; submissionId?: string; mutate: (command: Command) => Promise<void>; onSaved: () => void; notify: (message: string) => void }
 export function Practice({ data, role, assignment, submissionId, mutate, onSaved, notify }: Props) {
   const host = role === "host";
+  const scope = workspaceScope(role, data.actor.organizationId);
   const submission = submissionId ? data.submissions.find(s => s.id === submissionId) : data.submissions.find(s => s.assignmentId === assignment.id && s.learnerId === data.actor.userId);
   const feedback = data.feedback.find(f => f.submissionId === submission?.id);
   const existing = host ? feedback : submission;
@@ -23,7 +25,7 @@ export function Practice({ data, role, assignment, submissionId, mutate, onSaved
   const editSequence = useRef(0);
   useEffect(() => {
     let active = true;
-    void localDb.drafts.get(`${role}:${key}`).then(draft => {
+    void localDb.drafts.get(`${scope}:${key}`).then(draft => {
       if (!active) return;
       if (draft) { try { const value = JSON.parse(draft.body); setBody(value.body); if (typeof value.baseVersion === "number") setVersion(value.baseVersion); if (!existing && value.id) setId(value.id); } catch { setBody(draft.body); } setSaved(true); }
       setReady(true);
@@ -31,10 +33,10 @@ export function Practice({ data, role, assignment, submissionId, mutate, onSaved
     return () => { active = false; };
     // An open editor owns its revision. Polling must not replace the draft or base version.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role, key]);
+  }, [scope, key]);
   const change = (value: string) => {
     setBody(value); setSaved(false); const sequence = ++editSequence.current;
-    writes.current = writes.current.catch(() => {}).then(() => saveDraft(role, key, JSON.stringify({ id, body: value, baseVersion: version })));
+    writes.current = writes.current.catch(() => {}).then(() => saveDraft(scope, key, JSON.stringify({ id, body: value, baseVersion: version })));
     void writes.current.then(() => { if (editSequence.current === sequence) { setSaved(true); setError(""); } }).catch(() => setError("本机保存失败，请复制你的内容后重试。"));
   };
   const submit = async (publish: boolean) => {
@@ -42,7 +44,7 @@ export function Practice({ data, role, assignment, submissionId, mutate, onSaved
     try {
       await writes.current;
       if (!publish && (existing?.status === "submitted" || existing?.status === "published")) {
-        await saveDraft(role, key, JSON.stringify({ id, body, baseVersion: version }));
+        await saveDraft(scope, key, JSON.stringify({ id, body, baseVersion: version }));
         setSaved(true); notify("修改已存为本机草稿。"); return;
       }
       const base = { id: crypto.randomUUID(), entityId: id, baseVersion: version };
@@ -50,7 +52,7 @@ export function Practice({ data, role, assignment, submissionId, mutate, onSaved
         ? { ...base, kind: "feedback.save", payload: { submissionId: submission!.id, body, status: publish ? "published" : "draft" } }
         : { ...base, kind: "submission.save", payload: { assignmentId: assignment.id, body, completed: publish || submission?.completed || false, status: publish ? "submitted" : "draft" } };
       await mutate(command);
-      await localDb.drafts.delete(`${role}:${key}`);
+      await localDb.drafts.delete(`${scope}:${key}`);
       notify(publish ? "已存本机，同步后送达。" : "草稿已加入同步队列。");
       onSaved();
     } catch (e) { setError(e instanceof Error ? e.message : "无法保存，请重试。"); }

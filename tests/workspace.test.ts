@@ -27,7 +27,7 @@ test("schema and seed are repeatable; foreign keys are valid", t => {
   const second = new SqliteRepository(file);
   assert.equal(second.read().users.length, 9);
   assert.deepEqual(second.db.prepare("PRAGMA foreign_key_check").all(), []);
-  assert.equal((second.db.prepare("SELECT COUNT(*) AS n FROM schema_migrations").get() as { n: number }).n, 2);
+  assert.equal((second.db.prepare("SELECT COUNT(*) AS n FROM schema_migrations").get() as { n: number }).n, 3);
   second.db.close();
 });
 
@@ -159,5 +159,53 @@ test("city migration preserves existing users and accepts old rows without city"
     assert.equal(repo.read().users.find(u => u.id === "imported-v1")?.city, "");
     repo.saveUser({ ...user, city: "北京" });
     assert.equal(repo.read().users.find(u => u.id === user.id)?.city, "北京");
+  } finally { repo.db.close(); }
+});
+
+test("organizations isolate snapshots and reject cross-workspace mutations for every role", async t => {
+  const { service, repo } = fixture(t);
+  const secondId = seedId(1002);
+  const secondLearner = { ...demoActors.learn, organizationId: secondId };
+  const first = await service.snapshot(demoActors.learn);
+  const second = await service.snapshot(secondLearner);
+  assert.equal(first.organizations.length, 2);
+  assert.deepEqual(second.households.map(h => h.name), ["City Stories"]);
+  assert.ok(!second.assignments.some(a => first.assignments.some(old => old.id === a.id)));
+  assert.ok(second.users.every(u => [seedId(1),seedId(5)].includes(u.id)));
+  await assert.rejects(service.execute(secondLearner, submissionCommand()), { status: 403 });
+  await assert.rejects(service.snapshot({ ...demoActors.learn, organizationId: randomUUID() }), { status: 403 });
+  const secondOps = { ...demoActors.ops, organizationId: secondId };
+  assert.deepEqual((await service.snapshot(secondOps)).applications, []);
+  await assert.rejects(service.execute(secondOps, { id: randomUUID(), kind: "application.contact", entityId: seedId(701), baseVersion: 1, payload: {} }), { status: 403 });
+  // A colliding entity UUID cannot overwrite a record in another organization.
+  await assert.rejects(service.execute(secondLearner, { ...submissionCommand(), kind: "submission.save", payload: { assignmentId: seedId(1401), body: "Collision", completed: false, status: "draft" } }), { status: 403 });
+  assert.equal(repo.read().submissions.find(s => s.id === seedId(502))?.body, "There is a little bookshop near my home. I like going there on Sunday mornings…");
+});
+
+test("public applications are attached only to the selected institution", async t => {
+  const { service } = fixture(t);
+  const application = await service.apply({ name: "New member", email: "new-institution@example.test", goal: "Practice together", availability: "Weekends" }, seedId(1002));
+  assert.ok(!(await service.snapshot(demoActors.ops)).applications.some(a => a.id === application.id));
+  assert.ok((await service.snapshot({ ...demoActors.ops, organizationId: seedId(1002) })).applications.some(a => a.id === application.id));
+});
+
+test("organization migration preserves populated households and restores FK enforcement", t => {
+  const folder = mkdtempSync(path.join(os.tmpdir(), "iriva-organization-migration-"));
+  const filename = path.join(folder, "legacy.sqlite");
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  const legacy = new Database(filename);
+  legacy.exec(readFileSync("server/db/migrations/001_initial.sql", "utf8"));
+  legacy.exec(readFileSync("server/db/migrations/002_user_city.sql", "utf8"));
+  legacy.exec("CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL); INSERT INTO schema_migrations VALUES (1,'2026-10-30'),(2,'2026-10-30')");
+  legacy.prepare("INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?)").run("legacy-host", "Host", "host@sample.test", "Europe/London", "blue", 1, "2026-10-30", "2026-10-30", "London");
+  legacy.exec("INSERT INTO terms VALUES ('term','Existing term','2026-10-30','2026-12-01',1,'2026-10-30','2026-10-30'); INSERT INTO households VALUES ('household','Existing group','term','legacy-host','Europe/London',4,'Existing theme',1,'2026-10-30','2026-10-30')");
+  legacy.close();
+  const repo = new SqliteRepository(filename);
+  try {
+    assert.equal(repo.read().households[0].organizationId, seedId(1001));
+    assert.equal(repo.read().households[0].name, "Existing group");
+    assert.equal(repo.db.pragma("foreign_keys", { simple: true }), 1);
+    assert.deepEqual(repo.db.pragma("foreign_key_check"), []);
+    assert.throws(() => repo.put("households", { ...repo.read().households[0], organizationId: "missing" }));
   } finally { repo.db.close(); }
 });

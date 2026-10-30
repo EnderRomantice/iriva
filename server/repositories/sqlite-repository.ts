@@ -2,10 +2,10 @@ import Database from "better-sqlite3";
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import type { State, Submission, Feedback, Application, Session, Membership, Enrollment, User } from "../../domain/models";
+import type { OrganizationMembership, State, Submission, Feedback, Application, Session, Membership, Enrollment, User } from "../../domain/models";
 import type { WorkspaceRepository, WorkspaceUnitOfWork } from "./workspace-repository";
 
-export const tables = ["users", "terms", "households", "memberships", "sessions", "assignments", "submissions", "feedback", "applications", "enrollments"] as const;
+export const tables = ["organizations", "users", "organizationMemberships", "terms", "households", "memberships", "sessions", "assignments", "submissions", "feedback", "applications", "enrollments"] as const;
 const snake = (key: string) => key.replace(/[A-Z]/g, c => `_${c.toLowerCase()}`);
 const camel = (key: string) => key.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
 
@@ -17,26 +17,33 @@ export class SqliteRepository implements WorkspaceRepository, WorkspaceUnitOfWor
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("busy_timeout = 5000");
     this.db.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
-    for (const [index, file] of ["001_initial.sql", "002_user_city.sql"].entries()) {
+    for (const [index, file] of ["001_initial.sql", "002_user_city.sql", "003_organizations.sql"].entries()) {
       const version = index + 1;
       if (this.db.prepare("SELECT version FROM schema_migrations WHERE version = ?").get(version)) continue;
-      this.atomic(() => {
-        this.db.exec(readFileSync(path.join(process.cwd(), "server/db/migrations", file), "utf8"));
-        this.db.prepare("INSERT INTO schema_migrations VALUES (?,?)").run(version, new Date().toISOString());
-      });
+      // SQLite requires FK enforcement off while adding a referenced column with
+      // a non-null default to populated tables. Validate inside the transaction
+      // before committing, then always restore enforcement on this connection.
+      if (version === 3) this.db.pragma("foreign_keys = OFF");
+      try {
+        this.atomic(() => {
+          this.db.exec(readFileSync(path.join(process.cwd(), "server/db/migrations", file), "utf8"));
+          if ((this.db.pragma("foreign_key_check") as unknown[]).length) throw new Error(`Invalid foreign keys after migration ${version}`);
+          this.db.prepare("INSERT INTO schema_migrations VALUES (?,?)").run(version, new Date().toISOString());
+        });
+      } finally { this.db.pragma("foreign_keys = ON"); }
     }
   }
   atomic<T>(work: () => T): T { return this.db.transaction(work).immediate(); }
   async snapshot(): Promise<State> { return this.read(); }
   async transaction<T>(work: (tx: WorkspaceUnitOfWork) => T): Promise<T> { return this.atomic(() => work(this)); }
   read(): State {
-    return Object.fromEntries(tables.map(table => [table, this.db.prepare(`SELECT * FROM ${table}`).all().map(row => Object.fromEntries(Object.entries(row as Record<string, unknown>).map(([key, value]) => [camel(key), key === "completed" ? Boolean(value) : value])))])) as unknown as State;
+    return Object.fromEntries(tables.map(table => [table, this.db.prepare(`SELECT * FROM ${snake(table)}`).all().map(row => Object.fromEntries(Object.entries(row as Record<string, unknown>).map(([key, value]) => [camel(key), key === "completed" ? Boolean(value) : value])))])) as unknown as State;
   }
   /** Table names and entity fields come only from trusted domain code, never requests. */
   put(table: typeof tables[number], value: object) {
     const entries = Object.entries(value);
     const names = entries.map(([key]) => snake(key));
-    this.db.prepare(`INSERT INTO ${table} (${names.join(",")}) VALUES (${names.map(() => "?").join(",")}) ON CONFLICT(id) DO UPDATE SET ${names.filter(n => n !== "id").map(n => `${n}=excluded.${n}`).join(",")}`).run(...entries.map(([, value]) => typeof value === "boolean" ? Number(value) : value));
+    this.db.prepare(`INSERT INTO ${snake(table)} (${names.join(",")}) VALUES (${names.map(() => "?").join(",")}) ON CONFLICT(id) DO UPDATE SET ${names.filter(n => n !== "id").map(n => `${n}=excluded.${n}`).join(",")}`).run(...entries.map(([, value]) => typeof value === "boolean" ? Number(value) : value));
   }
   receipt(actorId: string, commandId: string) { return this.db.prepare("SELECT version FROM mutation_receipts WHERE actor_id=? AND command_id=?").get(actorId, commandId) as { version: number } | undefined; }
   acknowledge(actorId: string, commandId: string, version: number) { this.db.prepare("INSERT INTO mutation_receipts VALUES (?,?,?,?)").run(actorId, commandId, version, new Date().toISOString()); }
@@ -47,5 +54,6 @@ export class SqliteRepository implements WorkspaceRepository, WorkspaceUnitOfWor
   saveSession(v: Session) { this.put("sessions", v); }
   saveMembership(v: Membership) { this.put("memberships", v); }
   saveEnrollment(v: Enrollment) { this.put("enrollments", v); }
+  saveOrganizationMembership(v: OrganizationMembership) { this.put("organizationMemberships", v); }
   saveUser(v: User) { this.put("users", v); }
 }
