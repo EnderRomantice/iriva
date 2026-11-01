@@ -5,7 +5,7 @@ import { canContactHost } from '@/domain/hosts';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { workspaceRepository, workspaceService } from '@/server/container';
-import { actorFromRequest, errorResponse, requireLocalDemo } from '@/server/http';
+import { actorFromRequest, errorResponse } from '@/server/http';
 import { digest, sameOrigin, sessionActor, sessionCookie, sessionToken, renewSession } from '@/server/auth';
 import { DomainError } from '@/domain/commands';
 import { plans, profileSchema, missingProfileFields } from '@/domain/account';
@@ -17,8 +17,7 @@ export async function GET(request:Request) {
   try {
     const actor=await actorFromRequest(request), repo=await workspaceRepository(), state=await repo.read();
     const org=await platformId(repo,actor.organizationId);
-    let testPaymentsAvailable=false;
-    try { requireLocalDemo(request); testPaymentsAvailable=true; } catch {}
+    const testPaymentsAvailable=canManageSubscription(actor.role);
     const hosts=state.organizationMemberships.filter(m=>m.organizationId===org&&m.role==='host').map(m=>state.users.find(u=>u.id===m.userId)!).map(({email,birthChart,...user})=>user);
     const bookings=await repo.db.prepare(`SELECT b.*,u.name learner_name,h.name host_name FROM bookings b JOIN users u ON u.id=b.learner_id JOIN users h ON h.id=b.host_id WHERE organization_id=? AND ${actor.role==='ops'?'1=1':actor.role==='host'?'host_id=?':'learner_id=?'} ORDER BY b.created_at DESC`).all(...(actor.role==='ops'?[org]:[org,actor.userId]));
     const support=state.channels.find(c=>c.organizationId===org&&c.kind==='direct'&&c.description==='support'&&state.channelParticipants.some(p=>p.channelId===c.id&&p.userId===actor.userId));
@@ -77,10 +76,10 @@ export async function POST(request:Request) {
       if(!existing) await repo.db.prepare('INSERT INTO plan_orders VALUES (?,?,?,?,?,?,?)').run(id,user.id,input.plan,input.frequency,plan.prices[input.frequency-1],'pending',new Date().toISOString());
       return id;
       });
-      return Response.json({id,status:'pending',message:'订单已保存。在线支付暂未开通，你可以联系运营了解付款安排。支付确认后将开放 Host 选择。'});
+      return Response.json({id,status:'pending',message:'订单已保存，点击支付即可开通套餐。当前为体验支付，不会实际扣款。'});
     }
-    if(body.action==='checkout.pay-test') {
-      requireLocalDemo(request);
+    // Keep the previous action working for checkout pages opened before deployment.
+    if(body.action==='checkout.pay'||body.action==='checkout.pay-test') {
       if(!canManageSubscription(actor.role)) throw new DomainError(403,'只有学员可以支付自己的订单。');
       const {orderId}=z.object({orderId:z.uuid()}).parse(body);
       await repo.transaction(async ()=>{

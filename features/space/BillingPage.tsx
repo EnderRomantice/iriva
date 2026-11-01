@@ -40,10 +40,10 @@ export function BillingPage({ checkout = false }: { checkout?: boolean }) {
       location.assign(billingHref('checkout', org, result.id));
     } catch (e) { setError(e instanceof Error ? e.message : '暂时无法创建订单。'); setBusy(''); }
   }
-  async function payTest() {
+  async function pay() {
     setBusy('payment'); setError('');
     try {
-      await accountRequest({ action: 'checkout.pay-test', orderId });
+      await accountRequest({ action: 'checkout.pay', orderId });
       setAccount(await accountRequest());
     } catch (e) { setError(e instanceof Error ? e.message : '支付失败，请重试。'); }
     finally { setBusy(''); }
@@ -57,7 +57,7 @@ export function BillingPage({ checkout = false }: { checkout?: boolean }) {
         <a className="sp-billing-back" href={billingHref('plans', org)}>← 返回套餐</a>
         {!order || !selected ? <div className="sp-checkout-empty"><h1>未找到这个订单</h1><p>请返回套餐页重新选择。</p></div> : <div className="sp-checkout-grid">
           <section className="sp-checkout-summary"><h1>{selected.name}<br/><span>开启六周同行。</span></h1><p>{selected.description}</p><ul>{selected.benefits.map(b => <li key={b}>✓ {b}</li>)}</ul><div className="sp-checkout-detail"><span>学习周期</span><strong>6 周 / 学期</strong><span>iriva meeting 频次</span><strong>每周 {order.frequency} 次</strong></div></section>
-          <section className="sp-checkout-payment"><h2>订单确认</h2><div className="sp-checkout-line"><span>{selected.name} · 一个学期</span><strong>¥{(order.amount_minor / 100).toLocaleString()}</strong></div><div className="sp-checkout-total"><span>应付金额</span><strong>¥{(order.amount_minor / 100).toLocaleString()}</strong></div><p className="sp-billing-caption">一次付清，无自动续费</p><div className="sp-checkout-status" role="status">{order.status === 'paid' ? '支付成功！套餐已开通，可以开始选择 Host。' : account.testPaymentsAvailable ? '测试支付 · 点击后立即成功，不会产生真实扣款。' : '订单已保存。在线支付暂未开通，请与运营确认付款安排。'}</div>{order.status === 'paid' ? <a className="sp-billing-primary" href={billingHref('hosts', org)}>选择 Host →</a> : <button className="sp-billing-primary" disabled={!account.testPaymentsAvailable || !!busy} onClick={() => void payTest()}>{busy === 'payment' ? '正在支付…' : account.testPaymentsAvailable ? `支付 ¥${(order.amount_minor / 100).toLocaleString()}` : '支付暂未开通'}</button>}{error && <p className="sp-error" role="alert">{error}</p>}<button className="sp-checkout-contact" onClick={() => continueToSupport(account, org)}>联系运营</button></section>
+          <section className="sp-checkout-payment"><h2>订单确认</h2><div className="sp-checkout-line"><span>{selected.name} · 一个学期</span><strong>¥{(order.amount_minor / 100).toLocaleString()}</strong></div><div className="sp-checkout-total"><span>应付金额</span><strong>¥{(order.amount_minor / 100).toLocaleString()}</strong></div><p className="sp-billing-caption">一次付清，无自动续费</p><div className="sp-checkout-status" role="status">{order.status === 'paid' ? '支付成功！套餐已开通，可以开始选择 Host。' : account.testPaymentsAvailable ? '体验支付 · 点击即可开通套餐，不会实际扣款。' : '当前账号无法支付，请刷新页面或重新登录。'}</div>{order.status === 'paid' ? <a className="sp-billing-primary" href={billingHref('hosts', org)}>选择 Host →</a> : <button className="sp-billing-primary" disabled={!account.testPaymentsAvailable || !!busy} onClick={() => void pay()}>{busy === 'payment' ? '正在支付…' : account.testPaymentsAvailable ? `支付 ¥${(order.amount_minor / 100).toLocaleString()}` : '暂时无法支付'}</button>}{error && <p className="sp-error" role="alert">{error}</p>}<button className="sp-checkout-contact" onClick={() => continueToSupport(account, org)}>联系运营</button></section>
         </div>}
       </div>
     </> : <section className="sp-plans-content">

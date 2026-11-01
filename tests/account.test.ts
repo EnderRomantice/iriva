@@ -21,7 +21,7 @@ function mailFixture(t: TestContext) {
  t.mock.method(globalThis,'fetch',async(_url:unknown,init:RequestInit)=>{const body=JSON.parse(String(init.body));messages.push({email:body.to[0],code:body.text.match(/\b[0-9]{6}\b/)[0]});return Response.json({id:randomUUID()});});
  return messages;
 }
-test('registration → support → pending order → paid fixture → booking → ops enrollment, with role and payment gates',async t=>{
+test('registration → support → pending order → instant payment → booking → ops enrollment, with role and payment gates',async t=>{
  const messages=mailFixture(t);
  const start=await POST(request({action:'email.begin',email:'new@example.test'}));assert.equal(start.status,200);
  const challenge=await start.json();assert.equal(challenge.delivery,'email');assert.equal(challenge.code,undefined);
@@ -40,20 +40,27 @@ test('registration → support → pending order → paid fixture → booking �
  const application=(await (await workspaceRepository()).read()).applications.find(a=>a.userId===actor.userId)!;
  const enroll={id:randomUUID(),entityId:application.id,baseVersion:1,kind:'application.enroll' as const,payload:{householdId:seedId(202)}};
  await assert.rejects((await workspaceService()).execute(demoActors.ops,enroll),{status:422});
- // Test payment is local-only, owned by the current learner, and idempotent.
- assert.equal((await POST(request({action:'checkout.pay-test',orderId}))).status,404);
- assert.equal((await POST(request({action:'checkout.pay-test',orderId},'','host'))).status,403);
+ // Instant payment works in production but remains scoped to the current learner.
+ assert.equal((await POST(request({action:'checkout.pay',orderId}))).status,404);
+ assert.equal((await POST(request({action:'checkout.pay',orderId},'','host'))).status,403);
  const mode=process.env.NODE_ENV;
  Object.assign(process.env,{NODE_ENV:'production'});
- try { assert.equal((await POST(request({action:'checkout.pay-test',orderId},cookie))).status,403); }
- finally { if(mode===undefined)Reflect.deleteProperty(process.env,'NODE_ENV');else Object.assign(process.env,{NODE_ENV:mode}); }
- const remotePay=new Request('http://192.168.1.2/api/account',{method:'POST',headers:{host:'192.168.1.2',cookie,'content-type':'application/json'},body:JSON.stringify({action:'checkout.pay-test',orderId})});
- assert.equal((await POST(remotePay)).status,403);
- assert.equal((await POST(request({action:'checkout.pay-test',orderId},cookie))).status,200);
+ try {
+  const productionRequest=(body?:object,session=cookie,origin='https://iriva.life')=>new Request('https://iriva.life/api/account',{method:body?'POST':'GET',headers:{host:'iriva.life',origin,cookie:session,'content-type':'application/json'},body:body?JSON.stringify(body):undefined});
+  assert.equal((await (await GET(productionRequest())).json()).testPaymentsAvailable,true);
+  assert.equal((await POST(productionRequest({action:'checkout.pay',orderId},''))).status,403);
+  assert.equal((await POST(productionRequest({action:'checkout.pay',orderId},cookie,'https://other.example'))).status,403);
+  assert.equal((await POST(productionRequest({action:'checkout.pay',orderId:randomUUID()}))).status,404);
+  const payments=await Promise.all([POST(productionRequest({action:'checkout.pay',orderId,plan:'max',amountMinor:1})),POST(productionRequest({action:'checkout.pay',orderId}))]);
+  for(const payment of payments){assert.equal(payment.status,200);assert.deepEqual(await payment.json(),{ok:true,status:'paid',test:true});}
+  const paid=await (await GET(productionRequest())).json();
+  assert.equal(paid.user.plan,'pro');assert.equal(paid.orders.find((o:{id:string})=>o.id===orderId).status,'paid');
+ } finally { if(mode===undefined)Reflect.deleteProperty(process.env,'NODE_ENV');else Object.assign(process.env,{NODE_ENV:mode}); }
  const paidUser=(await (await workspaceRepository()).read()).users.find(u=>u.id===actor.userId)!;
- assert.equal(paidUser.plan,'pro');
  assert.equal((await POST(request({action:'checkout.pay-test',orderId},cookie))).status,200);
  assert.equal((await (await workspaceRepository()).read()).users.find(u=>u.id===actor.userId)!.version,paidUser.version);
+ const receipts=await (await workspaceRepository()).db.prepare("SELECT id FROM audit_events WHERE kind='checkout.test_paid' AND entity_id=?").all(orderId);
+ assert.equal(receipts.length,1);
  await (await workspaceRepository()).db.prepare("UPDATE users SET plan='lite' WHERE id=?").run(actor.userId);
  assert.equal((await POST(request({action:'contact',hostId:demoActors.host.userId},cookie))).status,403);
  assert.equal((await (await workspaceRepository()).db.prepare('SELECT id FROM bookings WHERE learner_id=?').all(actor.userId)).length,0);
