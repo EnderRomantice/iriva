@@ -6,6 +6,9 @@ import { useWorkspace } from "@/local/use-workspace";
 import { localDb } from "@/local/database";
 import { resolveConflict } from "@/local/sync";
 import { accentInk, onColor, usePreferences, viewLabels, type View } from "./preferences";
+import { WorkspaceManagement } from "./WorkspaceManagement";
+import "./workspace-management.css";
+import { defaultOrganizationId } from "@/domain/workspace";
 import { AdmissionsPage } from "./AdmissionsPage";
 import { canAccessWorkspaceView, canManageSubscription, workspaceHomeHref } from "@/domain/workspace-access";
 import { findCard, type MessageCard } from "@/domain/message-cards";
@@ -32,13 +35,14 @@ export function Space({ role }: { role: Role }) {
   const navigation = useSpaceNavigation(role);
   const [account, setAccount] = useState<Account>();
   const [authError, setAuthError] = useState("");
-  async function refreshAccount() { const result = await accountRequest(); setAccount(result); }
+  async function refreshAccount() { const result:Account = await accountRequest(); if(result.role!==role) { location.replace(workspaceHomeHref(result.role,result.organizationId)); return; } setAccount(result); }
   useEffect(() => { accountRequest().then((a: Account) => {
     const org = new URLSearchParams(location.search).get("org") || undefined;
+    if (!org && !new URLSearchParams(location.search).get('view') && a.authenticated && a.role !== 'ops' && (a.landingWorkspaceId || a.homeWorkspaceId)) { location.replace(workspaceHomeHref(a.role,a.landingWorkspaceId || a.homeWorkspaceId)); return; }
     if (a.role !== role) { location.replace(workspaceHomeHref(a.role,org)); return; }
-    if (role === "learn" && !a.application) { location.replace(`/apply${org ? `?org=${encodeURIComponent(org)}` : ''}`); return; }
+    if (role === "learn" && !a.application && !a.management?.space?.kind?.match(/personal|host/)) { location.replace(`/apply${org ? `?org=${encodeURIComponent(org)}` : ''}`); return; }
     if (new URLSearchParams(location.search).get("panel") === "hosts") { location.replace(canAccessWorkspaceView(a.role,"hosts") ? billingHref("hosts",org) : workspaceHomeHref(a.role,org)); return; }
-    if (readRoute(location.href, role).view !== "profile" && needsPlan(a) && !hasChosenChat(a.user.id, org) && new URLSearchParams(location.search).get("chat") !== "1") { location.replace(billingHref("plans", org)); return; }
+    if (a.management?.space?.kind !== "personal" && a.management?.space?.kind !== "host" && readRoute(location.href, role).view !== "profile" && needsPlan(a) && !hasChosenChat(a.user.id, org) && new URLSearchParams(location.search).get("chat") !== "1") { location.replace(billingHref("plans", org)); return; }
     setAccount(a);
   }).catch(e => { if(role === "learn") location.replace("/apply"); else setAuthError(e.message); }); }, [role, navigation.route?.organizationId]);
   if (!navigation.route || !account) return <div className="sp-loading">{authError || "正在打开你的空间…"}</div>;
@@ -78,6 +82,7 @@ function SpaceContent({ role, navigation, account, refreshAccount }: { role: Rol
   useEffect(() => { setQuery(""); setPractice(undefined); setSession(undefined); scroll.current?.scrollTo({ top: 0 }); }, [route.view, route.householdId, route.channelId]);
   function navigate(value: string, level: "organization" | "household" = "household") {
     if (!allowed(value)) return;
+    if (value === "hosts" && account.management?.platformId && account.management.platformId !== route.organizationId) { location.assign(billingHref("hosts",account.management.platformId)); return; }
     const organization = data?.organizations?.find(o => o.id === route.organizationId);
     const next = viewRoute(route, value, level);
     navigation.go(next, `${organization?.name || "IRIVA"} / ${next.householdId ? household?.name || "小组" : "全部小组"} / ${value === "overview" && !next.householdId ? "主页" : viewLabels[value]}`);
@@ -92,14 +97,16 @@ function SpaceContent({ role, navigation, account, refreshAccount }: { role: Rol
     setQuery("");
   }
   function notify(message: string) { clearTimeout(timer.current); setToast(message); timer.current = setTimeout(() => setToast(""), 4500); }
-  const user = data?.users.find(u => u.id === data.actor.userId), household = data?.households.find(h => h.id === route.householdId);
+  const user = data?.users.find(u => u.id === data.actor.userId);
+  const currentSpace = data?.organizations.find(o=>o.id===route.organizationId);
+  const household = data?.households.find(h => h.id === route.householdId || !route.householdId && currentSpace?.kind === 'host' && h.organizationId === route.organizationId);
   const channel = data?.channels.find(c => c.id === route.channelId);
   const isChat = view === "channels" || view === "direct";
   useEffect(() => { if (channel || route.channelId !== openingChannel) setOpeningChannel(undefined); },[channel?.id,route.channelId,openingChannel]);
   const failed = operations.filter(o => o.status === "conflict");
   const status = failed.length ? "有更改需要处理" : offline ? "离线 · 已存本机" : error ? "连接中断 · 已存本机" : operations.length ? `${operations.length} 项待同步` : busy && !data ? "连接中…" : "所有更改已同步";
   const props = data ? { data, role, pending: new Set(operations.map(o => o.entityId)), navigate, openPractice: (assignment: Assignment, submissionId?: string) => setPractice({ assignment, submissionId }), openSession: setSession, mutate, onlineMutation, notify, openDirect } : undefined;
-  const content = data && householdSnapshot(data, route.householdId);
+  const content = data && householdSnapshot(data, household?.id || route.householdId);
   const scoped = props && content ? { ...props, data: content } : undefined;
   function selectHousehold(id: string) {
     const h = data?.households.find(h => h.id === id);
@@ -143,14 +150,14 @@ function SpaceContent({ role, navigation, account, refreshAccount }: { role: Rol
   async function resolve(entityId: string, choice: "local" | "server") { setResolving(true); setSyncError(""); try { await resolveConflict(scope, entityId, choice); await refresh(); } catch(e) { setSyncError(e instanceof Error ? e.message : "无法同步"); } finally { setResolving(false); } }
   return <div className="sp-app" data-dark={preferences.dark} data-compact={preferences.compact} data-collapsed={preferences.collapsed} style={{ "--sp-brand": preferences.color, "--sp-on-brand": onColor(preferences.color), "--sp-action-ink": accentInk(preferences.color) } as CSSProperties}>
     <Chrome role={role} data={data} user={user} household={household} channel={channel} selectChannel={selectChannel} createChat={setChatDialog} navigation={navigation} preferences={preferences} setPreferences={setPreferences} view={view} query={query} setQuery={setQuery} search={search} navigate={navigate} navigateOrganization={value => navigate(value, "organization")}
-      selectOrganization={id => { const org = data?.organizations?.find(o => o.id === id); if (id !== route.organizationId) navigation.go({ organizationId: id, householdId: "", view: "overview" }, `${org?.name || "工作区"} / 主页`); }}
+      selectOrganization={id => { const org = data?.organizations?.find(o => o.id === id); if (id !== route.organizationId) { const targetRole=data?.organizationMemberships.find(m=>m.userId===account.user.id&&m.organizationId===id)?.role || role; location.assign(workspaceHomeHref(targetRole,id)); } }}
       selectHousehold={selectHousehold}
       create={setCreating} settings={() => setSettings(true)} offline={offline || !!error}>
         {profileIncomplete && view !== "profile" && <div className="sp-profile-reminder" role="status"><span>完善个人资料，让 Host 更了解你。</span><button onClick={() => editProfile(view === "hosts")}>去完善 <span aria-hidden="true">→</span></button></div>}
         <main className={`sp-scroll ${isChat && (channel || !route.channelId) ? "sp-chat-scroll" : ""}`} ref={scroll}>{!data || !props ? <div className="sp-loading"><h1>正在打开你的空间</h1><p>{error || "读取本机内容…"}</p>{error && <button onClick={() => void refresh()}>重试</button>}</div> : <div className={isChat && (channel || !route.channelId) ? "sp-chat-screen" : view === "hosts" ? "sp-content sp-host-content" : "sp-content"} key={`${isChat || view === "hosts" || view === "profile" || view === "applications" ? view : query ? "search" : view}:${route.channelId || household?.id}`}>
           {role !== "learn" && view !== "applications" && account.bookings.some(b => b.status === "pending") && <div className="sp-upgrade-banner"><strong>有新的学生想约谈</strong><button onClick={() => openAdmissions("bookings")}>查看约谈</button></div>}
           {offline && <p className="sp-offline">当前离线。草稿留在本机，恢复连接后同步。</p>}
-          {view === "profile" ? <section className="sp-profile-page" aria-label="个人资料页面"><header><div><h2>个人资料</h2><p>管理你的头像、个人信息与账号。</p></div><button onClick={() => navigate("overview", "organization")}>返回主页</button></header><ProfileForm key={account.user.id} account={account} onSaved={async () => { await Promise.all([refreshAccount(), refresh()]); if (route.profileReturn === "hosts") navigate("hosts", "organization"); else notify("个人资料已保存。"); }} onLogout={() => { void logout().catch(e => notify(e.message)); }}/></section> : view === "hosts" ? <HostDirectory account={account} org={route.organizationId} query={query} resetSearch={() => setQuery("")} completeProfile={() => editProfile(true)} openConversation={async (id, isNew) => { if (isNew) { await Promise.all([refreshAccount(), refresh()]); } openChannel(id, "direct", "私聊"); }} /> : view === "applications" ? <AdmissionsPage {...props} account={account} tab={route.applicationTab} setTab={openAdmissions} query={query} onRefresh={async () => { await Promise.all([refreshAccount(),refresh()]); }} contact={booking => { if(role === "host") openChannel(booking.channel_id,"direct",booking.learner_name); else void openDirect(booking.learner_id); }}/> : isChat ? channel ? <Chat key={channel.id} channel={channel} data={data} operations={operations} mutate={mutate} onlineMutation={onlineMutation} query={query} openDirect={id => void openDirect(id)} showSync={() => setSync(true)} onOpenCard={openSharedCard} /> : route.channelId && openingChannel === route.channelId ? <div className="sp-loading"><p>正在打开对话…</p>{error && <button onClick={() => void refresh()}>重新连接</button>}</div> : route.channelId ? <div className="sp-page-section"><h1>无法打开这个对话</h1><p>频道不存在，或你没有查看权限。</p><button onClick={() => navigate(view,"organization")}>返回对话列表</button></div> : <ConversationPlaceholder direct={view === "direct"}/> : query ? role === "ops" ? <Applications {...props} query={query} /> : <Tasks {...props} query={query} /> : !scoped ? <div className="sp-page-section"><h1>无法打开这个小组</h1><p>小组不存在，或你当前没有访问权限。</p><button onClick={() => navigate("overview", "organization")}>返回工作区主页</button></div> : view === "overview" ? household ? <Overview {...scoped} /> : <OrganizationHome {...props} selectHousehold={selectHousehold} /> : view === "tasks" ? <Tasks {...scoped} /> : view === "calendar" ? <Calendar {...scoped} /> : view === "household" ? <Members {...scoped} activeId={household?.id} /> : view === "journey" ? <Journey {...scoped} /> : <Applications {...props} />}
+          {view === "manage" ? <WorkspaceManagement account={account} onRefresh={async()=>{await Promise.all([refreshAccount(),refresh()]);}}/> : view === "profile" ? <section className="sp-profile-page" aria-label="个人资料页面"><header><div><h2>个人资料</h2><p>管理你的头像、个人信息与账号。</p></div><button onClick={() => navigate("overview", "organization")}>返回主页</button></header><ProfileForm key={account.user.id} account={account} onSaved={async () => { await Promise.all([refreshAccount(), refresh()]); if (route.profileReturn === "hosts") navigate("hosts", "organization"); else notify("个人资料已保存。"); }} onLogout={() => { void logout().catch(e => notify(e.message)); }}/></section> : view === "hosts" ? <HostDirectory account={account} org={route.organizationId} query={query} resetSearch={() => setQuery("")} completeProfile={() => editProfile(true)} openConversation={async (id, isNew) => { if (isNew) { await Promise.all([refreshAccount(), refresh()]); } openChannel(id, "direct", "私聊"); }} /> : view === "applications" ? <AdmissionsPage {...props} account={account} tab={route.applicationTab} setTab={openAdmissions} query={query} onRefresh={async () => { await Promise.all([refreshAccount(),refresh()]); }} contact={booking => { if(role === "host") { const parent=account.management?.platformId||defaultOrganizationId; location.assign(`${workspaceHomeHref(role,parent)}&view=direct&channel=${booking.channel_id}`); } else void openDirect(booking.learner_id); }}/> : isChat ? channel ? <Chat key={channel.id} channel={channel} data={data} operations={operations} mutate={mutate} onlineMutation={onlineMutation} query={query} openDirect={id => void openDirect(id)} showSync={() => setSync(true)} onOpenCard={openSharedCard} /> : route.channelId && openingChannel === route.channelId ? <div className="sp-loading"><p>正在打开对话…</p>{error && <button onClick={() => void refresh()}>重新连接</button>}</div> : route.channelId ? <div className="sp-page-section"><h1>无法打开这个对话</h1><p>频道不存在，或你没有查看权限。</p><button onClick={() => navigate(view,"organization")}>返回对话列表</button></div> : <ConversationPlaceholder direct={view === "direct"}/> : query ? role === "ops" ? <Applications {...props} query={query} /> : <Tasks {...props} query={query} /> : !scoped ? <div className="sp-page-section"><h1>无法打开这个小组</h1><p>小组不存在，或你当前没有访问权限。</p><button onClick={() => navigate("overview", "organization")}>返回工作区主页</button></div> : view === "overview" ? household ? <Overview {...scoped} /> : <OrganizationHome {...props} selectHousehold={selectHousehold} /> : view === "tasks" ? <Tasks {...scoped} /> : view === "calendar" ? <Calendar {...scoped} /> : view === "household" ? <Members {...scoped} activeId={household?.id} /> : view === "journey" ? <Journey {...scoped} /> : <Applications {...props} />}
         </div>}</main><footer className="sp-statusbar"><button onClick={() => setSync(true)}>{status}</button></footer>
     </Chrome>
     {toast && <div className="sp-toast" role="status">{toast}<button onClick={() => setToast("")}>关闭</button></div>}

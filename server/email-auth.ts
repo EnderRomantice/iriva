@@ -1,3 +1,4 @@
+import { activateHostGrants, ensurePersonalWorkspace } from './services/owned-workspaces';
 import { randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { workspaceRepository } from './container';
@@ -13,7 +14,7 @@ export async function beginEmailSignIn(input: unknown, organizationId: string, r
   const repo = workspaceRepository(), now = Date.now(), id = randomUUID();
   const code = String(randomInt(0,1000000)).padStart(6,'0');
   repo.atomic(() => {
-    if (!repo.read().organizations.some(o => o.id === organizationId)) throw new DomainError(404,'工作区不存在。');
+    if (!repo.read().organizations.some(o => o.id === organizationId && o.kind === 'platform')) throw new DomainError(404,'工作区不存在。');
     const recent = repo.db.prepare('SELECT created_at FROM email_challenges WHERE email=? AND created_at>? ORDER BY created_at DESC').all(email,now-3600000) as {created_at:number}[];
     if (recent[0] && now-recent[0].created_at < 60000) throw new DomainError(429,'请等待 60 秒后重新获取验证码。');
     if (recent.length >= 5) throw new DomainError(429,'验证码发送次数过多，请一小时后再试。');
@@ -44,6 +45,7 @@ export function verifyEmailSignIn(input: unknown, organizationId: string, reques
     if (!challenge || !challenge.delivered || challenge.consumed || challenge.expires_at <= Date.now() || challenge.attempts >= 5) return {error:'验证码已过期或失效，请重新获取。'};
     repo.db.prepare('UPDATE email_challenges SET attempts=attempts+1 WHERE id=?').run(challengeId);
     if (!localTestCode && !timingSafeEqual(Buffer.from(challenge.code_hash,'hex'),Buffer.from(digest(`${challengeId}:${code}`),'hex'))) return {error:'验证码不正确，请重试。'};
+    if (!repo.read().organizations.some(o=>o.id===organizationId&&o.kind==='platform')) return {error:'请从平台登录入口验证邮箱。'};
     let user = repo.read().users.find(u=>u.email.toLowerCase()===challenge.email);
     if (!user) {
       user={...meta(),name:challenge.email.split('@')[0],email:challenge.email,timezone:'Asia/Shanghai',city:'',avatar:'blue'};
@@ -51,6 +53,8 @@ export function verifyEmailSignIn(input: unknown, organizationId: string, reques
       repo.saveOrganizationMembership({...meta(),organizationId,userId:user.id,role:'learn'});
     }
     if (!repo.read().organizationMemberships.some(m=>m.organizationId===organizationId && m.userId===user.id)) return {error:'这个账号没有访问该工作区的权限。'};
+    ensurePersonalWorkspace(repo,user,organizationId);
+    activateHostGrants(repo,user);
     repo.db.prepare('UPDATE email_challenges SET consumed=1 WHERE email=?').run(challenge.email);
     repo.db.prepare('INSERT INTO email_identities VALUES (?,?) ON CONFLICT(user_id) DO UPDATE SET verified_at=excluded.verified_at').run(user.id,Date.now());
     return {token:newSession(user.id)};

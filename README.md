@@ -97,3 +97,14 @@ A message can contain plain `body` text, up to five `cards`, or both. Cards use 
 The five types are `user`, `task`, `group`, `host`, and `plan`; plans use `free`, `lite`, `pro`, or `max` as IDs. `domain/message-cards.ts` defines the shared schema. `server/services/message-cards.ts` resolves current public profile fields, basic summaries of accessible or explicitly shared groups, and plan data, and restricts task details to viewers who have access. The server validates sender permissions; references do not grant recipients access or enroll them in a group. Missing or inaccessible references render as unavailable. Cards remain reference-only in SQLite; the per-viewer snapshot catalog supplies current titles, descriptions and metadata without copying private profile fields into messages.
 
 The composer supports selection, preview, removal, card-only sending, reactions, title search, persistent local drafts and the existing offline outbox. Card details route to user conversations, tasks, groups, Host contact (using the existing profile/plan checks), or the selected plan on the plans page. Unjoined group cards direct learners to support. Migration 010 preserves previous messages and reactions.
+
+
+### 个人空间与 Host 小组
+
+每位用户首次验证邮箱登录时拥有一个个人工作空间，不能添加成员。运营在主页或报名页的「Host 与小组管理」输入邮箱：已注册账号原空间直接升级，空间 ID、个人频道和消息保留；未注册邮箱保存待激活资格，首次登录即开通 Host 小组，跳过学员报名与套餐引导。邮箱忽略大小写，重复添加不重复开组。
+
+Host 空间与小组一一对应。Host 在该空间主页添加已注册成员，成员保留自己的个人空间，可通过左上角切换空间；加入别人的小组时使用学员权限。个人频道仅本人可见，小组公共频道仅本空间成员可见。运营拥有所属平台 Host 小组管理权限，不获得个人空间访问权。
+
+Host 在主页提交额外开组申请，运营可批准或拒绝；审批前不创建空间，同一 Host 同一平台只允许一个待审批申请，重复批准不会重复创建。成员人数仍受小组容量限制。
+
+迁移 011 增加空间所有权、邮箱预授权和开组审批表。启动时一次性转换旧数据：原小组分别成为空间，保留小组 ID 及关联任务；Host 创建的旧公开频道归入其在原机构的首个小组，旧个人频道归入所有者个人空间，私聊仍保留原机构归属。迁移与升级均在事务内执行。平台入口保留目录、约谈、客服及运营汇总；新公共频道须在 Host 小组内创建。备份导出 v11 包含 Host 预授权和开组审批记录。

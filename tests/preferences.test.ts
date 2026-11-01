@@ -10,6 +10,8 @@ test("corrupt and stale persisted preferences restore a complete usable navigati
   assert.equal(new Set(result.order).size, defaults.order.length);
   assert.ok(result.order.includes("overview"));
   assert.equal(result.dark, false);
+  const saved = parsePreferences(JSON.stringify({ order:["overview", "channels", "direct", "hosts", "tasks", "applications", "calendar", "household", "journey"] }));
+  assert.equal(saved.order[saved.order.indexOf("applications") + 1], "manage", "a newly added view sits by its default neighbour");
 });
 test("valid navigation order, visibility and appearance survive serialization", () => {
   const value = { ...defaults, color:"#4a154b", dark:true, compact:true, collapsed:true, hidden:["calendar"], order:[...defaults.order].reverse() };

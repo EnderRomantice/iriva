@@ -16,6 +16,7 @@ export function hasChosenChat(userId: string, org = defaultOrganizationId) {
   try { return sessionStorage.getItem(skipKey(userId, org)) === 'yes'; } catch { return false; }
 }
 export function continueToSupport(account: Account, org = defaultOrganizationId) {
+  org = account.management?.platformId || org;
   const params = new URLSearchParams({ view: 'direct' });
   if (org !== defaultOrganizationId) params.set('org', org);
   if (account.supportId) params.set('channel', account.supportId);

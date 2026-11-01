@@ -91,7 +91,7 @@ function seedChats(repo: SqliteRepository) {
   repo.atomic(() => {
     const state = repo.read();
     for (const [organizationId, n] of [[seedId(1001), 4001], [seedId(1002), 4002]] as const) {
-      if (!state.organizations.some(o => o.id === organizationId) || state.channels.some(c => c.organizationId === organizationId && c.kind === "public")) continue;
+      if (state.channels.some(c=>c.id===seedId(n)) || !state.organizations.some(o => o.id === organizationId) || state.channels.some(c => c.organizationId === organizationId && c.kind === "public")) continue;
       const host = state.organizationMemberships.find(m => m.organizationId === organizationId && m.role === "host");
       if (!host) continue;
       const now = new Date().toISOString();

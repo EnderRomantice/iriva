@@ -3,7 +3,7 @@ import type { MessageReaction } from './reactions';
 export type Role = "learn" | "host" | "ops";
 export interface Entity { id: string; version: number; createdAt: string; updatedAt: string }
 // city stores the local official name (上海, New York, London), independent of UI language.
-export interface Organization extends Entity { name: string; initials: string; color: string }
+export interface Organization extends Entity { name: string; initials: string; color: string; kind?: "platform" | "personal" | "host"; ownerId?: string; parentId?: string; isPrimary?: number }
 export interface OrganizationMembership extends Entity { organizationId: string; userId: string; role: Role }
 export interface User extends Entity { name: string; email: string; city?: string; timezone: string; avatar: string; countryCode?: string; hostQualifications?: string[]; hostFeatured?: boolean; hostFullTime?: boolean; signature?: string; mbti?: string; zodiac?: string; birthChart?: string; occupation?: string; plan?: "free" | "lite" | "pro" | "max" }
 export interface Term extends Entity { name: string; startsOn: string; endsOn: string }

@@ -2,17 +2,27 @@ import type { WorkspaceView } from "@/domain/workspace-access";
 import { defaultOrganizationId, demoOrganizationId } from "@/domain/workspace";
 import { useThemeTransition } from "./theme-transition";
 import { useEffect, useState } from "react";
-export const viewLabels = { profile: "个人资料", hosts: "寻找 Host", overview: "本周", channels: "频道", direct: "私聊", tasks: "练习与反馈", calendar: "日程", household: "伙伴", applications: "报名", journey: "六周旅程" } satisfies Record<WorkspaceView,string>;
+export const viewLabels = { profile: "个人资料", hosts: "寻找 Host", overview: "本周", channels: "频道", direct: "私聊", tasks: "练习与反馈", calendar: "日程", household: "伙伴", applications: "报名", journey: "六周旅程", manage: "管理" } satisfies Record<WorkspaceView,string>;
 export type View = keyof typeof viewLabels;
 export interface Preferences { color: string; dark: boolean; compact: boolean; collapsed: boolean; hidden: View[]; order: View[] }
-export const defaults: Preferences = { color: "#12658a", dark: false, compact: false, collapsed: false, hidden: ["journey"], order: ["overview", "channels", "direct", "hosts", "tasks", "applications", "calendar", "household", "journey"] };
+export const defaults: Preferences = { color: "#12658a", dark: false, compact: false, collapsed: false, hidden: ["journey"], order: ["overview", "channels", "direct", "hosts", "tasks", "applications", "manage", "calendar", "household", "journey"] };
 export const preferenceKey = "iriva-space-preferences-v1";
 export function parsePreferences(raw: string | null): Preferences {
   try {
     const p = JSON.parse(raw || "null"); if (!p || typeof p !== "object") return defaults;
     const order: View[] = Array.isArray(p.order) ? [...new Set<View>(p.order.filter((v: unknown): v is View => typeof v === "string" && Object.hasOwn(viewLabels, v)))] : defaults.order;
-    return { color: /^#[0-9a-f]{6}$/i.test(p.color) ? p.color : defaults.color, dark: p.dark === true, compact: p.compact === true, collapsed: p.collapsed === true, hidden: Array.isArray(p.hidden) ? p.hidden.filter((v: View) => v !== "overview" && Object.hasOwn(viewLabels, v)) : defaults.hidden, order: [...order, ...defaults.order.filter(v => !order.includes(v))] };
+    return { color: /^#[0-9a-f]{6}$/i.test(p.color) ? p.color : defaults.color, dark: p.dark === true, compact: p.compact === true, collapsed: p.collapsed === true, hidden: Array.isArray(p.hidden) ? p.hidden.filter((v: View) => v !== "overview" && Object.hasOwn(viewLabels, v)) : defaults.hidden, order: withNewViews(order) };
   } catch { return defaults; }
+}
+/** Views added after a person saved their order go next to their default neighbour, not to the end. */
+function withNewViews(order: View[]) {
+  const result = [...order];
+  defaults.order.forEach((view, index) => {
+    if (result.includes(view)) return;
+    const before = defaults.order.slice(0, index).reverse().find(v => result.includes(v));
+    if (before) result.splice(result.indexOf(before) + 1, 0, view); else result.push(view);
+  });
+  return result;
 }
 export function usePreferences(organizationId = defaultOrganizationId) {
   const key = organizationId === defaultOrganizationId ? preferenceKey : `${preferenceKey}:${organizationId}`;

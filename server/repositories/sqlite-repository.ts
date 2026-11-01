@@ -17,7 +17,7 @@ export class SqliteRepository implements WorkspaceRepository, WorkspaceUnitOfWor
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("busy_timeout = 5000");
     this.db.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
-    for (const [index, file] of ["001_initial.sql", "002_user_city.sql", "003_organizations.sql", "004_chat.sql", "005_accounts.sql", "006_email_auth.sql", "007_host_directory.sql", "008_host_full_time.sql", "009_message_reactions.sql", "010_message_cards.sql"].entries()) {
+    for (const [index, file] of ["001_initial.sql", "002_user_city.sql", "003_organizations.sql", "004_chat.sql", "005_accounts.sql", "006_email_auth.sql", "007_host_directory.sql", "008_host_full_time.sql", "009_message_reactions.sql", "010_message_cards.sql", "011_owned_workspaces.sql"].entries()) {
       const version = index + 1;
       if (this.db.prepare("SELECT version FROM schema_migrations WHERE version = ?").get(version)) continue;
       // SQLite requires FK enforcement off while adding a referenced column with

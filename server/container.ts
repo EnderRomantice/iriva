@@ -4,6 +4,8 @@ import { SqliteRepository } from "./repositories/sqlite-repository";
 import { WorkspaceService } from "./services/workspace-service";
 import { seedDemo } from "./db/seed";
 
+import { bootstrapOwnedWorkspaces } from "./services/owned-workspaces";
+
 let repository: SqliteRepository | undefined;
 export function workspaceRepository() { workspaceService(); return repository!; }
 let service: WorkspaceService | undefined;
@@ -14,6 +16,7 @@ export function workspaceService() {
     const repo = new SqliteRepository(filename);
     repository = repo;
     seedDemo(repo);
+    bootstrapOwnedWorkspaces(repo);
     service = new WorkspaceService(repo);
   }
   return service;

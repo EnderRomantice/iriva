@@ -810,3 +810,28 @@
 .sp-booking-state.is-accepted{color:#21865e}.sp-booking-state.is-rejected{color:var(--sp-error)}
 .sp-application-bookings{border-top:1px solid var(--sp-line);border-bottom:1px solid var(--sp-line);padding:14px 0;margin:20px 0}.sp-application-bookings h3{font-size:14px;margin:0 0 12px}.sp-application-bookings p{display:flex;justify-content:space-between;gap:12px;font-size:12px}.sp-application-bookings span{color:var(--sp-muted)}
 @media(max-width:600px){.sp-booking-actions{width:100%;margin-left:0}.sp-booking-person{min-width:0;flex:1}}
+
+/* Sign-in: same bay blue as the marketing site, readable hints, visible field focus. */
+.sp-auth-page{background:var(--sp-soft)}
+.sp-auth-wordmark{color:var(--sp-brand);margin-bottom:28px}
+.sp-auth-intro{text-align:center;margin:0 0 28px}
+.sp-auth-page .sp-auth-intro h1{font-size:24px;font-weight:900;line-height:1.3;margin:0 0 8px;color:var(--sp-ink)}
+.sp-auth-page .sp-auth-intro p{font-size:14px;line-height:1.7;color:var(--sp-muted);margin:0}
+.sp-auth-page form>input{border-color:#d4d7da;color:var(--sp-ink)}
+.sp-auth-page form>input::placeholder{color:#6b7280}
+.sp-apply :is(input,textarea):focus-visible,.sp-auth-page form>input:focus-visible{border-color:var(--sp-brand);box-shadow:0 0 0 3px color-mix(in srgb,var(--sp-brand) 22%,transparent)}
+.sp-email-divider{color:#5e6b70;font-size:13px}
+.sp-email-divider::before,.sp-email-divider::after{background:var(--sp-line)}
+.sp-code-destination{color:var(--sp-ink)}
+.sp-code-destination button,.sp-auth-page form .sp-code-resend{color:#4f646d;font-size:13px}
+.sp-auth-page .sp-code-hint{color:#4f646d;font-size:13px}
+.sp-code-digit{color:var(--sp-accent)}
+.sp-code-slots:focus-within .sp-code-digit[data-active=true]{border-color:var(--sp-brand);background:var(--sp-tint)}
+.sp-auth-page .sp-social-card{color:var(--sp-ink);border-color:#d4d7da}
+.sp-auth-page .sp-social-card:hover{background:var(--sp-tint);border-color:color-mix(in srgb,var(--sp-brand) 35%,#fff)}
+.sp-auth-page .sp-social-card:focus-visible{outline-color:var(--sp-brand)}
+.sp-auth-garden{color:var(--sp-brand)}
+.sp-garden-patch-0{color:#4f8aa6}.sp-garden-patch-1{color:#7fa9bd}.sp-garden-patch-2{color:#2d6f8d}
+.sp-garden-patch-3{color:#8fb4c5}.sp-garden-patch-4{color:#3b7896}.sp-garden-patch-5{color:#9dbfce}
+.sp-auth-page form>.sp-primary{font-size:15px}
+.sp-popover-section { padding:8px 16px 2px; font-size:12px; color:var(--sp-muted); }

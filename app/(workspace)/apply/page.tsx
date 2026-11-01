@@ -25,11 +25,11 @@ export default function Apply() {
   },[retryAt]);
   function enter(a: Account) {
     const params = new URLSearchParams(location.search);
-    const org = params.get('org');
+    const org = a.role !== 'ops' ? a.landingWorkspaceId || a.homeWorkspaceId || params.get('org') : params.get('org');
     if (needsPlan(a)) { location.replace(billingHref('plans', org || undefined)); return; }
     const next = new URLSearchParams();
     if (org) next.set('org',org);
-    if (a.role === 'learn') { next.set('view','direct'); if(a.supportId) next.set('channel',a.supportId); }
+    if (a.role === 'learn' && !a.homeWorkspaceId) { next.set('view','direct'); if(a.supportId) next.set('channel',a.supportId); }
     location.replace(`/${a.role}${next.size ? `?${next}` : ''}`);
   }
   async function sendCode(value: string) {
@@ -79,6 +79,10 @@ export default function Apply() {
     <section>
       <a className="sp-auth-wordmark" href="/" aria-label="iriva 首页">iriva</a>
       {account && <><h1>让我们认识你。</h1><p>告诉我们你的学习目标和时间。</p></>}
+      {ready && !account && <div className="sp-auth-intro">{challenge
+        ? <><h1>查收验证码</h1><p>输入发到邮箱的 6 位验证码。</p></>
+        : <><h1>登录或注册</h1><p>第一次来？验证邮箱后自动创建账号，不需要设置密码。</p></>}
+      </div>}
       {ready && !account && !challenge && <>
         <div className="sp-social-cards">
           <button className="sp-social-card" type="button" aria-label="使用 Google 继续" disabled={busy} onClick={() => void social('google')}><GoogleIcon /><span>使用 Google 继续</span></button>
@@ -96,7 +100,7 @@ export default function Apply() {
           <CodeInput busy={busy} invalid={!!error} />
         </> : <input aria-label="邮箱" name="email" type="email" autoComplete="email" required maxLength={200} defaultValue={email} placeholder="you@example.com" autoFocus />}
         {error && <p className="sp-error" role="alert">{error}</p>}
-        <button className="sp-primary" disabled={busy}>{busy ? '请稍候…' : account ? '进入 Workspace' : challenge ? '验证并继续' : '使用邮箱继续'}</button>
+        <button className="sp-primary" disabled={busy}>{busy ? '请稍候…' : account ? '进入学习空间' : challenge ? '验证并继续' : '使用邮箱继续'}</button>
         {!account && challenge && <button className="sp-code-resend" type="button" disabled={busy || remaining > 0} onClick={() => void resend()}>{remaining > 0 ? `${remaining} 秒后可重新发送` : '重新发送验证码'}</button>}
       </form> : <p role="status">正在加载…</p>}
     </section>

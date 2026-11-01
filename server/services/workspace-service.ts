@@ -16,7 +16,8 @@ export class WorkspaceService {
   private organizationState(state: State, actor: Actor): State {
     const id = actor.organizationId || defaultOrganizationId;
     requireRule(state.organizationMemberships.some(m => m.organizationId === id && m.userId === actor.userId && m.role === actor.role), "你没有访问这个工作区的权限。", 403);
-    const households = state.households.filter(h => (h.organizationId || defaultOrganizationId) === id);
+    const managed = new Set(actor.role === 'ops' ? state.organizations.filter(o=>o.parentId===id&&o.kind==='host').map(o=>o.id) : []);
+    const households = state.households.filter(h => (h.organizationId || defaultOrganizationId) === id || managed.has(h.organizationId || ''));
     const householdIds = new Set(households.map(h => h.id));
     const assignments = state.assignments.filter(a => householdIds.has(a.householdId));
     const assignmentIds = new Set(assignments.map(a => a.id));
@@ -27,7 +28,7 @@ export class WorkspaceService {
     const userIds = new Set([...organizationMemberships.map(m => m.userId), ...applications.map(a => a.userId)]);
     const channels = state.channels.filter(c => c.organizationId === id && (c.kind === "public" || c.kind === "private" && c.ownerId === actor.userId || c.kind === "direct" && state.channelParticipants.some(p => p.channelId === c.id && p.userId === actor.userId)));
     const channelIds = new Set(channels.map(c => c.id));
-    const accessible = new Set(state.organizationMemberships.filter(m => m.userId === actor.userId && m.role === actor.role).map(m => m.organizationId));
+    const accessible = new Set(state.organizationMemberships.filter(m => m.userId === actor.userId).map(m => m.organizationId));
     return { channels, channelParticipants: state.channelParticipants.filter(p => channelIds.has(p.channelId)), messages: state.messages.filter(m => channelIds.has(m.channelId)), organizations: state.organizations.filter(o => accessible.has(o.id)), organizationMemberships, households, assignments, submissions, applications,
       users: state.users.filter(u => userIds.has(u.id)), terms: state.terms.filter(t => households.some(h => h.termId === t.id)),
       memberships: state.memberships.filter(m => householdIds.has(m.householdId)), sessions: state.sessions.filter(s => householdIds.has(s.householdId)),
@@ -37,7 +38,8 @@ export class WorkspaceService {
     return actor.role === "ops" || (actor.role === "host" ? state.households.some(h => h.id === householdId && h.hostId === actor.userId) : state.memberships.some(m => m.householdId === householdId && m.userId === actor.userId && m.role === "learner"));
   }
   async snapshot(actor: Actor): Promise<Snapshot> {
-    const state = this.organizationState(await this.repo.snapshot(), actor);
+    const raw = await this.repo.snapshot();
+    const state = this.organizationState(raw, actor);
     requireRule(state.users.some(u => u.id === actor.userId), "身份不存在。", 401);
     const cards = cardCatalog(state, actor);
     if (actor.role === "ops") return { ...state, cardCatalog:cards, actor, serverTime: new Date().toISOString() };
@@ -50,7 +52,7 @@ export class WorkspaceService {
     const submissionIds = new Set(submissions.map(s => s.id));
     const userIds = new Set(state.organizationMemberships.map(m => m.userId));
     return {
-      organizations: state.organizations, organizationMemberships: state.organizationMemberships.filter(m => m.userId === actor.userId),
+      organizations: state.organizations, organizationMemberships: raw.organizationMemberships.filter(m => m.userId === actor.userId),
       channels: state.channels, channelParticipants: state.channelParticipants, messages: state.messages,
       cardCatalog:cards, actor, serverTime: new Date().toISOString(), households, memberships, assignments, submissions,
       users: state.users.filter(u => userIds.has(u.id)).map(u => u.id === actor.userId ? u : { ...u, email: "", birthChart: "" }),
@@ -78,7 +80,7 @@ export class WorkspaceService {
       const checkVersion = (value?: Entity) => { requireRule((value?.version ?? 0) === command.baseVersion, "这条记录已在其他设备更新。你的输入已保留，请查看最新版本。", 409); version = (value?.version ?? 0) + 1; };
       switch (command.kind) {
         case "channel.create": {
-          requireRule(command.payload.kind === "private" || actor.role === "host", "只有 Host 可以建立公开频道。", 403);
+          requireRule(command.payload.kind === "private" || actor.role === "host" && (state.organizations.find(o => o.id === (actor.organizationId || defaultOrganizationId))?.kind !== "platform" || !state.organizations.some(o=>o.kind === "host")), "只有 Host 可以建立公开频道。", 403);
           requireRule(!state.channels.some(c => c.id === command.entityId), "频道已存在，请刷新后查看。", 409);
           requireRule(!state.channels.some(c => c.kind === command.payload.kind && c.name.toLowerCase() === command.payload.name.toLowerCase() && (c.kind === "public" || c.ownerId === actor.userId)), "已有同名频道。", 409);
           checkVersion();
@@ -148,6 +150,7 @@ export class WorkspaceService {
         }
         case "household.create": {
           requireRule(actor.role === "ops");
+          requireRule(!state.organizations.some(o => o.kind === "host" || o.kind === "personal"), "请通过 Host 开通或额外小组审批创建空间。", 409);
           requireRule(!state.households.some(h => h.id === command.entityId), "小组已建立，请刷新后查看。", 409);
           requireRule(state.terms.some(t => t.id === command.payload.termId), "请选择当前机构的学期。", 422);
           requireRule(state.organizationMemberships.some(m => m.userId === command.payload.hostId && m.role === "host"), "请选择当前机构的 Host。", 422);
@@ -199,7 +202,8 @@ export class WorkspaceService {
               const learner = state.users.find(u => u.id === application.userId);
               requireRule(isProfileComplete(learner), "请学员先完善必填个人资料。", 422);
             }
-            tx.saveMembership({ ...meta(randomUUID()), householdId: household.id, userId: application.userId, role: "learner" });
+            if (!state.memberships.some(m=>m.householdId===household.id&&m.userId===application.userId)) tx.saveMembership({ ...meta(randomUUID()), householdId: household.id, userId: application.userId, role: "learner" });
+            if(household.organizationId && !raw.organizationMemberships.some(m=>m.organizationId===household.organizationId&&m.userId===application.userId)) tx.saveOrganizationMembership({...meta(randomUUID()),organizationId:household.organizationId,userId:application.userId,role:'learn'});
             tx.saveEnrollment({ ...meta(randomUUID()), householdId: household.id, userId: application.userId, termId: household.termId, plan: admission.order?.plan || "母语档 · 每周 1 次", amountMinor: admission.order?.amountMinor || 318000, currency: "CNY", paymentStatus: admission.order ? "paid" : "pending" });
           }
           tx.saveApplication({ ...application, ...meta(application.id, application), status: command.kind === "application.enroll" ? "enrolled" : "contacted" });
@@ -213,7 +217,7 @@ export class WorkspaceService {
           const { startsAt, endsAt } = command.payload;
           requireRule(Date.parse(endsAt) > Date.parse(startsAt) && Date.parse(startsAt) > Date.now(), "请选择未来的时间，结束时间必须晚于开始时间。", 422);
           const hostId = state.households.find(h => h.id === session.householdId)?.hostId;
-          const conflict = state.sessions.some(s => s.id !== session.id && s.status === "scheduled" && (s.householdId === session.householdId || state.households.find(h => h.id === s.householdId)?.hostId === hostId) && s.startsAt < endsAt && s.endsAt > startsAt);
+          const conflict = raw.sessions.some(s => s.id !== session.id && s.status === "scheduled" && (s.householdId === session.householdId || raw.households.find(h => h.id === s.householdId)?.hostId === hostId) && s.startsAt < endsAt && s.endsAt > startsAt);
           requireRule(!conflict, "该时间与 Host 或 Household 的其他课程冲突。", 409);
           checkVersion(session);
           tx.saveSession({ ...session, ...meta(session.id, session), startsAt, endsAt });

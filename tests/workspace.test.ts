@@ -28,7 +28,7 @@ test("schema and seed are repeatable; foreign keys are valid", t => {
   const second = new SqliteRepository(file);
   assert.equal(second.read().users.length, 12);
   assert.deepEqual(second.db.prepare("PRAGMA foreign_key_check").all(), []);
-  assert.equal((second.db.prepare("SELECT COUNT(*) AS n FROM schema_migrations").get() as { n: number }).n, 10);
+  assert.equal((second.db.prepare("SELECT COUNT(*) AS n FROM schema_migrations").get() as { n: number }).n, 11);
   second.db.close();
 });
 

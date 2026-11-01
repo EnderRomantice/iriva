@@ -1,3 +1,4 @@
+import { manageWorkspace, managementSnapshot, platformId } from '@/server/services/owned-workspaces';
 import { canManageSubscription } from '@/domain/workspace-access';
 import { beginEmailSignIn, verifyEmailSignIn } from '@/server/email-auth';
 import { canContactHost } from '@/domain/hosts';
@@ -15,13 +16,16 @@ const meta=()=>({id:randomUUID(),version:1,createdAt:new Date().toISOString(),up
 export async function GET(request:Request) {
   try {
     const actor=actorFromRequest(request), repo=workspaceRepository(), state=repo.read();
-    const org=actor.organizationId||defaultOrganizationId;
+    const org=platformId(repo,actor.organizationId);
     let testPaymentsAvailable=false;
     try { requireLocalDemo(request); testPaymentsAvailable=true; } catch {}
     const hosts=state.organizationMemberships.filter(m=>m.organizationId===org&&m.role==='host').map(m=>state.users.find(u=>u.id===m.userId)!).map(({email,birthChart,...user})=>user);
     const bookings=repo.db.prepare(`SELECT b.*,u.name learner_name,h.name host_name FROM bookings b JOIN users u ON u.id=b.learner_id JOIN users h ON h.id=b.host_id WHERE organization_id=? AND ${actor.role==='ops'?'1=1':actor.role==='host'?'host_id=?':'learner_id=?'} ORDER BY b.created_at DESC`).all(...(actor.role==='ops'?[org]:[org,actor.userId]));
     const support=state.channels.find(c=>c.organizationId===org&&c.kind==='direct'&&c.description==='support'&&state.channelParticipants.some(p=>p.channelId===c.id&&p.userId===actor.userId));
-    return Response.json({testPaymentsAvailable,user:state.users.find(u=>u.id===actor.userId),role:actor.role,authenticated:!!sessionToken(request),application:state.applications.find(a=>a.userId===actor.userId&&a.organizationId===org),supportId:support?.id,hosts,bookings,orders:repo.db.prepare('SELECT * FROM plan_orders WHERE user_id=? ORDER BY created_at DESC').all(actor.userId)}, {headers:{'Cache-Control':'no-store',...renewSession(request)}});
+    const home=state.organizations.find(o=>o.ownerId===actor.userId&&o.isPrimary);
+    const joinedGroup=state.organizations.find(o=>o.kind==='host'&&o.id!==home?.id&&state.organizationMemberships.some(m=>m.organizationId===o.id&&m.userId===actor.userId));
+    const landing=home?.kind==='host'?home:joinedGroup||home;
+    return Response.json({management:managementSnapshot(repo,actor),homeWorkspaceId:home?.id,landingWorkspaceId:landing?.id,organizationId:actor.organizationId||defaultOrganizationId,testPaymentsAvailable,user:state.users.find(u=>u.id===actor.userId),role:actor.role,authenticated:!!sessionToken(request),application:state.applications.find(a=>a.userId===actor.userId&&a.organizationId===org),supportId:support?.id,hosts,bookings,orders:repo.db.prepare('SELECT * FROM plan_orders WHERE user_id=? ORDER BY created_at DESC').all(actor.userId)}, {headers:{'Cache-Control':'no-store',...renewSession(request)}});
   } catch(e){return errorResponse(e);}
 }
 export async function POST(request:Request) {
@@ -31,10 +35,11 @@ export async function POST(request:Request) {
     if(body.action==='logout') { const token=sessionToken(request); if(token) repo.db.prepare('DELETE FROM auth_sessions WHERE token_hash=?').run(digest(token)); return Response.json({ok:true},{headers:{'Set-Cookie':sessionCookie('')}}); }
     if(body.action==='google') throw new DomainError(503,'Gmail 登录暂未开通，请先使用邮箱登录。');
     if(body.action==='wechat') throw new DomainError(503,'微信登录暂未开通，请先使用邮箱登录。');
-    if(body.action==='email.begin') return await beginEmailSignIn(body, org, request);
-    if(body.action==='email.verify') return verifyEmailSignIn(body, org, request);
+    if(body.action==='email.begin') return await beginEmailSignIn(body, platformId(repo,org), request);
+    if(body.action==='email.verify') return verifyEmailSignIn(body, platformId(repo,org), request);
     const actor=actorFromRequest(request), state=repo.read(), user=state.users.find(u=>u.id===actor.userId)!;
-    const organizationId=actor.organizationId||defaultOrganizationId;
+    if(['host.add','group.request','group.review','group.member.add'].includes(body.action)) return Response.json(manageWorkspace(repo,actor,body));
+    const organizationId=platformId(repo,actor.organizationId);
     if(body.action==='apply') {
       if(!sessionActor(request)) throw new DomainError(401,'请先登录。');
       const input=z.object({goal:z.string().trim().min(4).max(2000),availability:z.string().trim().min(2).max(1000)}).parse(body);
@@ -87,9 +92,9 @@ export async function POST(request:Request) {
       if(!canContactHost(user.plan, !!host?.hostFeatured)) throw new DomainError(403,'明星 Host 需要 Pro 或 Max 套餐。');
       const missing = missingProfileFields(user);
       if(missing.length) throw new DomainError(422, `请先完善个人资料：${missing.join('、')}。`);
-      const conversation=await workspaceService().execute(actor,{kind:'conversation.open',id:randomUUID(),entityId:randomUUID(),baseVersion:0,payload:{userId:hostId}});
+      const conversation=await workspaceService().execute({...actor,organizationId},{kind:'conversation.open',id:randomUUID(),entityId:randomUUID(),baseVersion:0,payload:{userId:hostId}});
       repo.atomic(()=>{const existing=repo.db.prepare('SELECT id FROM bookings WHERE organization_id=? AND learner_id=? AND host_id=?').get(organizationId,user.id,hostId);if(!existing){repo.db.prepare('INSERT INTO bookings VALUES (?,?,?,?,?,?,?)').run(randomUUID(),organizationId,user.id,hostId,conversation.entityId,'pending',new Date().toISOString());repo.saveMessage({...meta(),channelId:conversation.entityId!,authorId:user.id,body:'你好！我想和你约一次见面，聊聊学习目标和加入小组的可能。'});}});
-      return Response.json({channelId:conversation.entityId});
+      return Response.json({channelId:conversation.entityId,organizationId});
     }
     if(body.action==='booking') {
       const input=z.object({id:z.uuid(),status:z.enum(['accepted','rejected'])}).parse(body);
