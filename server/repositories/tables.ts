@@ -1,0 +1,1 @@
+export const tables = ["organizations", "users", "organizationMemberships", "terms", "households", "memberships", "sessions", "assignments", "submissions", "feedback", "applications", "enrollments", "channels", "channelParticipants", "messages"] as const;

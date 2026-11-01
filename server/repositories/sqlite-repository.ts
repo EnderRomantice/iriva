@@ -5,7 +5,8 @@ import path from "node:path";
 import type { Channel, ChannelParticipant, Message, Assignment, Household, OrganizationMembership, State, Submission, Feedback, Application, Session, Membership, Enrollment, User } from "../../domain/models";
 import type { WorkspaceRepository, WorkspaceUnitOfWork } from "./workspace-repository";
 
-export const tables = ["organizations", "users", "organizationMemberships", "terms", "households", "memberships", "sessions", "assignments", "submissions", "feedback", "applications", "enrollments", "channels", "channelParticipants", "messages"] as const;
+import { tables } from "./tables";
+export { tables } from "./tables";
 const snake = (key: string) => key.replace(/[A-Z]/g, c => `_${c.toLowerCase()}`);
 const camel = (key: string) => key.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
 
@@ -35,12 +36,22 @@ export class SqliteRepository implements WorkspaceRepository, WorkspaceUnitOfWor
   }
   atomic<T>(work: () => T): T { return this.db.transaction(work).immediate(); }
   async snapshot(): Promise<State> { return this.read(); }
-  async transaction<T>(work: (tx: WorkspaceUnitOfWork) => T): Promise<T> { return this.atomic(() => work(this)); }
+  private queue: Promise<unknown> = Promise.resolve();
+  transaction<T>(work: (tx: WorkspaceUnitOfWork) => T | Promise<T>): Promise<T> {
+    const next = this.queue.then(async () => {
+      this.db.exec('BEGIN IMMEDIATE');
+      try { const result = await work(this); this.db.exec('COMMIT'); return result; }
+      catch(error) { this.db.exec('ROLLBACK'); throw error; }
+    });
+    this.queue = next.catch(() => {});
+    return next;
+  }
   read(): State {
     return Object.fromEntries(tables.map(table => [table, this.db.prepare(`SELECT * FROM ${snake(table)}`).all().map(row => Object.fromEntries(Object.entries(row as Record<string, unknown>).map(([key, value]) => [camel(key), (key === "host_qualifications" || key === "reactions" || key === "cards") ? JSON.parse(String(value)) : key === "completed" || key === "host_featured" || key === "host_full_time" ? Boolean(value) : value])))])) as unknown as State;
   }
   /** Table names and entity fields come only from trusted domain code, never requests. */
-  put(table: typeof tables[number], value: object) {
+  put(table: string, value: object) {
+    if (!(tables as readonly string[]).includes(table)) throw new Error("Unknown domain table");
     const entries = Object.entries(value);
     const names = entries.map(([key]) => snake(key));
     this.db.prepare(`INSERT INTO ${snake(table)} (${names.join(",")}) VALUES (${names.map(() => "?").join(",")}) ON CONFLICT(id) DO UPDATE SET ${names.filter(n => n !== "id").map(n => `${n}=excluded.${n}`).join(",")}`).run(...entries.map(([, value]) => Array.isArray(value) ? JSON.stringify(value) : typeof value === "boolean" ? Number(value) : value));

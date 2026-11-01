@@ -68,12 +68,12 @@ export class WorkspaceService {
       const hash = createHash("sha256").update(`${actor.organizationId || defaultOrganizationId}:${pair}`).digest("hex");
       command = { ...command, entityId: `${hash.slice(0,8)}-${hash.slice(8,12)}-5${hash.slice(13,16)}-8${hash.slice(17,20)}-${hash.slice(20,32)}` };
     }
-    return this.repo.transaction(tx => {
-      const raw = tx.read();
+    return this.repo.transaction(async tx => {
+      const raw = await tx.read();
       const state = this.organizationState(raw, actor);
       const table = (command.kind === "message.send" || command.kind === "message.react") ? "messages" : (command.kind === "channel.create" || command.kind === "conversation.open") ? "channels" : command.kind === "submission.save" ? "submissions" : command.kind === "feedback.save" ? "feedback" : (command.kind === "session.reschedule" || command.kind === "session.create") ? "sessions" : command.kind === "assignment.create" ? "assignments" : command.kind === "household.create" ? "households" : "applications";
       requireRule(!raw[table].some(e => e.id === command.entityId) || state[table].some(e => e.id === command.entityId));
-      const receipt = tx.receipt(actor.userId, command.id);
+      const receipt = await tx.receipt(actor.userId, command.id);
       if (receipt) return command.kind === "conversation.open" ? { ...receipt, entityId: command.entityId } : receipt;
       requireRule(state.users.some(u => u.id === actor.userId), "身份不存在。", 401);
       let version = 0;
@@ -84,7 +84,7 @@ export class WorkspaceService {
           requireRule(!state.channels.some(c => c.id === command.entityId), "频道已存在，请刷新后查看。", 409);
           requireRule(!state.channels.some(c => c.kind === command.payload.kind && c.name.toLowerCase() === command.payload.name.toLowerCase() && (c.kind === "public" || c.ownerId === actor.userId)), "已有同名频道。", 409);
           checkVersion();
-          tx.saveChannel({ ...meta(command.entityId), ...command.payload, organizationId: actor.organizationId || defaultOrganizationId, ownerId: actor.userId, directKey: "" });
+          await tx.saveChannel({ ...meta(command.entityId), ...command.payload, organizationId: actor.organizationId || defaultOrganizationId, ownerId: actor.userId, directKey: "" });
           break;
         }
         case "conversation.open": {
@@ -93,8 +93,8 @@ export class WorkspaceService {
           const existing = state.channels.find(c => c.id === command.entityId);
           if (existing) { requireRule(existing.kind === "direct"); version = existing.version; break; }
           checkVersion();
-          tx.saveChannel({ ...meta(command.entityId), organizationId: actor.organizationId || defaultOrganizationId, ownerId: actor.userId, name: "", description: "", kind: "direct", directKey: [actor.userId, peer].sort().join(":") });
-          for (const userId of [actor.userId, peer]) tx.saveChannelParticipant({ ...meta(randomUUID()), channelId: command.entityId, userId });
+          await tx.saveChannel({ ...meta(command.entityId), organizationId: actor.organizationId || defaultOrganizationId, ownerId: actor.userId, name: "", description: "", kind: "direct", directKey: [actor.userId, peer].sort().join(":") });
+          for (const userId of [actor.userId, peer]) await tx.saveChannelParticipant({ ...meta(randomUUID()), channelId: command.entityId, userId });
           break;
         }
         case "message.react": {
@@ -110,7 +110,7 @@ export class WorkspaceService {
           const reactions = previous.filter(r => !(r.userId === actor.userId && r.emoji === command.payload.emoji));
           if (command.payload.active) reactions.push({ userId: actor.userId, emoji: command.payload.emoji });
           version++;
-          tx.saveMessage({ ...message, reactions, version, updatedAt: new Date().toISOString() });
+          await tx.saveMessage({ ...message, reactions, version, updatedAt: new Date().toISOString() });
           break;
         }
         case "message.send": {
@@ -124,7 +124,7 @@ export class WorkspaceService {
           }
           requireRule(!state.messages.some(m => m.id === command.entityId), "这条消息已经发送。", 409);
           checkVersion();
-          tx.saveMessage({ ...meta(command.entityId), ...command.payload, body: command.payload.body.trim(), cards: parsed.data, authorId: actor.userId });
+          await tx.saveMessage({ ...meta(command.entityId), ...command.payload, body: command.payload.body.trim(), cards: parsed.data, authorId: actor.userId });
           break;
         }
         case "assignment.create": {
@@ -133,7 +133,7 @@ export class WorkspaceService {
           requireRule(!state.assignments.some(a => a.id === command.entityId), "任务已建立，请刷新后查看。", 409);
           requireRule(Date.parse(command.payload.dueAt) > Date.now(), "截止时间必须晚于当前时间。", 422);
           checkVersion();
-          tx.saveAssignment({ ...meta(command.entityId), ...command.payload });
+          await tx.saveAssignment({ ...meta(command.entityId), ...command.payload });
           break;
         }
         case "session.create": {
@@ -145,7 +145,7 @@ export class WorkspaceService {
           const conflict = raw.sessions.some(s => s.status === "scheduled" && raw.households.some(h => h.id === s.householdId && h.hostId === actor.userId) && s.startsAt < endsAt && s.endsAt > startsAt);
           requireRule(!conflict, "该时间与 Host 的其他 iriva meeting 冲突。", 409);
           checkVersion();
-          tx.saveSession({ ...meta(command.entityId), ...command.payload, status: "scheduled", meetingUrl: "" });
+          await tx.saveSession({ ...meta(command.entityId), ...command.payload, status: "scheduled", meetingUrl: "" });
           break;
         }
         case "household.create": {
@@ -156,8 +156,8 @@ export class WorkspaceService {
           requireRule(state.organizationMemberships.some(m => m.userId === command.payload.hostId && m.role === "host"), "请选择当前机构的 Host。", 422);
           requireRule(!state.households.some(h => h.termId === command.payload.termId && h.name.toLowerCase() === command.payload.name.toLowerCase()), "这个学期已有同名小组。", 409);
           checkVersion();
-          tx.saveHousehold({ ...meta(command.entityId), ...command.payload, organizationId: actor.organizationId || defaultOrganizationId, timezone: "Asia/Shanghai" });
-          tx.saveMembership({ ...meta(randomUUID()), householdId: command.entityId, userId: command.payload.hostId, role: "host" });
+          await tx.saveHousehold({ ...meta(command.entityId), ...command.payload, organizationId: actor.organizationId || defaultOrganizationId, timezone: "Asia/Shanghai" });
+          await tx.saveMembership({ ...meta(randomUUID()), householdId: command.entityId, userId: command.payload.hostId, role: "host" });
           break;
         }
         case "submission.save": {
@@ -168,7 +168,7 @@ export class WorkspaceService {
           requireRule(!state.submissions.some(s => s.id !== command.entityId && s.assignmentId === assignment.id && s.learnerId === actor.userId), "此任务已有提交，请刷新后继续编辑。", 409);
           requireRule(command.payload.status !== "submitted" || command.payload.body.trim().length > 0, "请先写下你的练习内容。", 422);
           checkVersion(existing);
-          tx.saveSubmission({ ...meta(command.entityId, existing), ...command.payload, learnerId: actor.userId });
+          await tx.saveSubmission({ ...meta(command.entityId, existing), ...command.payload, learnerId: actor.userId });
           break;
         }
         case "feedback.save": {
@@ -180,7 +180,7 @@ export class WorkspaceService {
           requireRule(!state.feedback.some(f => f.id !== command.entityId && f.authorId === actor.userId && f.submissionId === submission.id), "已有反馈，请刷新后编辑。", 409);
           requireRule(command.payload.status !== "published" || command.payload.body.trim().length > 0, "请先写下反馈。", 422);
           checkVersion(existing);
-          tx.saveFeedback({ ...meta(command.entityId, existing), ...command.payload, authorId: actor.userId });
+          await tx.saveFeedback({ ...meta(command.entityId, existing), ...command.payload, authorId: actor.userId });
           break;
         }
         case "application.contact":
@@ -195,18 +195,18 @@ export class WorkspaceService {
             requireRule(household, "Household 不存在。", 404);
             requireRule(state.memberships.filter(m => m.householdId === household.id && m.role === "learner").length < household.capacity, "这个 Household 已满员，请选择其他小组。", 409);
             requireRule(!state.enrollments.some(e => e.userId === application.userId && e.termId === household.termId), "该学员已加入本学期。", 409);
-            const admission = tx.admission(application.userId, actor.organizationId || defaultOrganizationId, household.hostId);
+            const admission = await tx.admission(application.userId, actor.organizationId || defaultOrganizationId, household.hostId);
             if (admission.registered) {
               requireRule(admission.order, "该学员尚未完成套餐付款。", 422);
               requireRule(admission.accepted, "请先由该小组 Host 确定加入。", 422);
               const learner = state.users.find(u => u.id === application.userId);
               requireRule(isProfileComplete(learner), "请学员先完善必填个人资料。", 422);
             }
-            if (!state.memberships.some(m=>m.householdId===household.id&&m.userId===application.userId)) tx.saveMembership({ ...meta(randomUUID()), householdId: household.id, userId: application.userId, role: "learner" });
-            if(household.organizationId && !raw.organizationMemberships.some(m=>m.organizationId===household.organizationId&&m.userId===application.userId)) tx.saveOrganizationMembership({...meta(randomUUID()),organizationId:household.organizationId,userId:application.userId,role:'learn'});
-            tx.saveEnrollment({ ...meta(randomUUID()), householdId: household.id, userId: application.userId, termId: household.termId, plan: admission.order?.plan || "母语档 · 每周 1 次", amountMinor: admission.order?.amountMinor || 318000, currency: "CNY", paymentStatus: admission.order ? "paid" : "pending" });
+            if (!state.memberships.some(m=>m.householdId===household.id&&m.userId===application.userId)) await tx.saveMembership({ ...meta(randomUUID()), householdId: household.id, userId: application.userId, role: "learner" });
+            if(household.organizationId && !raw.organizationMemberships.some(m=>m.organizationId===household.organizationId&&m.userId===application.userId)) await tx.saveOrganizationMembership({...meta(randomUUID()),organizationId:household.organizationId,userId:application.userId,role:'learn'});
+            await tx.saveEnrollment({ ...meta(randomUUID()), householdId: household.id, userId: application.userId, termId: household.termId, plan: admission.order?.plan || "母语档 · 每周 1 次", amountMinor: admission.order?.amountMinor || 318000, currency: "CNY", paymentStatus: admission.order ? "paid" : "pending" });
           }
-          tx.saveApplication({ ...application, ...meta(application.id, application), status: command.kind === "application.enroll" ? "enrolled" : "contacted" });
+          await tx.saveApplication({ ...application, ...meta(application.id, application), status: command.kind === "application.enroll" ? "enrolled" : "contacted" });
           break;
         }
         case "session.reschedule": {
@@ -220,26 +220,26 @@ export class WorkspaceService {
           const conflict = raw.sessions.some(s => s.id !== session.id && s.status === "scheduled" && (s.householdId === session.householdId || raw.households.find(h => h.id === s.householdId)?.hostId === hostId) && s.startsAt < endsAt && s.endsAt > startsAt);
           requireRule(!conflict, "该时间与 Host 或 Household 的其他课程冲突。", 409);
           checkVersion(session);
-          tx.saveSession({ ...session, ...meta(session.id, session), startsAt, endsAt });
+          await tx.saveSession({ ...session, ...meta(session.id, session), startsAt, endsAt });
           break;
         }
       }
-      tx.acknowledge(actor.userId, command.id, version);
-      tx.audit(actor.userId, command.kind, command.entityId);
+      await tx.acknowledge(actor.userId, command.id, version);
+      await tx.audit(actor.userId, command.kind, command.entityId);
       return command.kind === "conversation.open" ? { version, entityId: command.entityId } : { version };
     });
   }
   apply(input: unknown, organizationId = defaultOrganizationId) {
     const data = applicationSchema.parse(input);
-    return this.repo.transaction(tx => {
-      requireRule(tx.read().organizations.some(o => o.id === organizationId), "工作区不存在。", 404);
+    return this.repo.transaction(async tx => {
+      requireRule((await tx.read()).organizations.some(o => o.id === organizationId), "工作区不存在。", 404);
       const email = data.email.toLowerCase();
-      requireRule(!tx.read().users.some(u => u.email === email), "这个邮箱已有报名记录，请联系运营确认。", 409);
+      requireRule(!(await tx.read()).users.some(u => u.email === email), "这个邮箱已有报名记录，请联系运营确认。", 409);
       const user = { ...meta(randomUUID()), name: data.name, email, city: "", timezone: "Asia/Shanghai", avatar: "blue" };
-      tx.saveUser(user);
-      tx.saveOrganizationMembership({ ...meta(randomUUID()), organizationId, userId: user.id, role: "learn" });
+      await tx.saveUser(user);
+      await tx.saveOrganizationMembership({ ...meta(randomUUID()), organizationId, userId: user.id, role: "learn" });
       const application = { ...meta(randomUUID()), organizationId, userId: user.id, goal: data.goal, availability: data.availability, status: "new" as const };
-      tx.saveApplication(application);
+      await tx.saveApplication(application);
       return { id: application.id };
     });
   }

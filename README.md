@@ -1,6 +1,6 @@
 # IRIVA · Household
 
-Next.js App Router + TypeScript。本地三端工作区，Slack 启发的温暖协作界面、微交互、SQLite 后端与 IndexedDB 本地优先体验。
+Next.js App Router + TypeScript。本地三端工作区，Slack 启发的温暖协作界面、微交互、Supabase PostgreSQL 生产后端与 IndexedDB 本地优先体验，本地开发可使用 SQLite。
 
 ## 启动
 
@@ -15,7 +15,7 @@ npm run dev -- --hostname 127.0.0.1 --port 3001
 - 运营：<http://127.0.0.1:3001/ops>
 - 报名：<http://127.0.0.1:3001/apply>
 
-首次接口访问自动迁移并初始化示例数据。数据库位于 `data/iriva.sqlite`，可用 `SQLITE_PATH` 指定文件。`data/` 不进入 Git。三个本地演示身份可从左下角切换，数据真实持久化，不是正式登录。
+未配置 DATABASE_URL 的本地开发环境首次接口访问自动迁移并初始化示例数据。数据库位于 `data/iriva.sqlite`，可用 `SQLITE_PATH` 指定文件。`data/` 不进入 Git。三个本地演示身份可从左下角切换，数据真实持久化，不是正式登录。
 
 ## 已实现
 
@@ -25,14 +25,14 @@ npm run dev -- --hostname 127.0.0.1 --port 3001
 - Host 工作台、反馈草稿与发布、日程与改期冲突校验。
 - 运营报名跟进、容量校验、入组、报名价格快照与付款状态查看。
 - 独立机构数据与离线队列隔离，附带 Common Ground 演示工作区。
-- SQLite 事务、幂等记录、乐观版本检查、审计事件。
+- PostgreSQL 可串行化事务、幂等记录、乐观版本检查、审计事件；本地保留 SQLite 适配器。
 - IndexedDB 草稿与 outbox，乐观更新、恢复联网后同步、冲突比较与显式选择。
 - 导航分为机构汇总（左侧窄栏）、Household 选择（侧栏）、小组内容（组内标签）。不选小组时汇总当前机构内有权访问的数据，选择后练习、日程、成员和旅程仅显示该组内容；练习搜索覆盖当前机构，聊天页面搜索当前对话消息，频道列表搜索频道名称。
 - 左下角“建立”按身份提供入口：学员写练习，Host 建任务与排课，运营建小组。创建表单草稿保存在本机；任务、排课和建组提交需联网，并检查机构权限与排课冲突。
 - Slack 三栏布局、带图标导航、组织切换与前进/后退/历史菜单、可收起侧栏、导航显隐与排序、自定义配色、深色模式和紧凑间距。
 - 已访问工作区的离线外壳缓存；设置内可模拟慢网与离线。构建版已验证停服后重新打开；开发模式受 Next.js 热更新影响，刷新页面仍需本地服务运行，已打开页面的草稿与队列可离线保存。
 
-本地测试采用开发身份适配器，仅对 loopback Host + development 开启。正式部署前须接真实会话和角色管理；production 构建接口会拒绝演示访问。支付、会议接入、录音上传、自动通知尚未实现。
+本地测试采用开发身份适配器，仅对 loopback Host + development 开启。正式登录使用邮箱验证码和 HttpOnly 会话；production 构建接口会拒绝演示访问。支付、会议接入、录音上传、自动通知尚未实现。
 
 ## 检查与数据迁移
 
@@ -51,7 +51,7 @@ npm run db:import -- data/exports/<export>.json data/restored.sqlite
 - `app/api`：Next.js HTTP 适配层。
 - `domain`：共享实体与命令合同。
 - `server/services`：与 Next.js/数据库驱动解耦的业务规则。
-- `server/repositories`：持久化接口与 SQLite 适配器。
+- `server/repositories`：异步持久化接口、PostgreSQL 与 SQLite 适配器。
 - `server/db/migrations`：数据库版本迁移。
 - `local`：本地数据库、乐观视图与同步队列。
 - `features/space`：三端功能视图。
@@ -94,7 +94,7 @@ A message can contain plain `body` text, up to five `cards`, or both. Cards use 
 }
 ```
 
-The five types are `user`, `task`, `group`, `host`, and `plan`; plans use `free`, `lite`, `pro`, or `max` as IDs. `domain/message-cards.ts` defines the shared schema. `server/services/message-cards.ts` resolves current public profile fields, basic summaries of accessible or explicitly shared groups, and plan data, and restricts task details to viewers who have access. The server validates sender permissions; references do not grant recipients access or enroll them in a group. Missing or inaccessible references render as unavailable. Cards remain reference-only in SQLite; the per-viewer snapshot catalog supplies current titles, descriptions and metadata without copying private profile fields into messages.
+The five types are `user`, `task`, `group`, `host`, and `plan`; plans use `free`, `lite`, `pro`, or `max` as IDs. `domain/message-cards.ts` defines the shared schema. `server/services/message-cards.ts` resolves current public profile fields, basic summaries of accessible or explicitly shared groups, and plan data, and restricts task details to viewers who have access. The server validates sender permissions; references do not grant recipients access or enroll them in a group. Missing or inaccessible references render as unavailable. Cards remain reference-only in the database; the per-viewer snapshot catalog supplies current titles, descriptions and metadata without copying private profile fields into messages.
 
 The composer supports selection, preview, removal, card-only sending, reactions, title search, persistent local drafts and the existing offline outbox. Card details route to user conversations, tasks, groups, Host contact (using the existing profile/plan checks), or the selected plan on the plans page. Unjoined group cards direct learners to support. Migration 010 preserves previous messages and reactions.
 
@@ -108,3 +108,31 @@ Host 空间与小组一一对应。Host 在该空间主页添加已注册成员�
 Host 在主页提交额外开组申请，运营可批准或拒绝；审批前不创建空间，同一 Host 同一平台只允许一个待审批申请，重复批准不会重复创建。成员人数仍受小组容量限制。
 
 迁移 011 增加空间所有权、邮箱预授权和开组审批表。启动时一次性转换旧数据：原小组分别成为空间，保留小组 ID 及关联任务；Host 创建的旧公开频道归入其在原机构的首个小组，旧个人频道归入所有者个人空间，私聊仍保留原机构归属。迁移与升级均在事务内执行。平台入口保留目录、约谈、客服及运营汇总；新公共频道须在 Host 小组内创建。备份导出 v11 包含 Host 预授权和开组审批记录。
+
+### Supabase / Vercel 部署
+
+生产环境必须配置 `DATABASE_URL`，使用 Supabase Connect 中的 Transaction pooler URI（端口 6543）。应用用独立 `iriva_app` 登录角色，`prepare:false` 兼容事务连接池；每个实例最多 3 个连接，使用仓库内 Supabase 公共根证书验证 TLS 证书链和主机名。该 URL 只放 Vercel Production 的 Sensitive 环境变量。Preview 应使用单独的测试数据库，不能默认指向生产库。
+
+`NEXT_PUBLIC_SUPABASE_URL` 和 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` 可公开；数据库密码和 `DATABASE_URL` 不能加 `NEXT_PUBLIC_` 前缀。应用通过服务端 PostgreSQL 连接读写私有 `iriva` schema，浏览器继续调用 `/api/*`。所有业务表启用 RLS，只有服务器数据库角色可访问；用户身份和跨组权限仍由服务端会话和业务规则校验。现有账号与会话迁入 PostgreSQL，登录仍使用 Resend 邮箱验证码，不是 Supabase Auth 用户。
+
+在停写期间，从最新 SQLite 文件迁移：
+
+```bash
+# .env.supabase.local 中填写 SUPABASE_DATABASE_URL（管理员 URI）。
+# 文件被 Git 忽略；SQLITE_PATH 默认 data/iriva.sqlite。
+node --env-file=.env.supabase.local --import tsx scripts/migrate-supabase.ts
+# 创建受限应用角色，连接信息保存到同一 Git 忽略文件，不输出密码。
+node --env-file=.env.supabase.local --import tsx scripts/provision-supabase.ts
+```
+
+脚本先备份到 `data/backups/`，仅升级备份副本，再执行 PostgreSQL schema 迁移，事务内导入 25 张表（包括账号、会话、邮件验证码、订单、聊天、Host 资格和审批记录），逐行校验。目标有数据时拒绝覆盖；同一快照重跑不会重复导入。原始 SQLite 文件不改动。管理员凭据仅用于一次性迁移，不配置给应用运行时。
+
+配置 `RESEND_API_KEY` 和已验证发件地址 `AUTH_EMAIL_FROM` 后再上线邮箱登录；数据库迁移本身不启用邮件发送。Vercel 环境变量变更后需要重新部署。生产不会执行示例数据初始化，也不会回退到本地临时 SQLite 文件。
+
+可用独立本地 PostgreSQL 复跑生产适配器的账号、小组权限、并发幂等、回滚与数据库角色权限测试：
+
+```bash
+TEST_POSTGRES_ADMIN_URL=postgres://localhost:5432/postgres npm run test:postgres
+```
+
+此命令仅允许本机地址，创建并删除专属临时测试数据库，不修改现有数据库。`npm test` 保留 SQLite 与纯逻辑测试。

@@ -14,9 +14,9 @@ export function requireLocalDemo(request: Request) {
   const origin = request.headers.get("origin");
   if (origin && origin !== incoming.origin) throw new DomainError(403, "不接受跨站请求。");
 }
-export function actorFromRequest(request: Request): Actor {
+export async function actorFromRequest(request: Request): Promise<Actor> {
   sameOrigin(request);
-  const session = sessionActor(request);
+  const session = await sessionActor(request);
   const expected = request.headers.get("x-account-id");
   if (expected && expected !== session?.userId) throw new DomainError(401, "账号已切换，请重新打开工作区。");
   if (session) return session;

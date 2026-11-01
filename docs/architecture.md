@@ -1,10 +1,10 @@
-# IRIVA 本地工作区架构
+# IRIVA 工作区架构
 
 ## 运行范围
 
-Next.js 内承载 HTTP 适配层与独立后端模块，SQLite 用于本地测试，浏览器 IndexedDB 用于离线副本、草稿与待同步操作。所有演示身份仅在 development + loopback Host 下启用，production 接口拒绝演示访问。身份切换不是正式鉴权。
+Next.js 内承载 HTTP 适配层与独立后端模块，Supabase PostgreSQL 用于生产持久化，SQLite 用于本地测试，浏览器 IndexedDB 用于离线副本、草稿与待同步操作。所有演示身份仅在 development + loopback Host 下启用，production 接口拒绝演示访问。身份切换不是正式鉴权。
 
-当前可运行流程：报名 → 运营跟进 → 入组（同时创建成员与学期报名）→ 查看排课；学员编辑/提交练习 → Host 草稿/发布反馈 → 学员读取反馈。会议链接、真实登录、支付、音频上传及自动提醒尚未接入。
+当前可运行流程：报名 → 运营跟进 → 入组（同时创建成员与学期报名）→ 查看排课；学员编辑/提交练习 → Host 草稿/发布反馈 → 学员读取反馈。邮箱验证码与会话已接入；会议链接、在线支付、音频上传及自动提醒尚未接入。
 
 ## 边界
 
@@ -13,11 +13,14 @@ Next.js 内承载 HTTP 适配层与独立后端模块，SQLite 用于本地测�
 - `server/services`：访问范围、状态规则、版本冲突、组班容量、排课冲突。
 - `server/repositories/workspace-repository.ts`：异步 repository 边界与 transaction-scoped unit of work。
 - `server/repositories/sqlite-repository.ts`：唯一依赖 better-sqlite3 的业务数据适配器。事务使用 BEGIN IMMEDIATE 序列化容量检查和写入。
-- `server/db/migrations`：版本化关系表迁移，启动时应用未执行版本。
+- `server/db/migrations`：本地 SQLite 版本迁移。`supabase/migrations`：独立 PostgreSQL 版本迁移，部署前显式执行。
+- `server/repositories/postgres-repository.ts`：私有 schema、事务连接池与可串行化事务。
 - `local`：Dexie 数据库、派生乐观视图、持久化 outbox、同步逻辑。
 - `features/space`：三端界面及业务表单，不导入 SQLite、数据库连接或服务端实现。
 
-Repository 接口是异步的，事务回调为同步 unit of work：SQLite 直接执行；未来网络数据库适配器需要在数据库事务中加载所需记录，提供 unit of work，并提交收集到的写入。适配器必须提供锁或等价并发校验，不能在事务外“先查再写”。当前为小规模本地 MVP 读取全量状态，服务层先裁剪字段与权限再返回；扩大规模时应将范围查询下推到 repository。
+Repository 和 unit of work 支持异步调用。PostgreSQL 在可串行化事务中读取、校验和写入，序列化失败或死锁时重试整个事务，事务内部通过 AsyncLocalStorage 复用同一连接。本地 SQLite 通过异步队列避免独立请求加入别人的未提交事务。快照由一条 SQL 读取，服务层裁剪字段与权限后返回；扩大规模时应将范围查询下推到 repository。
+
+应用通过受限服务器角色访问私有 `iriva` schema。所有业务表启用 RLS，`anon`/`authenticated` 不直接访问业务表；应用角色没有建表或读取迁移元数据的权限。邮箱验证码及 HttpOnly 会话继续由应用验证，存储迁入 PostgreSQL，不创建 Supabase Auth 用户。
 
 ## 数据关系
 
@@ -40,7 +43,7 @@ erDiagram
 
 每个领域实体都有应用生成的 UUID、`version`、UTC ISO-8601 `createdAt`/`updatedAt`。会员关系唯一键为 `(householdId,userId)`，提交唯一键为 `(assignmentId,learnerId)`，反馈唯一键为 `(submissionId,authorId)`，报名唯一键为 `(userId,termId)`。金额用整数最小币种单位（`amountMinor`）及 ISO 币种代码；方案价格是报名时的快照。
 
-身份与角色在 `Actor` 接口传入，未来由真实会话及角色关联表生成，服务层仍然检查所属 Household、记录所有者和反馈发布状态。Host 不可读取学员未提交草稿，学员只能读取自己的提交与已发布反馈，其他成员的邮箱不会返回。
+身份与角色在 `Actor` 接口传入，由真实会话及角色关联表生成，服务层仍然检查所属 Household、记录所有者和反馈发布状态。Host 不可读取学员未提交草稿，学员只能读取自己的提交与已发布反馈，其他成员的邮箱不会返回。
 
 课程存储已经确定的 UTC 起止时间，Household 与用户另存 IANA 时区。当前不生成周期性课程；以后新增 recurrence rule 表，必须明确固定哪个时区，再逐次展开课程，以正确处理夏令时。所有课程状态、类别等为受约束字符串，不使用数据库专属 enum。
 
@@ -61,14 +64,11 @@ Service Worker 只缓存访问过的工作区 HTML 外壳与 Next 静态资源�
 
 ## 迁移 PostgreSQL
 
-1. 暂停写入并完成 outbox 同步；执行 `npm run db:export` 获取一致快照、幂等记录及审计事件。
-2. 建立 PostgreSQL 独立 migration history。SQLite 的驱动、PRAGMA、建库迁移不能直接用于 PostgreSQL。
-3. 按 users → organizations → organization_memberships → terms → households → memberships → sessions → assignments → submissions → feedback → applications → enrollments → channels → channel_participants → messages 导入，保持 UUID、版本、时间和金额不变。布尔字段在适配器转换为数据库 boolean。
-4. 实现同一 repository 合同，并在涉及容量/时间冲突的事务内提供正确的锁和条件写入；并发提交的唯一约束错误应映射为 409。
-5. 保持 `/api/workspace`、`/api/mutations` 的 DTO 与命令格式不变，浏览器本地数据库无需因为换库重建。
-6. 对比各表计数、外键、金额合计及关键记录；重放本项目的 repository/service 合同测试后切换连接配置。
+先停写并同步浏览器 outbox，使用 `scripts/migrate-supabase.ts` 备份源 SQLite、升级备份副本，再将 25 张业务及账号表导入空的 PostgreSQL schema。保留 UUID、版本、ISO 时间、金额、会话和审计记录。JSON 集合使用 JSONB，毫秒时间戳使用 BIGINT，兼容原模型的 0/1 标记继续使用受约束整数。
 
-可以用 `npm run db:import -- <export.json> <new.sqlite>` 验证可移植快照在新 SQLite 数据库的恢复；它拒绝覆盖已有文件。PostgreSQL 适配器目前未实现，不能仅改一个环境变量就切库。
+导入在一个事务内完成，外键延迟到提交校验，每张表逐行规范化比对；失败回滚。迁移文件校验和与导入快照指纹分别记录在私有元数据表中。已有业务数据的目标拒绝覆盖，原始 SQLite 文件保持不变。配置受限角色的 `DATABASE_URL` 后重新部署；生产不回退到 SQLite，也不运行示例数据种子。
+
+`npm run test:postgres` 在独立本地临时 PostgreSQL 数据库重跑账号、Host 小组、权限、并发、回滚和迁移幂等测试。原 `/api/*` DTO 与浏览器离线协议不变。具体命令与 Vercel 环境变量见 README。
 
 ## 验证重点
 

@@ -1,0 +1,19 @@
+project_id = "iriva"
+
+# Business data lives in the private iriva schema, never the public Data API.
+[api]
+enabled = true
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+
+[db]
+major_version = 17
+
+[db.migrations]
+enabled = true
+schema_paths = []
+
+# Production data is imported explicitly from a verified SQLite backup.
+[db.seed]
+enabled = false
+sql_paths = []

@@ -9,7 +9,9 @@
     "test": "tsx --test tests/*.test.ts",
     "db:export": "tsx scripts/export-data.ts",
     "typecheck": "tsc --noEmit",
-    "db:import": "tsx scripts/import-data.ts"
+    "db:import": "tsx scripts/import-data.ts",
+    "db:migrate:supabase": "tsx scripts/migrate-supabase.ts",
+    "test:postgres": "tsx scripts/test-postgres.ts"
   },
   "dependencies": {
     "@fontsource/noto-sans-sc": "^5.3.1",
@@ -19,6 +21,7 @@
     "dexie-react-hooks": "^4.4.0",
     "lucide-react": "^1.65.0",
     "next": "^16.4.3",
+    "postgres": "4.0.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "zod": "^4.6.7"

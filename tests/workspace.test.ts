@@ -132,11 +132,11 @@ test("request validation rejects unknown mutations and unexpected fields", () =>
   assert.equal(commandSchema.safeParse({ ...submissionCommand(), entityId: "1;drop table" }).success, false);
 });
 
-test("demo identities are restricted to local same-origin requests", () => {
-  assert.equal(actorFromRequest(new Request("http://localhost:3001/api/workspace", { headers: { host: "127.0.0.1:3001", origin: "http://127.0.0.1:3001", "x-demo-role": "learn" } })).role, "learn");
-  assert.throws(() => actorFromRequest(new Request("http://public.example/api/workspace", { headers: { "x-demo-role": "ops" } })), { status: 403 });
-  assert.throws(() => actorFromRequest(new Request("http://localhost/api/workspace", { headers: { "x-demo-role": "ops", origin: "https://foreign.example" } })), { status: 403 });
-  assert.throws(() => actorFromRequest(new Request("http://localhost/api/workspace", { headers: { "x-demo-role": "constructor" } })), { status: 401 });
+test("demo identities are restricted to local same-origin requests", async () => {
+  assert.equal((await actorFromRequest(new Request("http://localhost:3001/api/workspace", { headers: { host: "127.0.0.1:3001", origin: "http://127.0.0.1:3001", "x-demo-role": "learn" } }))).role, "learn");
+  await assert.rejects(() => actorFromRequest(new Request("http://public.example/api/workspace", { headers: { "x-demo-role": "ops" } })), { status: 403 });
+  await assert.rejects(() => actorFromRequest(new Request("http://localhost/api/workspace", { headers: { "x-demo-role": "ops", origin: "https://foreign.example" } })), { status: 403 });
+  await assert.rejects(() => actorFromRequest(new Request("http://localhost/api/workspace", { headers: { "x-demo-role": "constructor" } })), { status: 401 });
 });
 
 
