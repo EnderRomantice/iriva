@@ -44,3 +44,33 @@ test("chat history restores channel and organization, then exits cleanly to grou
   assert.equal(viewRoute(route,"calendar","organization").channelId,undefined);
   assert.equal(readRoute("/learn?view=channels&channel=room-1&household=group-2","learn").householdId,"");
 });
+
+test('Host directory stays in the learner workspace route and clears group context', () => {
+  const group = { organizationId: demoOrganizationId, householdId: 'group-2', channelId: 'dm-1', view: 'direct' as const };
+  const hosts = viewRoute(group, 'hosts', 'household');
+  assert.equal(hosts.householdId, '');
+  assert.equal(hosts.channelId, undefined);
+  assert.deepEqual(readRoute(routeHref('learn', hosts), 'learn'), { organizationId: demoOrganizationId, householdId: '', view: 'hosts' });
+  assert.equal(readRoute('/learn?view=hosts&household=group-2', 'learn').householdId, '');
+  assert.equal(readRoute('/host?view=hosts', 'host').view, 'overview');
+  assert.equal(readRoute('/ops?view=hosts', 'ops').view, 'overview');
+});
+
+test('profile is a routable workspace page with a safe Host return target and legacy link support', () => {
+  const route = {organizationId:demoOrganizationId,householdId:'',view:'profile' as const,profileReturn:'hosts' as const};
+  assert.deepEqual(readRoute(routeHref('learn',route),'learn'),route);
+  assert.equal(readRoute('/learn?panel=profile&household=old','learn').view,'profile');
+  assert.equal(readRoute('/learn?view=profile&household=old','learn').householdId,'');
+  assert.equal(readRoute('/learn?view=profile&return=https://example.com','learn').profileReturn,undefined);
+  assert.equal(viewRoute(route,'overview','organization').profileReturn,undefined);
+  assert.equal(readRoute('/ops?view=profile','ops').view,'profile');
+});
+
+test('admissions interview routes persist for staff and stay unavailable to learners', () => {
+  const route = {organizationId:demoOrganizationId,householdId:'',view:'applications' as const,applicationTab:'bookings' as const};
+  for(const role of ['host','ops'] as const) assert.deepEqual(readRoute(routeHref(role,route),role),route);
+  assert.equal(readRoute('/learn?view=applications&tab=bookings','learn').view,'overview');
+  assert.equal(readRoute('/learn?view=applications&tab=bookings','learn').applicationTab,undefined);
+  assert.equal(viewRoute(route,'overview','organization').applicationTab,undefined);
+  assert.equal(readRoute('/host?view=applications','host').view,'applications');
+});

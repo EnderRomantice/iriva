@@ -1,28 +1,50 @@
 "use client";
 import { useEffect, useState } from "react";
+import { canAccessWorkspaceView } from "@/domain/workspace-access";
 import type { Role } from "@/domain/models";
 import { defaultOrganizationId } from "@/domain/workspace";
 import { viewLabels, type View } from "./preferences";
-export interface SpaceRoute { organizationId: string; householdId: string; channelId?: string; view: View }
+export interface SpaceRoute { organizationId: string; householdId: string; channelId?: string; profileReturn?: "hosts"; applicationTab?: "bookings"; view: View }
+const globalViews:View[] = ["applications","hosts","profile","channels","direct"];
 export function viewRoute(route: SpaceRoute, view: View, scope: "organization" | "household"): SpaceRoute {
-  return { ...route, channelId: undefined, view, householdId: scope === "organization" || view === "applications" ? "" : route.householdId };
+  return { ...route, channelId: undefined, profileReturn: undefined, applicationTab: undefined, view, householdId: scope === "organization" || globalViews.includes(view) ? "" : route.householdId };
 }
 export interface Visit { href: string; title: string; at: number }
 interface NavigationState { entries: Visit[]; index: number }
-export function routeHref(role: Role, route: SpaceRoute) {
+export function normalizeRoute(role:Role, route:SpaceRoute):SpaceRoute {
+  const allowed = canAccessWorkspaceView(role,route.view);
+  const view = allowed && (route.view !== 'journey' || route.householdId) ? route.view : 'overview';
+  return {
+    organizationId:route.organizationId,
+    householdId:allowed && !globalViews.includes(view) ? route.householdId : '',
+    view,
+    ...((view === 'channels' || view === 'direct') && route.channelId ? {channelId:route.channelId} : {}),
+    ...(view === 'profile' && role === 'learn' && route.profileReturn === 'hosts' ? {profileReturn:'hosts' as const} : {}),
+    ...(view === 'applications' && route.applicationTab === 'bookings' ? {applicationTab:'bookings' as const} : {}),
+  };
+}
+export function routeHref(role: Role, input: SpaceRoute) {
+  const route = normalizeRoute(role,input);
   const query = new URLSearchParams();
   if (route.organizationId !== defaultOrganizationId) query.set("org", route.organizationId);
   if (route.channelId && (route.view === "channels" || route.view === "direct")) query.set("channel", route.channelId);
+  if (route.view === "applications" && role !== "learn" && route.applicationTab) query.set("tab",route.applicationTab);
   if (route.householdId) query.set("household", route.householdId);
+  if (route.view === "profile" && route.profileReturn) query.set("return", route.profileReturn);
   if (route.view !== "overview") query.set("view", route.view);
   return `/${role}${query.size ? `?${query}` : ""}`;
 }
 export function readRoute(href: string, role: Role): SpaceRoute {
   const url = new URL(href, "http://localhost");
-  const value = url.searchParams.get("view") || "overview";
+  const value = url.searchParams.get("panel") === "profile" ? "profile" : url.searchParams.get("view") || "overview";
   const householdId = url.searchParams.get("household") || "";
-  const valid = (value !== "journey" || !!householdId) && Object.hasOwn(viewLabels, value) && (role === "ops" ? value !== "tasks" : value !== "applications");
-  return { organizationId: url.searchParams.get("org") || defaultOrganizationId, ...((value === "channels" || value === "direct") && url.searchParams.get("channel") ? { channelId: url.searchParams.get("channel")! } : {}), householdId: ["applications", "channels", "direct"].includes(value) ? "" : householdId, view: valid ? value as View : "overview" };
+  return normalizeRoute(role,{
+    organizationId:url.searchParams.get("org") || defaultOrganizationId,
+    householdId, view:value as View,
+    channelId:url.searchParams.get('channel') || undefined,
+    ...(url.searchParams.get('return') === 'hosts' ? {profileReturn:'hosts' as const} : {}),
+    ...(url.searchParams.get('tab') === 'bookings' ? {applicationTab:'bookings' as const} : {}),
+  });
 }
 export function appendVisit(state: NavigationState, visit: Visit): NavigationState {
   if (state.entries[state.index]?.href === visit.href) return state;
@@ -67,6 +89,7 @@ export function useSpaceNavigation(role: Role) {
     return () => window.removeEventListener("popstate", pop);
   }, [role, key]);
   function go(next: SpaceRoute, title: string) {
+    next = normalizeRoute(role,next);
     const href = routeHref(role, next);
     const updated = appendVisit(state, { href, title, at: Date.now() });
     if (updated !== state) history.pushState({ ...history.state, irivaIndex: updated.index }, "", href);

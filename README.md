@@ -60,3 +60,40 @@ npm run db:import -- data/exports/<export>.json data/restored.sqlite
 - `original-export/`：最初落地页产物，保留用于对照。
 
 数据关系、同步协议、PostgreSQL 迁移边界见 [docs/architecture.md](docs/architecture.md)。
+
+### 邮箱统一登录与注册
+
+登录页先输入邮箱，再输入 6 位验证码；新用户在验证成功后创建账号，已有用户直接登录，不需要设置密码。验证码 10 分钟有效、一次性使用，60 秒后可重发，每个邮箱每小时最多发送 5 次，每个验证码最多尝试 5 次。登录会话保留 30 天，活跃使用时每周续期，退出登录立即使当前会话失效。
+
+本地 `npm run dev` 且通过 localhost / 127.0.0.1 访问时，如果没有邮件配置，验证码只输出到开发服务终端（搜索 `IRIVA 本地邮件预览`），页面会明确提示未发送邮件。本地开发还可以输入 `000000` 通过当前有效的验证码请求；生产和非本机地址不接受这个测试码。此预览模式不会用于生产或局域网地址。
+
+要实际发送邮件，将 `.env.example` 中的 `RESEND_API_KEY` 和 `AUTH_EMAIL_FROM` 配置到 `.env.local` 后重启开发服务。发件地址需使用 Resend 已验证的域名。验证码不会返回到浏览器 API 响应中。第三方 Google / 微信和在线支付仍待配置。
+
+新用户填写学习需求后先进入独立 `/plans` 套餐页，选择付费套餐进入 `/checkout?order=…` 订单确认页。Free 用户可点击右下角「先聊聊看」进入客服工作区，本次登录不再重复拦截；退出登录后重置。联系 Host 仍需付费权益；后续由 Host 确认约谈、运营完成入组。
+
+本地测试付款：在 localhost / 127.0.0.1 的开发服务中，订单页点击支付立即成功并开通套餐，后台记录 `checkout.test_paid` 审计事件，不产生真实扣款。生产环境和非本机地址禁用该入口。
+
+Host 目录位于工作区 `/learn?view=hosts` 路由视图（旧 `/hosts` 自动跳转），支持按专业资质筛选及姓名、城市、专业搜索。全职 Host 使用金色细边框，明星 Host 使用炫彩细边框；明星 Host 仅 Pro / Max 可发起约谈，服务端也校验权限。当前四位 Host 的照片和资质为本地示例数据；运营需替换为真实资料。
+
+资料完整性在进入 Host 列表时检查一次；未完善时工作区持续提醒，联系 Host 的服务端接口也会在创建对话、约谈及通知之前校验必填项。头像无会员边框；昵称后以银色 Lite、金色 Pro、彩色 Max 标签表示套餐。
+
+主页按小组汇总任务完成、正式提交与 meeting 进度，综合分数为任务完成率 × 70 + 正式提交率 × 30（不是语言能力评分）；无任务时显示空值。个人资料为 `?view=profile` 工作区路由，从 Host 校验进入时保存后返回 Host 列表。
+
+### Shared message cards
+
+A message can contain plain `body` text, up to five `cards`, or both. Cards use a versioned reference format; arbitrary HTML, URLs, display text and prices are not accepted from the sender:
+
+```json
+{
+  "channelId": "<channel UUID>",
+  "body": "推荐你看看这位 Host 和这个套餐",
+  "cards": [
+    { "version": 1, "type": "host", "entityId": "<host UUID>" },
+    { "version": 1, "type": "plan", "entityId": "pro" }
+  ]
+}
+```
+
+The five types are `user`, `task`, `group`, `host`, and `plan`; plans use `free`, `lite`, `pro`, or `max` as IDs. `domain/message-cards.ts` defines the shared schema. `server/services/message-cards.ts` resolves current public profile fields, basic summaries of accessible or explicitly shared groups, and plan data, and restricts task details to viewers who have access. The server validates sender permissions; references do not grant recipients access or enroll them in a group. Missing or inaccessible references render as unavailable. Cards remain reference-only in SQLite; the per-viewer snapshot catalog supplies current titles, descriptions and metadata without copying private profile fields into messages.
+
+The composer supports selection, preview, removal, card-only sending, reactions, title search, persistent local drafts and the existing offline outbox. Card details route to user conversations, tasks, groups, Host contact (using the existing profile/plan checks), or the selected plan on the plans page. Unjoined group cards direct learners to support. Migration 010 preserves previous messages and reactions.

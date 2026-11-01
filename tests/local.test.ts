@@ -69,3 +69,17 @@ test("offline chat messages remain separate, retain timestamps and survive reloa
   assert.deepEqual(projectSnapshot(oldCache as Snapshot,[]).channels,[]);
   await localDb.delete();
 });
+
+test('card drafts and card-only outbox messages survive local database reopen', async () => {
+  await localDb.open();
+  const role = 'learn:cards-test';
+  const cards = [{version:1 as const,type:'plan' as const,entityId:'pro' as const}];
+  await saveDraft(role,'card-draft','A recommendation',cards);
+  const command:Command={id:randomUUID(),entityId:randomUUID(),baseVersion:0,kind:'message.send',payload:{channelId:randomUUID(),body:'',cards}};
+  await enqueue(role,command);
+  localDb.close(); await localDb.open();
+  assert.deepEqual((await localDb.drafts.get(`${role}:card-draft`))?.cards,cards);
+  const operations=await localDb.outbox.where('role').equals(role).toArray();
+  assert.equal(operations.length,1);
+  assert.deepEqual(projectSnapshot(snapshot,operations).messages.find(m => m.id === command.entityId)?.cards,cards);
+});

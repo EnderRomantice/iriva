@@ -9,7 +9,7 @@ export function setNetworkMode(value: NetworkMode) { localStorage.setItem("iriva
 export async function request(role: WorkspaceScope, path: string, command?: Command): Promise<Response> {
   if (networkMode() === "offline" || !navigator.onLine) throw new Error("当前离线，内容已保存在本机。");
   if (networkMode() === "slow") await new Promise(resolve => setTimeout(resolve, 1800));
-  return fetch(path, { method: command ? "POST" : "GET", headers: { "x-demo-role": scopeIdentity(role).role, "x-workspace-id": scopeIdentity(role).organizationId, ...(command ? { "Content-Type": "application/json" } : {}) }, body: command ? JSON.stringify(command) : undefined, cache: "no-store", signal: AbortSignal.timeout(15000) });
+  return fetch(path, { method: command ? "POST" : "GET", headers: { "x-demo-role": scopeIdentity(role).role, "x-account-id": role.split(":")[2] || "", "x-workspace-id": scopeIdentity(role).organizationId, ...(command ? { "Content-Type": "application/json" } : {}) }, body: command ? JSON.stringify(command) : undefined, cache: "no-store", signal: AbortSignal.timeout(15000) });
 }
 export async function fetchSnapshot(role: WorkspaceScope): Promise<Snapshot> {
   const response = await request(role, "/api/workspace");

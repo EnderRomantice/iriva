@@ -13,6 +13,7 @@ export function seedDemo(repo: SqliteRepository) {
     });
     seedOrganizations(repo);
     seedChats(repo);
+    seedHostDirectory(repo);
     return;
   }
   const now = new Date();
@@ -35,13 +36,13 @@ export function seedDemo(repo: SqliteRepository) {
     terms: [{ ...base(101), name: "秋日同行 · 第一期", startsOn: at(-8).slice(0,10), endsOn: at(34).slice(0,10) }],
     households: [
       { ...base(201), name: "The Sunday Club", termId: seedId(101), hostId: seedId(5), timezone: "Asia/Shanghai", capacity: 4, theme: "从日常小事，认识彼此的世界。" },
-      { ...base(202), name: "Across the Table", termId: seedId(101), hostId: seedId(5), timezone: "Asia/Shanghai", capacity: 4, theme: "一张圆桌，新的故事。" },
+      { ...base(202), name: "Across the Table", termId: seedId(101), hostId: seedId(5), timezone: "Asia/Shanghai", capacity: 4, theme: "一次相聚，新的故事。" },
     ],
     memberships: [1,2,3,4,5].map((user, index) => ({ ...base(210 + index), householdId, userId: seedId(user), role: user === 5 ? "host" as const : "learner" as const })).concat([{ ...base(220), householdId: seedId(202), userId: seedId(5), role: "host" }]),
     sessions: [
       { ...base(301), householdId, title: "Small talk, real connections", description: "从一句 How was your day? 开始，聊聊那些让日常变得特别的小事。带上一件想分享的物品就好。", startsAt: at(1), endsAt: at(1,14), status: "scheduled", meetingUrl: "" },
       { ...base(302), householdId, title: "A little piece of home", description: "分享一个来自家乡的小故事，练习自然地表达与追问。", startsAt: at(4), endsAt: at(4,14), status: "scheduled", meetingUrl: "" },
-      { ...base(303), householdId, title: "Hello, this is me", description: "我们的第一场圆桌：记住名字，也记住彼此的故事。", startsAt: at(-6), endsAt: at(-6,14), status: "completed", meetingUrl: "" },
+      { ...base(303), householdId, title: "Hello, this is me", description: "我们的第一场 iriva meeting：记住名字，也记住彼此的故事。", startsAt: at(-6), endsAt: at(-6,14), status: "completed", meetingUrl: "" },
     ],
     assignments: [
       { ...base(401), householdId, title: "带来一个关于你的小故事", description: "用 3–5 句话介绍一件你喜欢的小事。它可能是一杯咖啡、一首歌，或者下班路上的风。试着说说它为什么对你特别。", category: "prepare", dueAt: at(1), week: 2 },
@@ -65,6 +66,7 @@ export function seedDemo(repo: SqliteRepository) {
   repo.atomic(() => { for (const table of tables) for (const item of state[table]) repo.put(table, item); });
   seedOrganizations(repo);
   seedChats(repo);
+    seedHostDirectory(repo);
 }
 
 
@@ -94,6 +96,31 @@ function seedChats(repo: SqliteRepository) {
       if (!host) continue;
       const now = new Date().toISOString();
       repo.saveChannel({ id: seedId(n), version: 1, createdAt: now, updatedAt: now, organizationId, ownerId: host.userId, name: "大厅", description: "打个招呼，分享日常，让对话自然发生。", kind: "public", directKey: "" });
+    }
+  });
+}
+
+function seedHostDirectory(repo: SqliteRepository) {
+  repo.atomic(() => {
+    const now=new Date().toISOString();
+    const profiles=[
+      {n:10,name:"Daniel Chen",email:"daniel@example.test",city:"New York",timezone:"America/New_York",signature:"从电影、设计到城市散步，每个故事都值得被听见。",occupation:"设计师 · 城市文化"},
+      {n:11,name:"Sophie Lin",email:"sophie@example.test",city:"Sydney",timezone:"Australia/Sydney",signature:"喜欢旅行和美食，一起用英语聊聊生活里的小发现。",occupation:"旅行写作者 · 日常交流"},
+      {n:12,name:"Alex Wang",email:"alex@example.test",city:"Vancouver",timezone:"America/Vancouver",signature:"聊职业，也聊生活。陪你把想法说得更自然。",occupation:"产品顾问 · 职业沟通"}
+    ];
+    for(const {n,...profile} of profiles) {
+      if(repo.read().users.some(u=>u.id===seedId(n)))continue;
+      repo.saveUser({id:seedId(n),version:1,createdAt:now,updatedAt:now,avatar:"sage",hostFullTime:n===10,...profile});
+      repo.saveOrganizationMembership({id:seedId(5000+n),version:1,createdAt:now,updatedAt:now,organizationId:seedId(1001),userId:seedId(n),role:"host"});
+    }
+    // Fictional directory credentials for the existing local demo profiles.
+    for (const [n, country, qualifications, featured] of [
+      [5, 'GB', ['CELTA', 'TESOL'], true],
+      [10, 'US', ['TESOL', '设计学硕士'], false],
+      [11, 'AU', ['TEFL', '传播学学士'], false],
+      [12, 'CA', ['TESOL', 'MBA'], true],
+    ] as const) {
+      repo.db.prepare("UPDATE users SET host_full_time=CASE WHEN id='10000000-0000-4000-8000-000000000005' THEN 1 ELSE host_full_time END,country_code=?,host_qualifications=?,host_featured=? WHERE id=? AND country_code='' AND email LIKE '%@example.test'").run(country,JSON.stringify(qualifications),Number(featured),seedId(n));
     }
   });
 }

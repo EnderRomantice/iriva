@@ -9,14 +9,8 @@ export const nav = [
 
 export const ctaLabel = "预约 15 分钟认识一下";
 
-export const heroStats = [
-  { value: "6 周", label: "固定开学日，固定同行" },
-  { value: "4 + 1", label: "四位伙伴，一位 Host，不换人" },
-  { value: "约 30 分钟", label: "每次圆桌你的开口时间" },
-];
-
 export const weekSchedule = [
-  { name: "小组圆桌", detail: "1 或 2 次 × 120 分钟" },
+  { name: "iriva meeting", detail: "1 或 2 次 × 120 分钟" },
   { name: "Host 一对一", detail: "1 次 × 30 分钟" },
   { name: "伙伴练习", detail: "3–4 次 × 30–45 分钟" },
   { name: "AI 教练", detail: "每天 15 分钟" },
@@ -25,17 +19,14 @@ export const weekSchedule = [
 
 export const values = [
   {
-    tag: "MESSAGE · 传递",
     title: "每个人都带着自己的故事来",
     body: "生活、文化、经历，都是开口的理由。在这里，每一种声音都有机会被听见。",
   },
   {
-    tag: "CONNECTION · 连接",
     title: "差异让我们靠得更近",
     body: "固定的伙伴、反复的交流、共同的任务，让对话一次比一次深入。",
   },
   {
-    tag: "BELONGING · 归属",
     title: "不必完美，也能自在表达",
     body: "被欢迎、被倾听，然后自然地说得更多、更好。",
   },
@@ -62,8 +53,8 @@ export const ourWay = {
 
 export const formats = [
   {
-    title: "小组圆桌",
-    meta: "Host + 4 位学习者 · 120 分钟",
+    title: "iriva meeting",
+    meta: "Host 和 4 位学习者，每次 120 分钟",
     body: "生活故事、文化话题、角色扮演。中间两人一组练习，每人每次约开口 30 分钟。",
   },
   {
@@ -73,22 +64,22 @@ export const formats = [
   },
   {
     title: "伙伴练习",
-    meta: "两人一组 · 每周 3–4 次",
+    meta: "两人一组，每周 3–4 次",
     body: "AI 给任务卡：场景、角色、要用的表达。你的伙伴在等你，你也在等他。",
   },
   {
     title: "AI 教练",
-    meta: "课前、课后、每一天",
+    meta: "课前、课后和每一天",
     body: "课前准备、课后复盘（3 处鼓励式纠正 + 1 句可借用的表达）、每日 15 分钟练习。",
   },
 ];
 
 export const roundtable = [
-  { time: "0–15 分钟", name: "签到", note: "讲一件这周的事" },
-  { time: "15–60 分钟", name: "主题对话", note: "故事、文化、讨论" },
-  { time: "60–70 分钟", name: "休息", note: "" },
-  { time: "70–110 分钟", name: "两人一组", note: "开口最多的时段", highlight: true },
-  { time: "110–120 分钟", name: "收尾", note: "每人一句今天的收获" },
+  { time: "0–15 分钟", minutes: 15, name: "签到", note: "讲一件这周的事" },
+  { time: "15–60 分钟", minutes: 45, name: "主题对话", note: "故事、文化、讨论" },
+  { time: "60–70 分钟", minutes: 10, name: "休息", note: "" },
+  { time: "70–110 分钟", minutes: 40, name: "两人一组", note: "开口最多的时段", highlight: true },
+  { time: "110–120 分钟", minutes: 10, name: "收尾", note: "每人一句今天的收获" },
 ];
 
 export const journey = [
@@ -159,7 +150,7 @@ export const tiers: Tier[] = [
   },
 ];
 
-/** 每周圆桌次数 → 一学期和 Host 相处的小时数 */
+/** 每周 iriva meeting 次数 → 一学期和 Host 相处的小时数 */
 export const hostHours: Record<Frequency, number> = { 1: 15, 2: 27 };
 
 export const refunds = [
@@ -180,7 +171,7 @@ export const faqs = [
   },
   {
     q: "时间怎么定？",
-    a: "报名时勾选你每周的可用时段。我们把时间对得上、目标相近的 4 位伙伴组成一个 Household，再和 Host 确认圆桌时间，整个学期固定。一对一和伙伴练习自己约。",
+    a: "报名时勾选你每周的可用时段。我们把时间对得上、目标相近的 4 位伙伴组成一个 Household，再和 Host 确认 iriva meeting 时间，整个学期固定。一对一和伙伴练习自己约。",
   },
   {
     q: "Host 是什么样的人？",
@@ -188,7 +179,7 @@ export const faqs = [
   },
   {
     q: "缺席了怎么办？",
-    a: "圆桌时间固定，缺席不单独补课，由一对一和伙伴练习补上。你的伙伴在等你，这也是大家能坚持下来的原因。",
+    a: "iriva meeting 时间固定，缺席不单独补课，由一对一和伙伴练习补上。你的伙伴在等你，这也是大家能坚持下来的原因。",
   },
   {
     q: "录音和数据怎么用？",
@@ -203,7 +194,7 @@ export const faqs = [
 export const applySteps = [
   { step: "第 1 步", title: "认识一下", body: "聊聊你的目标、故事和可用时间" },
   { step: "第 2 步", title: "录 3 分钟口语", body: "这是你的起点，结业时再听一次" },
-  { step: "第 3 步", title: "组成 Household", body: "认识你的 3 位伙伴、Host 和圆桌时间" },
+  { step: "第 3 步", title: "组成 Household", body: "认识你的 3 位伙伴、Host 和 iriva meeting 时间" },
   { step: "第 4 步", title: "付款，一起出发", body: "一次付清，固定开学日开始" },
 ];
 

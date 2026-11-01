@@ -7,7 +7,7 @@ import { localDb, saveDraft } from "@/local/database";
 import { Sheet, Empty } from "./primitives";
 
 export type CreateKind = "practice" | "assignment" | "session" | "household";
-export const createLabels: Record<CreateKind, string> = { practice: "写练习", assignment: "建立任务", session: "安排圆桌", household: "建立小组" };
+export const createLabels: Record<CreateKind, string> = { practice: "写练习", assignment: "建立任务", session: "安排 iriva meeting", household: "建立小组" };
 interface Props {
   kind: CreateKind; data: Snapshot; householdId: string; onClose: () => void;
   openPractice: (assignment: Assignment) => void; save: (command: Command) => Promise<unknown>;
@@ -81,8 +81,8 @@ function CreateForm({ kind, data, householdId, onClose, save, onCreated }: Props
         <label>学员人数上限<input required type="number" min={1} max={12} value={form.capacity} onChange={e => change("capacity", e.target.value)} /></label>
       </> : <>
         <label>小组<select required value={form.householdId} onChange={e => change("householdId", e.target.value)}><option value="">选择小组</option>{data.households.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label>
-        <label>{kind === "assignment" ? "任务名称" : "圆桌主题"}<input required maxLength={120} value={form.title} onChange={e => change("title", e.target.value)} /></label>
-        <label>{kind === "assignment" ? "任务说明" : "圆桌说明"}<textarea required={kind === "assignment"} maxLength={4000} value={form.description} onChange={e => change("description", e.target.value)} /></label>
+        <label>{kind === "assignment" ? "任务名称" : "iriva meeting 主题"}<input required maxLength={120} value={form.title} onChange={e => change("title", e.target.value)} /></label>
+        <label>{kind === "assignment" ? "任务说明" : "iriva meeting 说明"}<textarea required={kind === "assignment"} maxLength={4000} value={form.description} onChange={e => change("description", e.target.value)} /></label>
         {kind === "assignment" ? <>
           <label>类型<select value={form.category} onChange={e => change("category", e.target.value)}><option value="prepare">课前准备</option><option value="practice">日常练习</option><option value="reflect">课后回顾</option></select></label>
           <label>第几周<input type="number" required min={1} max={6} value={form.week} onChange={e => change("week", e.target.value)} /></label>

@@ -3,6 +3,7 @@ import type { Channel, ChannelParticipant, Message, Assignment, Household, Organ
 /** Domain-facing port. Only the adapter knows SQLite, SQL names, and driver types. */
 export interface WorkspaceUnitOfWork {
   read(): State;
+  admission(userId: string, organizationId: string, hostId: string): { registered: boolean; accepted: boolean; order?: { plan: string; amountMinor: number } };
   saveChannel(value: Channel): void;
   saveChannelParticipant(value: ChannelParticipant): void;
   saveMessage(value: Message): void;

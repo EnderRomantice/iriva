@@ -1,55 +1,51 @@
 @import "@fontsource/noto-sans-sc/chinese-simplified-400.css";
-@import "@fontsource/noto-sans-sc/chinese-simplified-500.css";
 @import "@fontsource/noto-sans-sc/chinese-simplified-700.css";
-@import "@fontsource/noto-serif-sc/chinese-simplified-600.css";
-@import "@fontsource/noto-serif-sc/chinese-simplified-900.css";
+@import "@fontsource/noto-sans-sc/chinese-simplified-900.css";
 @import "tailwindcss";
 
+/*
+ * Marketing tokens mirror the workspace defaults in app/(workspace)/space.css
+ * (--sp-brand, --sp-accent, --sp-ink, --sp-line …) so the site and the product share one palette.
+ */
 @theme {
-  --font-sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
-  --font-serif: "Noto Serif SC", "Songti SC", "Source Han Serif SC", "STSong", serif;
+  --font-sans: var(--font-slack-lato), "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
 
-  /* 品牌色 */
-  --color-sand: #f4ede1;
-  --color-paper: #fbf8f2;
-  --color-line: #e2d8c9;
-  --color-ink: #1e3442;
-  --color-muted: #5a6670;
-  --color-sea: #2f5b72;
-  --color-sea-2: #3b6c86;
-  --color-sea-3: #477c99;
-  --color-mist: #e8eef2;
-  --color-mist-2: #d3dfe6;
-  --color-frost: #a9c3d2;
-  --color-foot: #c6d2da;
-  --color-sage: #879f90;
-  --color-clay: #b77b58;
-  --color-clay-soft: #efdfd3;
-  --color-clay-text: #9a5f3e;
-  --color-clay-ink: #7a4a2f;
-  --color-clay-deep: #4a3426;
-  --color-peach: #f1c9ae;
+  --color-brand: #12658a;       /* 海湾蓝：工作区默认主色 */
+  --color-brand-deep: #14506c;  /* 工作区外框渐变的深端 */
+  --color-accent: #13526e;      /* 主按钮，与工作区 .sp-primary 相同 */
+  --color-tint: #edf4f7;        /* 工作区侧栏底色 */
+  --color-ink: #1d1c1d;
+  --color-muted: #5e5d60;
+  --color-line: #e3e5e7;
+  --color-soft: #f8f8f8;
+  --color-on-brand-muted: #cfe1ea;
 }
 
 @layer base {
   html {
-    background: var(--color-sand);
+    background: #fff;
     scroll-behavior: smooth;
+    scroll-padding-top: 72px;
     -webkit-text-size-adjust: 100%;
   }
   body {
     color: var(--color-ink);
     font-family: var(--font-sans);
-    line-height: 1.65;
+    line-height: 1.6;
   }
   button {
     font: inherit;
   }
   a {
-    color: var(--color-clay-text);
+    color: var(--color-brand);
   }
   :focus-visible {
-    outline: 2px solid var(--color-clay);
-    outline-offset: 2px;
+    outline: 2px solid var(--color-brand);
+    outline-offset: 3px;
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { transition: none !important; animation: none !important; }
 }

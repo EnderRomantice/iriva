@@ -1,13 +1,14 @@
 "use client";
 import type { Dispatch, SetStateAction } from "react";
 import type { Role } from "@/domain/models";
+import { canAccessWorkspaceView } from "@/domain/workspace-access";
 import { defaults, viewLabels, type Preferences, type View } from "./preferences";
 import { setNetworkMode, type NetworkMode } from "@/local/sync";
 import { Sheet } from "./primitives";
 const colors = [{ name: "海湾", value: "#12658a" }, { name: "茄紫", value: "#4a154b" }, { name: "松林", value: "#315c4a" }, { name: "石墨", value: "#414854" }];
 export function Settings({ preferences, setPreferences, role, mode, error, onClose }: { preferences: Preferences; setPreferences: Dispatch<SetStateAction<Preferences>>; role: Role; mode: NetworkMode; error: string; onClose: () => void }) {
   const update = (patch: Partial<Preferences>) => setPreferences(p => ({ ...p, ...patch }));
-  const options = preferences.order.filter(v => v !== "journey" && (role === "ops" ? v !== "tasks" : v !== "applications"));
+  const options = preferences.order.filter(v => v !== "journey" && canAccessWorkspaceView(role,v));
   const move = (view: View, direction: number) => {
     const index = preferences.order.indexOf(view), target = index + direction;
     if (target < 0 || target >= preferences.order.length) return;

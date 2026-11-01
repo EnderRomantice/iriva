@@ -1,10 +1,11 @@
+import type { MessageCard } from "@/domain/message-cards";
 import type { WorkspaceScope } from "@/domain/workspace";
 import Dexie, { type EntityTable } from "dexie";
 import type { Snapshot } from "@/domain/models";
 import type { Command } from "@/domain/commands";
 
 export interface PendingOperation { seq?: number; id: string; role: WorkspaceScope; entityId: string; command: Command; status: "pending" | "conflict"; error?: string; queuedAt?: string }
-export interface Draft { key: string; role: WorkspaceScope; body: string; savedAt: string }
+export interface Draft { key: string; role: WorkspaceScope; body: string; cards?: MessageCard[]; savedAt: string }
 export const localDb = new Dexie("iriva-workspace-v1") as Dexie & {
   snapshots: EntityTable<{ role: WorkspaceScope; data: Snapshot }, "role">;
   outbox: EntityTable<PendingOperation, "seq">;
@@ -52,6 +53,6 @@ export async function enqueue(role: WorkspaceScope, command: Command) {
   });
 }
 
-export async function saveDraft(role: WorkspaceScope, entityId: string, body: string) {
-  await localDb.drafts.put({ key: `${role}:${entityId}`, role, body, savedAt: new Date().toISOString() });
+export async function saveDraft(role: WorkspaceScope, entityId: string, body: string, cards?: MessageCard[]) {
+  await localDb.drafts.put({ key: `${role}:${entityId}`, role, body, cards, savedAt: new Date().toISOString() });
 }

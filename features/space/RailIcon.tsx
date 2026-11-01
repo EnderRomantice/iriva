@@ -14,6 +14,6 @@ const silhouettes: Partial<Record<View, string>> = {
 export function RailIcon({ view, icon: Outline, selected }: { view: View; icon: LucideIcon; selected: boolean }) {
   return <span className="sp-rail-icon t-icon-swap" data-state={selected ? "b" : "a"} aria-hidden="true">
     <span className="t-icon" data-icon="a"><Outline /></span>
-    <span className="t-icon" data-icon="b"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path fillRule="evenodd" d={silhouettes[view]} /></svg></span>
+    <span className="t-icon" data-icon="b"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path fillRule="evenodd" d={silhouettes[view] || silhouettes.household} /></svg></span>
   </span>;
 }

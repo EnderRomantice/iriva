@@ -1,3 +1,7 @@
+import { cardCatalog } from "./message-cards";
+import { cardKey, messageCardsSchema } from "../../domain/message-cards";
+import { reactionEmojis } from "../../domain/reactions";
+import { isProfileComplete } from "../../domain/account";
 import { defaultOrganizationId } from "../../domain/workspace";
 import { createHash, randomUUID } from "node:crypto";
 import type { Actor, Entity, Snapshot, State } from "../../domain/models";
@@ -35,7 +39,8 @@ export class WorkspaceService {
   async snapshot(actor: Actor): Promise<Snapshot> {
     const state = this.organizationState(await this.repo.snapshot(), actor);
     requireRule(state.users.some(u => u.id === actor.userId), "身份不存在。", 401);
-    if (actor.role === "ops") return { ...state, actor, serverTime: new Date().toISOString() };
+    const cards = cardCatalog(state, actor);
+    if (actor.role === "ops") return { ...state, cardCatalog:cards, actor, serverTime: new Date().toISOString() };
     const households = state.households.filter(h => this.householdAccess(state, actor, h.id));
     const allowed = new Set(households.map(h => h.id));
     const memberships = state.memberships.filter(m => allowed.has(m.householdId));
@@ -47,8 +52,8 @@ export class WorkspaceService {
     return {
       organizations: state.organizations, organizationMemberships: state.organizationMemberships.filter(m => m.userId === actor.userId),
       channels: state.channels, channelParticipants: state.channelParticipants, messages: state.messages,
-      actor, serverTime: new Date().toISOString(), households, memberships, assignments, submissions,
-      users: state.users.filter(u => userIds.has(u.id)).map(u => u.id === actor.userId ? u : { ...u, email: "" }),
+      cardCatalog:cards, actor, serverTime: new Date().toISOString(), households, memberships, assignments, submissions,
+      users: state.users.filter(u => userIds.has(u.id)).map(u => u.id === actor.userId ? u : { ...u, email: "", birthChart: "" }),
       terms: state.terms.filter(t => households.some(h => h.termId === t.id)),
       sessions: state.sessions.filter(s => allowed.has(s.householdId)),
       feedback: state.feedback.filter(f => submissionIds.has(f.submissionId) && (actor.role === "host" ? f.authorId === actor.userId : f.status === "published")),
@@ -64,7 +69,7 @@ export class WorkspaceService {
     return this.repo.transaction(tx => {
       const raw = tx.read();
       const state = this.organizationState(raw, actor);
-      const table = command.kind === "message.send" ? "messages" : (command.kind === "channel.create" || command.kind === "conversation.open") ? "channels" : command.kind === "submission.save" ? "submissions" : command.kind === "feedback.save" ? "feedback" : (command.kind === "session.reschedule" || command.kind === "session.create") ? "sessions" : command.kind === "assignment.create" ? "assignments" : command.kind === "household.create" ? "households" : "applications";
+      const table = (command.kind === "message.send" || command.kind === "message.react") ? "messages" : (command.kind === "channel.create" || command.kind === "conversation.open") ? "channels" : command.kind === "submission.save" ? "submissions" : command.kind === "feedback.save" ? "feedback" : (command.kind === "session.reschedule" || command.kind === "session.create") ? "sessions" : command.kind === "assignment.create" ? "assignments" : command.kind === "household.create" ? "households" : "applications";
       requireRule(!raw[table].some(e => e.id === command.entityId) || state[table].some(e => e.id === command.entityId));
       const receipt = tx.receipt(actor.userId, command.id);
       if (receipt) return command.kind === "conversation.open" ? { ...receipt, entityId: command.entityId } : receipt;
@@ -90,12 +95,34 @@ export class WorkspaceService {
           for (const userId of [actor.userId, peer]) tx.saveChannelParticipant({ ...meta(randomUUID()), channelId: command.entityId, userId });
           break;
         }
+        case "message.react": {
+          const message = state.messages.find(m => m.id === command.entityId);
+          requireRule(message && state.channels.some(c => c.id === message.channelId), "这条消息不存在，或你没有访问权限。", 403);
+          requireRule(reactionEmojis.includes(command.payload.emoji), "请选择支持的表情。", 422);
+          const previous = message.reactions || [];
+          const exists = previous.some(r => r.userId === actor.userId && r.emoji === command.payload.emoji);
+          version = message.version;
+          if (exists === command.payload.active) break;
+          // Set the caller's own reaction against the latest row inside the transaction.
+          // Unlike a toggle, retries are idempotent and concurrent participants are preserved.
+          const reactions = previous.filter(r => !(r.userId === actor.userId && r.emoji === command.payload.emoji));
+          if (command.payload.active) reactions.push({ userId: actor.userId, emoji: command.payload.emoji });
+          version++;
+          tx.saveMessage({ ...message, reactions, version, updatedAt: new Date().toISOString() });
+          break;
+        }
         case "message.send": {
           requireRule(state.channels.some(c => c.id === command.payload.channelId), "你无法向这个频道发送消息。", 403);
-          requireRule(command.payload.body.trim().length > 0 && command.payload.body.length <= 12000, "请填写消息，最多 12000 个字符。", 422);
+          const parsed = messageCardsSchema.safeParse(command.payload.cards || []);
+          requireRule(parsed.success, "卡片格式不正确，每条消息最多 5 张卡片。", 422);
+          requireRule((command.payload.body.trim().length > 0 || parsed.data.length > 0) && command.payload.body.length <= 12000, "请填写消息或添加卡片，最多 12000 个字符。", 422);
+          if (parsed.data.length) {
+            const allowed = new Set(cardCatalog(state, actor).map(c => cardKey(c.reference)));
+            requireRule(parsed.data.every(c => allowed.has(cardKey(c))), "卡片内容不存在，或你没有分享权限。", 403);
+          }
           requireRule(!state.messages.some(m => m.id === command.entityId), "这条消息已经发送。", 409);
           checkVersion();
-          tx.saveMessage({ ...meta(command.entityId), ...command.payload, body: command.payload.body.trim(), authorId: actor.userId });
+          tx.saveMessage({ ...meta(command.entityId), ...command.payload, body: command.payload.body.trim(), cards: parsed.data, authorId: actor.userId });
           break;
         }
         case "assignment.create": {
@@ -110,11 +137,11 @@ export class WorkspaceService {
         case "session.create": {
           const household = state.households.find(h => h.id === command.payload.householdId);
           requireRule(actor.role === "host" && household?.hostId === actor.userId);
-          requireRule(!state.sessions.some(s => s.id === command.entityId), "圆桌已建立，请刷新后查看。", 409);
+          requireRule(!state.sessions.some(s => s.id === command.entityId), "iriva meeting 已建立，请刷新后查看。", 409);
           const { startsAt, endsAt } = command.payload;
           requireRule(Date.parse(endsAt) > Date.parse(startsAt) && Date.parse(startsAt) > Date.now(), "请选择未来的时间，结束时间必须晚于开始时间。", 422);
           const conflict = raw.sessions.some(s => s.status === "scheduled" && raw.households.some(h => h.id === s.householdId && h.hostId === actor.userId) && s.startsAt < endsAt && s.endsAt > startsAt);
-          requireRule(!conflict, "该时间与 Host 的其他圆桌冲突。", 409);
+          requireRule(!conflict, "该时间与 Host 的其他 iriva meeting 冲突。", 409);
           checkVersion();
           tx.saveSession({ ...meta(command.entityId), ...command.payload, status: "scheduled", meetingUrl: "" });
           break;
@@ -165,8 +192,15 @@ export class WorkspaceService {
             requireRule(household, "Household 不存在。", 404);
             requireRule(state.memberships.filter(m => m.householdId === household.id && m.role === "learner").length < household.capacity, "这个 Household 已满员，请选择其他小组。", 409);
             requireRule(!state.enrollments.some(e => e.userId === application.userId && e.termId === household.termId), "该学员已加入本学期。", 409);
+            const admission = tx.admission(application.userId, actor.organizationId || defaultOrganizationId, household.hostId);
+            if (admission.registered) {
+              requireRule(admission.order, "该学员尚未完成套餐付款。", 422);
+              requireRule(admission.accepted, "请先由该小组 Host 确定加入。", 422);
+              const learner = state.users.find(u => u.id === application.userId);
+              requireRule(isProfileComplete(learner), "请学员先完善必填个人资料。", 422);
+            }
             tx.saveMembership({ ...meta(randomUUID()), householdId: household.id, userId: application.userId, role: "learner" });
-            tx.saveEnrollment({ ...meta(randomUUID()), householdId: household.id, userId: application.userId, termId: household.termId, plan: "母语档 · 每周 1 次", amountMinor: 318000, currency: "CNY", paymentStatus: "pending" });
+            tx.saveEnrollment({ ...meta(randomUUID()), householdId: household.id, userId: application.userId, termId: household.termId, plan: admission.order?.plan || "母语档 · 每周 1 次", amountMinor: admission.order?.amountMinor || 318000, currency: "CNY", paymentStatus: admission.order ? "paid" : "pending" });
           }
           tx.saveApplication({ ...application, ...meta(application.id, application), status: command.kind === "application.enroll" ? "enrolled" : "contacted" });
           break;

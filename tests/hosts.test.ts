@@ -1,0 +1,24 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { canContactHost, countryFlag, filterHosts } from '../domain/hosts';
+import { SqliteRepository } from '../server/repositories/sqlite-repository';
+import { seedDemo } from '../server/db/seed';
+test('directory metadata persists and qualification/search filters combine across featured and regular Hosts', t => {
+  const repo = new SqliteRepository(':memory:'); t.after(() => repo.db.close()); seedDemo(repo);
+  const state = repo.read();
+  const hosts = state.users.filter(u => state.organizationMemberships.some(m => m.userId === u.id && m.role === 'host'));
+  assert.equal(hosts.filter(h => h.hostFeatured).length, 2);
+  assert.equal(hosts.filter(h => h.hostFullTime).length, 2);
+  assert.equal(hosts.find(h => h.name === 'Daniel Chen')?.hostFullTime, true);
+  seedDemo(repo);
+  assert.equal(repo.read().users.filter(h => h.hostFullTime).length, 2);
+  assert.ok(hosts.every(h => Array.isArray(h.hostQualifications) && h.countryCode));
+  assert.deepEqual(filterHosts(hosts, 'CELTA', '').map(h => h.name), ['Emma Wilson']);
+  assert.deepEqual(filterHosts(hosts, 'TESOL', 'new york').map(h => h.name), ['Daniel Chen']);
+  assert.equal(filterHosts(hosts, 'TEFL', 'Emma').length, 0);
+  assert.equal(filterHosts(hosts, 'all', '').length, 4);
+  assert.equal(countryFlag('GB'), '🇬🇧'); assert.equal(countryFlag(undefined), '🌐');
+  assert.equal(canContactHost('lite', true), false); assert.equal(canContactHost('lite', false), true);
+  assert.equal(canContactHost('pro', true), true); assert.equal(canContactHost('max', true), true);
+  assert.equal(canContactHost('free', false), false);
+});

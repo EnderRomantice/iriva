@@ -1,0 +1,3 @@
+ALTER TABLE users ADD COLUMN country_code TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN host_qualifications TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE users ADD COLUMN host_featured INTEGER NOT NULL DEFAULT 0 CHECK(host_featured IN (0,1));

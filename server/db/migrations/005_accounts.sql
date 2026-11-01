@@ -1,0 +1,10 @@
+ALTER TABLE users ADD COLUMN signature TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN mbti TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN zodiac TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN birth_chart TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN occupation TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free';
+CREATE TABLE credentials (user_id TEXT PRIMARY KEY REFERENCES users(id), password_hash TEXT NOT NULL);
+CREATE TABLE auth_sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), expires_at INTEGER NOT NULL);
+CREATE TABLE bookings (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id), learner_id TEXT NOT NULL REFERENCES users(id), host_id TEXT NOT NULL REFERENCES users(id), channel_id TEXT NOT NULL REFERENCES channels(id), status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','rejected')), created_at TEXT NOT NULL, UNIQUE(organization_id, learner_id, host_id));
+CREATE TABLE plan_orders (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), plan TEXT NOT NULL CHECK(plan IN ('lite','pro','max')), frequency INTEGER NOT NULL CHECK(frequency IN (1,2)), amount_minor INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL);

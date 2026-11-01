@@ -1,3 +1,4 @@
+import { sessionActor, sameOrigin } from "./auth";
 import { ZodError } from "zod";
 import { demoActors, type Actor, type Role } from "../domain/models";
 import { DomainError } from "../domain/commands";
@@ -14,6 +15,11 @@ export function requireLocalDemo(request: Request) {
   if (origin && origin !== incoming.origin) throw new DomainError(403, "不接受跨站请求。");
 }
 export function actorFromRequest(request: Request): Actor {
+  sameOrigin(request);
+  const session = sessionActor(request);
+  const expected = request.headers.get("x-account-id");
+  if (expected && expected !== session?.userId) throw new DomainError(401, "账号已切换，请重新打开工作区。");
+  if (session) return session;
   requireLocalDemo(request);
   const role = request.headers.get("x-demo-role") as Role;
   if (!Object.hasOwn(demoActors, role ?? "")) throw new DomainError(401, "请选择一个本地演示身份。");

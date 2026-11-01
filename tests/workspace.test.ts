@@ -26,9 +26,9 @@ const submissionCommand = (overrides: Partial<Command> = {}): Command => ({ id: 
 test("schema and seed are repeatable; foreign keys are valid", t => {
   const { repo, file } = fixture(t); seedDemo(repo);
   const second = new SqliteRepository(file);
-  assert.equal(second.read().users.length, 9);
+  assert.equal(second.read().users.length, 12);
   assert.deepEqual(second.db.prepare("PRAGMA foreign_key_check").all(), []);
-  assert.equal((second.db.prepare("SELECT COUNT(*) AS n FROM schema_migrations").get() as { n: number }).n, 4);
+  assert.equal((second.db.prepare("SELECT COUNT(*) AS n FROM schema_migrations").get() as { n: number }).n, 10);
   second.db.close();
 });
 
@@ -357,4 +357,155 @@ test("DMs deduplicate both directions and isolate both participants from every o
   const otherOrg = await service.execute(second, openDM(demoActors.host.userId));
   assert.notEqual(otherOrg.entityId, opened.entityId);
   assert.equal((await service.snapshot(second)).messages.length, 0);
+});
+
+const reactTo = (entityId: string, active = true, emoji: '👍' | '❤️' = '👍'): Command => ({ id: randomUUID(), entityId, baseVersion: 1, kind: 'message.react', payload: { emoji, active } });
+
+test('message reactions merge across participants, are idempotent, and survive reopening', async t => {
+  const { service, repo, file } = fixture(t);
+  const dm = await service.execute(demoActors.learn, openDM(demoActors.host.userId));
+  const message = sendMessage(dm.entityId!);
+  await service.execute(demoActors.learn, message);
+  const learnerReaction = reactTo(message.entityId);
+  await Promise.all([service.execute(demoActors.learn, learnerReaction), service.execute(demoActors.host, reactTo(message.entityId))]);
+  const row = () => repo.read().messages.find(m => m.id === message.entityId)!;
+  assert.equal(row().reactions?.length, 2);
+  assert.equal(row().version, 3);
+  // Both a repeated receipt and a second request with the same desired state are safe.
+  await service.execute(demoActors.learn, learnerReaction);
+  await service.execute(demoActors.learn, reactTo(message.entityId));
+  assert.equal(row().reactions?.length, 2);
+  assert.equal(row().version, 3);
+  await service.execute(demoActors.learn, reactTo(message.entityId, true, '❤️'));
+  const remove = reactTo(message.entityId, false);
+  await service.execute(demoActors.learn, remove);
+  await service.execute(demoActors.learn, remove);
+  await service.execute(demoActors.learn, reactTo(message.entityId, false));
+  assert.deepEqual(row().reactions, [{ userId:demoActors.host.userId, emoji:'👍' }, { userId:demoActors.learn.userId, emoji:'❤️' }]);
+  assert.equal(row().version, 5);
+  const reopened = new SqliteRepository(file);
+  try {
+    for (const actor of [demoActors.learn, demoActors.host]) assert.deepEqual((await new WorkspaceService(reopened).snapshot(actor)).messages.find(m => m.id === message.entityId)?.reactions, row().reactions);
+  } finally { reopened.db.close(); }
+});
+
+test('reaction permissions follow public, private, DM and organization boundaries', async t => {
+  const { service, repo } = fixture(t);
+  const dm = await service.execute(demoActors.learn, openDM(demoActors.host.userId));
+  const directMessage = sendMessage(dm.entityId!);
+  await service.execute(demoActors.learn, directMessage);
+  await assert.rejects(service.execute(demoActors.ops, reactTo(directMessage.entityId)), { status:403 });
+  await assert.rejects(service.execute({ ...demoActors.learn, organizationId:seedId(1002) }, reactTo(directMessage.entityId)), { status:403 });
+  await assert.rejects(service.execute(demoActors.learn, reactTo(randomUUID())), { status:403 });
+  const privateChannel = createChannel('private');
+  await service.execute(demoActors.learn, privateChannel);
+  const privateMessage = sendMessage(privateChannel.entityId);
+  await service.execute(demoActors.learn, privateMessage);
+  await service.execute(demoActors.learn, reactTo(privateMessage.entityId));
+  for (const outsider of [demoActors.host, demoActors.ops]) await assert.rejects(service.execute(outsider, reactTo(privateMessage.entityId)), { status:403 });
+  const publicChannel = createChannel('public');
+  await service.execute(demoActors.host, publicChannel);
+  const publicMessage = sendMessage(publicChannel.entityId);
+  await service.execute(demoActors.host, publicMessage);
+  for (const actor of Object.values(demoActors)) await service.execute(actor, reactTo(publicMessage.entityId));
+  assert.equal(repo.read().messages.find(m => m.id === publicMessage.entityId)?.reactions?.length, 3);
+  assert.ok(!(await service.snapshot(demoActors.ops)).messages.some(m => m.id === privateMessage.entityId || m.id === directMessage.entityId));
+});
+
+test('reaction input cannot forge another user or send unsupported emoji', () => {
+  const command = reactTo(randomUUID());
+  assert.equal(commandSchema.safeParse(command).success, true);
+  assert.equal(commandSchema.safeParse({ ...command, payload:{ emoji:'arbitrary', active:true } }).success, false);
+  assert.equal(commandSchema.safeParse({ ...command, payload:{ emoji:'👍', active:true, userId:demoActors.host.userId } }).success, false);
+  assert.equal(commandSchema.safeParse({ ...command, payload:{ emoji:'👍' } }).success, false);
+});
+
+test('reaction migration preserves existing messages and defaults to an empty collection', t => {
+  const folder = mkdtempSync(path.join(os.tmpdir(), 'iriva-reaction-migration-'));
+  const file = path.join(folder, 'old.sqlite');
+  t.after(() => rmSync(folder, { recursive:true, force:true }));
+  const original = new SqliteRepository(file); seedDemo(original);
+  const now = new Date().toISOString(), channelId = randomUUID(), messageId = randomUUID();
+  original.saveChannel({ id:channelId, version:1, createdAt:now, updatedAt:now, organizationId:seedId(1001), ownerId:demoActors.host.userId, name:'Existing channel', description:'', kind:'public', directKey:'' });
+  original.saveMessage({ id:messageId, version:1, createdAt:now, updatedAt:now, channelId, authorId:demoActors.host.userId, body:'Existing message' });
+  original.db.exec('ALTER TABLE messages DROP COLUMN reactions; DELETE FROM schema_migrations WHERE version=9');
+  original.db.close();
+  const migrated = new SqliteRepository(file);
+  try { const message = migrated.read().messages.find(m => m.id === messageId)!; assert.equal(message.body,'Existing message'); assert.deepEqual(message.reactions,[]); }
+  finally { migrated.db.close(); }
+});
+
+test('all five shared card types persist, support card-only messages and reactions', async t => {
+  const { service, repo, file } = fixture(t);
+  const channel = createChannel('public'); await service.execute(demoActors.host,channel);
+  const view = await service.snapshot(demoActors.learn);
+  const types = ['user','task','group','host','plan'] as const;
+  const cards = types.map(type => view.cardCatalog!.find(c => c.reference.type === type)!.reference);
+  const command: Command = { ...sendMessage(channel.entityId,''), kind:'message.send', payload:{channelId:channel.entityId,body:'',cards} };
+  assert.equal(commandSchema.safeParse(command).success,true);
+  await service.execute(demoActors.learn,command);
+  await service.execute(demoActors.learn,command);
+  await service.execute(demoActors.host,reactTo(command.entityId));
+  assert.equal(repo.read().messages.filter(m => m.id === command.entityId).length,1);
+  const reopened = new SqliteRepository(file);
+  try {
+    const row = (await new WorkspaceService(reopened).snapshot(demoActors.learn)).messages.find(m => m.id === command.entityId)!;
+    assert.equal(row.body,''); assert.deepEqual(row.cards,cards); assert.equal(row.reactions?.length,1);
+  } finally { reopened.db.close(); }
+  const userCard = view.cardCatalog!.find(c => c.reference.type === 'user')!;
+  const user = repo.read().users.find(u => u.id === userCard.reference.entityId)!;
+  repo.saveUser({...user,name:'Updated public nickname'});
+  assert.equal((await service.snapshot(demoActors.learn)).cardCatalog!.find(c => c.reference.type === 'user' && c.reference.entityId === user.id)!.title,'Updated public nickname');
+});
+
+test('card schema rejects forged previews, links, duplicates, unknown versions and empty messages', () => {
+  const valid = { version:1,type:'plan',entityId:'pro' };
+  const command = (cards:unknown[], body='') => ({...sendMessage(randomUUID()),payload:{channelId:randomUUID(),body,cards}});
+  assert.equal(commandSchema.safeParse(command([valid])).success,true);
+  for (const cards of [[],[valid,valid],[{...valid,version:2}],[{...valid,type:'html'}],[{...valid,entityId:'enterprise'}],[{...valid,title:'Free lifetime Pro'}],[{...valid,url:'javascript:alert(1)'}],Array.from({length:6},(_,i)=>({version:1,type:'user',entityId:randomUUID()}))]) assert.equal(commandSchema.safeParse(command(cards)).success,false);
+  assert.equal(commandSchema.safeParse(command([],'Plain text still works')).success,true);
+});
+
+test('shared references respect organization, host role and per-viewer task access', async t => {
+  const { service, repo } = fixture(t);
+  const channel = createChannel('public'); await service.execute(demoActors.host,channel);
+  const send = (type:'task'|'host'|'user'|'group',entityId:string):Command => ({...sendMessage(channel.entityId),kind:'message.send',payload:{channelId:channel.entityId,body:'',cards:[{version:1,type,entityId}]}});
+  const learner = await service.snapshot(demoActors.learn);
+  const allowedTask = learner.cardCatalog!.find(c => c.reference.type === 'task')!;
+  const hiddenTask = repo.read().assignments.find(a => !learner.assignments.some(v => v.id === a.id))!;
+  await assert.rejects(service.execute(demoActors.learn,send('task',hiddenTask.id)),{status:403});
+  await assert.rejects(service.execute(demoActors.learn,send('host',demoActors.learn.userId)),{status:403});
+  await assert.rejects(service.execute(demoActors.learn,send('user',randomUUID())),{status:403});
+  const otherGroup = repo.read().households.find(h => h.organizationId === seedId(1002))!;
+  await assert.rejects(service.execute(demoActors.learn,send('group',otherGroup.id)),{status:403});
+  const message = send('task',allowedTask.reference.entityId);
+  await service.execute(demoActors.learn,message);
+  const outsider = {role:'learn' as const,userId:seedId(7)};
+  const recipient = await service.snapshot(outsider);
+  assert.ok(recipient.messages.some(m => m.id === message.entityId));
+  assert.ok(!recipient.cardCatalog!.some(c => c.reference.type === 'task' && c.reference.entityId === allowedTask.reference.entityId));
+  assert.ok(!recipient.assignments.some(a => a.id === allowedTask.reference.entityId));
+  assert.ok(!JSON.stringify(recipient.cardCatalog).includes('xiaoman@example.test'));
+  const groupId = learner.assignments.find(a => a.id === allowedTask.reference.entityId)!.householdId;
+  assert.ok(!recipient.cardCatalog!.some(c => c.reference.type === 'group' && c.reference.entityId === groupId));
+  await service.execute(demoActors.learn,send('group',groupId));
+  const afterShare = await service.snapshot(outsider);
+  assert.ok(afterShare.cardCatalog!.some(c => c.reference.type === 'group' && c.reference.entityId === groupId));
+  assert.ok(!afterShare.households.some(h => h.id === groupId));
+  assert.ok(!afterShare.assignments.some(a => a.householdId === groupId));
+  await assert.rejects(service.execute({...demoActors.learn,organizationId:seedId(1002)},message),{status:403});
+});
+
+test('message card migration retains old text and reaction data', t => {
+  const { repo, file } = fixture(t);
+  const now = new Date().toISOString(), channelId=randomUUID(),messageId=randomUUID();
+  repo.saveChannel({id:channelId,version:1,createdAt:now,updatedAt:now,organizationId:seedId(1001),ownerId:demoActors.host.userId,name:'Legacy',description:'',kind:'public',directKey:''});
+  repo.saveMessage({id:messageId,version:2,createdAt:now,updatedAt:now,channelId,authorId:demoActors.host.userId,body:'Keep this message',reactions:[{userId:demoActors.learn.userId,emoji:'❤️'}]});
+  repo.db.exec(`CREATE TABLE legacy_messages (id TEXT PRIMARY KEY,channel_id TEXT NOT NULL REFERENCES channels(id),author_id TEXT NOT NULL REFERENCES users(id),body TEXT NOT NULL CHECK(length(trim(body))>0),version INTEGER NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,reactions TEXT NOT NULL DEFAULT '[]');
+    INSERT INTO legacy_messages SELECT id,channel_id,author_id,body,version,created_at,updated_at,reactions FROM messages;
+    DROP TABLE messages; ALTER TABLE legacy_messages RENAME TO messages; CREATE INDEX messages_channel_time ON messages(channel_id,created_at,id); DELETE FROM schema_migrations WHERE version=10;`);
+  repo.db.close();
+  const migrated = new SqliteRepository(file);
+  try { const row=migrated.read().messages.find(m => m.id === messageId)!; assert.equal(row.body,'Keep this message'); assert.equal(row.reactions![0].emoji,'❤️'); assert.deepEqual(row.cards,[]); assert.deepEqual(migrated.db.prepare('PRAGMA foreign_key_check').all(),[]); }
+  finally { migrated.db.close(); }
 });
