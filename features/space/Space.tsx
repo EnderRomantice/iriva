@@ -40,32 +40,41 @@ export function Space({ role }: { role: Role }) {
   const navigation = useSpaceNavigation(role);
   const [account, setAccount] = useState<Account>();
   const [authError, setAuthError] = useState("");
+  const [accountOrg, setAccountOrg] = useState<string>();
+  const organizationId = navigation.route?.organizationId;
   const currentOrg = () => new URLSearchParams(location.search).get("org") || undefined;
-  async function refreshAccount() { const result:Account = await accountRequest(); if(result.role!==role) { location.replace(workspaceHomeHref(result.role,result.organizationId)); return; } setAccount(result); cacheAccount(role,currentOrg(),result); }
+  async function refreshAccount() { const org = currentOrg(); const result:Account = await accountRequest(); if (currentOrg() !== org) return; if(result.role!==role) { location.replace(workspaceHomeHref(result.role,result.organizationId)); return; } setAccount(result); cacheAccount(role,org,result); setAccountOrg(org || defaultOrganizationId); setAuthError(""); }
   function patchAccount(update: (account: Account) => Account) { setAccount(previous => previous && update(previous)); }
   useEffect(() => {
-    // Paint from the last known account right away; the request below revalidates it.
-    const cached = readCachedAccount(role, currentOrg());
-    if (cached) setAccount(cached);
-    accountRequest().then((a: Account) => {
+    if (!organizationId) return;
+    let cancelled = false;
     const org = currentOrg();
+    setAuthError("");
+    // Keep the existing shell while the target workspace account loads.
+    const cached = readCachedAccount(role, org);
+    if (cached) { setAccount(cached); setAccountOrg(organizationId); }
+    accountRequest().then((a: Account) => {
+    if (cancelled || currentOrg() !== org) return;
     if (!org && !new URLSearchParams(location.search).get('view') && a.authenticated && a.role !== 'ops' && (a.landingWorkspaceId || a.homeWorkspaceId)) { location.replace(workspaceHomeHref(a.role,a.landingWorkspaceId || a.homeWorkspaceId)); return; }
     if (a.role !== role) { location.replace(workspaceHomeHref(a.role,org)); return; }
     if (role === "learn" && !a.application && !a.management?.space?.kind?.match(/personal|host/)) { location.replace(`/apply${org ? `?org=${encodeURIComponent(org)}` : ''}`); return; }
     if (new URLSearchParams(location.search).get("panel") === "hosts") { location.replace(canAccessWorkspaceView(a.role,"hosts") ? billingHref("hosts",org) : workspaceHomeHref(a.role,org)); return; }
     if (a.management?.space?.kind !== "personal" && a.management?.space?.kind !== "host" && readRoute(location.href, role).view !== "profile" && needsPlan(a) && !hasChosenChat(a.user.id, org) && new URLSearchParams(location.search).get("chat") !== "1") { location.replace(billingHref("plans", org)); return; }
-    setAccount(a); cacheAccount(role, org, a);
+    setAccount(a); setAccountOrg(organizationId); cacheAccount(role, org, a);
   }).catch(e => {
+    if (cancelled || currentOrg() !== org) return;
     const signedOut = e instanceof AccountError && e.status === 401;
     if (signedOut) { forgetCachedAccounts(); setAccount(undefined); }
     else if (cached && !(e instanceof AccountError)) return; // network hiccup: keep working from the cached account
-    if(role === "learn") location.replace("/apply"); else setAuthError(e.message);
-  }); }, [role, navigation.route?.organizationId]);
+    if (signedOut && role === "learn") location.replace("/apply"); else setAuthError(e.message);
+  });
+    return () => { cancelled = true; };
+  }, [role, organizationId]);
   if (!navigation.route || !account) return authError ? <div className="sp-loading">{authError}</div> : <AppSkeleton organizationId={navigation.route?.organizationId} view={navigation.route?.view} chat={!!navigation.route?.channelId} />;
-  return <SpaceContent key={`${account.user.id}:${role}:${navigation.route.organizationId}`} role={role} navigation={navigation} account={account} refreshAccount={refreshAccount} patchAccount={patchAccount} />;
+  return <SpaceContent key={`${account.user.id}:${role}:${navigation.route.organizationId}`} role={role} navigation={navigation} account={account} accountPending={accountOrg !== organizationId} accountError={authError} refreshAccount={refreshAccount} patchAccount={patchAccount} />;
 }
 type Profile = z.infer<typeof profileSchema>;
-function SpaceContent({ role, navigation, account, refreshAccount, patchAccount }: { role: Role; navigation: SpaceNavigation; account: Account; refreshAccount: () => Promise<void>; patchAccount: (update: (account: Account) => Account) => void }) {
+function SpaceContent({ role, navigation, account, accountPending, accountError, refreshAccount, patchAccount }: { accountPending: boolean; accountError: string; role: Role; navigation: SpaceNavigation; account: Account; refreshAccount: () => Promise<void>; patchAccount: (update: (account: Account) => Account) => void }) {
   const route = navigation.route!;
   const scope: WorkspaceScope = account.authenticated ? `${role}:${route.organizationId}:${account.user.id}` : workspaceScope(role, route.organizationId);
   useEffect(() => { const interval=setInterval(() => { void refreshAccount().catch(() => {}); }, 10000); return () => clearInterval(interval); }, []);
@@ -76,10 +85,10 @@ function SpaceContent({ role, navigation, account, refreshAccount, patchAccount 
   const profileCheckedRoute = useRef<string | undefined>(undefined);
   useEffect(() => {
     const key = `${route.organizationId}:${view}`;
-    if (profileCheckedRoute.current === key) return;
+    if (accountPending || profileCheckedRoute.current === key) return;
     profileCheckedRoute.current = key;
-    if (view === "hosts" && profileIncomplete) editProfile(true);
-  }, [view, route.organizationId, profileIncomplete]);
+    if (!accountPending && view === "hosts" && profileIncomplete) editProfile(true);
+  }, [view, route.organizationId, profileIncomplete, accountPending]);
   const [query, setQuery] = useState("");
   const [settings, setSettings] = useState(false), [sync, setSync] = useState(false);
   const [openingChannel, setOpeningChannel] = useState<string>();
@@ -99,7 +108,7 @@ function SpaceContent({ role, navigation, account, refreshAccount, patchAccount 
   useEffect(() => { setQuery(""); setPractice(undefined); setSession(undefined); scroll.current?.scrollTo({ top: 0 }); }, [route.view, route.householdId, route.channelId]);
   function navigate(value: string, level: "organization" | "household" = "household") {
     if (!allowed(value)) return;
-    if (value === "hosts" && account.management?.platformId && account.management.platformId !== route.organizationId) { location.assign(billingHref("hosts",account.management.platformId)); return; }
+    if (value === "hosts" && account.management?.platformId && account.management.platformId !== route.organizationId) { navigation.go({ ...viewRoute(route, "hosts", "organization"), organizationId: account.management.platformId }, "Host"); setQuery(""); return; }
     const organization = data?.organizations?.find(o => o.id === route.organizationId);
     const next = viewRoute(route, value, level);
     navigation.go(next, `${organization?.name || "IRIVA"} / ${next.householdId ? household?.name || "小组" : "全部小组"} / ${value === "overview" && !next.householdId ? "主页" : viewLabels[value]}`);
@@ -189,11 +198,11 @@ function SpaceContent({ role, navigation, account, refreshAccount, patchAccount 
   async function resolve(entityId: string, choice: "local" | "server") { setResolving(true); setSyncError(""); try { await resolveConflict(scope, entityId, choice); await refresh(); } catch(e) { setSyncError(e instanceof Error ? e.message : "无法同步"); } finally { setResolving(false); } }
   return <div className="sp-app" data-dark={preferences.dark} data-compact={preferences.compact} data-collapsed={preferences.collapsed} style={{ "--sp-brand": preferences.color, "--sp-on-brand": onColor(preferences.color), "--sp-action-ink": accentInk(preferences.color) } as CSSProperties}>
     <Chrome role={role} data={data} user={user} household={household} channel={channel} selectChannel={selectChannel} createChat={setChatDialog} navigation={navigation} preferences={preferences} setPreferences={setPreferences} view={view} query={query} setQuery={setQuery} search={search} navigate={navigate} navigateOrganization={value => navigate(value, "organization")}
-      selectOrganization={id => { const org = data?.organizations?.find(o => o.id === id); if (id !== route.organizationId) { const targetRole=data?.organizationMemberships.find(m=>m.userId===account.user.id&&m.organizationId===id)?.role || role; location.assign(workspaceHomeHref(targetRole,id)); } }}
+      selectOrganization={id => { const org = data?.organizations?.find(o => o.id === id); if (id !== route.organizationId) { const targetRole=data?.organizationMemberships.find(m=>m.userId===account.user.id&&m.organizationId===id)?.role || role; if (targetRole !== role) location.assign(workspaceHomeHref(targetRole,id)); else navigation.go({ organizationId: id, householdId: "", view: "overview" }, org?.name || "工作区"); } }}
       selectHousehold={selectHousehold}
       create={setCreating} settings={() => setSettings(true)} offline={offline || !!error}>
-        {profileIncomplete && view !== "profile" && <div className="sp-profile-reminder" role="status"><span>完善个人资料，让 Host 更了解你。</span><button onClick={() => editProfile(view === "hosts")}>去完善 <span aria-hidden="true">→</span></button></div>}
-        <main className={`sp-scroll ${isChat && (channel || !route.channelId) ? "sp-chat-scroll" : ""}`} ref={scroll}>{!data || !props ? error ? <div className="sp-loading"><h1>暂时无法打开你的空间</h1><p>{error}</p><button onClick={() => void refresh()}>重试</button></div> : <ContentSkeleton view={view} chat={isChat && !!route.channelId} /> : <div className={isChat && (channel || !route.channelId) ? "sp-chat-screen" : view === "hosts" ? "sp-content sp-host-content" : "sp-content"} key={`${isChat || view === "hosts" || view === "profile" || view === "applications" ? view : query ? "search" : view}:${route.channelId || household?.id}`}>
+        {!accountPending && profileIncomplete && view !== "profile" && <div className="sp-profile-reminder" role="status"><span>完善个人资料，让 Host 更了解你。</span><button onClick={() => editProfile(view === "hosts")}>去完善 <span aria-hidden="true">→</span></button></div>}
+        <main className={`sp-scroll ${isChat && (channel || !route.channelId) ? "sp-chat-scroll" : ""}`} ref={scroll}>{accountError ? <div className="sp-loading" role="alert"><p>{accountError}</p><button onClick={() => void refreshAccount().catch(e => notify(e.message))}>重试</button></div> : accountPending ? <ContentSkeleton view={view} chat={isChat && !!route.channelId} /> : !data || !props ? error ? <div className="sp-loading"><h1>暂时无法打开你的空间</h1><p>{error}</p><button onClick={() => void refresh()}>重试</button></div> : <ContentSkeleton view={view} chat={isChat && !!route.channelId} /> : <div className={isChat && (channel || !route.channelId) ? "sp-chat-screen" : view === "hosts" ? "sp-content sp-host-content" : "sp-content"} key={`${isChat || view === "hosts" || view === "profile" || view === "applications" ? view : query ? "search" : view}:${route.channelId || household?.id}`}>
           {role !== "learn" && view !== "applications" && account.bookings.some(b => b.status === "pending") && <div className="sp-upgrade-banner"><strong>有新的学生想约谈</strong><button onClick={() => openAdmissions("bookings")}>查看约谈</button></div>}
           {offline && <p className="sp-offline">当前离线。草稿留在本机，恢复连接后同步。</p>}
           {view === "manage" ? <WorkspaceManagement account={account} onRefresh={async()=>{resync();}}/> : view === "profile" ? <section className="sp-profile-page" aria-label="个人资料页面"><header><div><h2>个人资料</h2><p>管理你的头像、个人信息与账号。</p></div><button onClick={() => navigate("overview", "organization")}>返回主页</button></header><ProfileForm key={account.user.id} account={account} onSave={saveProfile} onLogout={() => { void logout().catch(e => notify(e.message)); }}/></section> : view === "hosts" ? <HostDirectory account={account} org={route.organizationId} query={query} resetSearch={() => setQuery("")} completeProfile={() => editProfile(true)} openConversation={async (id, isNew) => { openChannel(id, "direct", "私聊"); if (isNew) resync(); }} /> : view === "applications" ? <AdmissionsPage {...props} account={account} tab={route.applicationTab} setTab={openAdmissions} query={query} onRefresh={async () => { resync(); }} patchAccount={patchAccount} contact={booking => { if(role === "host") { const parent=account.management?.platformId||defaultOrganizationId; location.assign(`${workspaceHomeHref(role,parent)}&view=direct&channel=${booking.channel_id}`); } else void openDirect(booking.learner_id); }}/> : isChat ? channel ? <Chat key={channel.id} channel={channel} data={data} operations={operations} mutate={mutate} onlineMutation={onlineMutation} query={query} openDirect={id => void openDirect(id)} showSync={() => setSync(true)} onOpenCard={openSharedCard} /> : route.channelId && openingChannel === route.channelId ? <ChatSkeleton /> : route.channelId ? <div className="sp-page-section"><h1>无法打开这个对话</h1><p>频道不存在，或你没有查看权限。</p><button onClick={() => navigate(view,"organization")}>返回对话列表</button></div> : <ConversationPlaceholder direct={view === "direct"}/> : query ? role === "ops" ? <Applications {...props} query={query} /> : <Tasks {...props} query={query} /> : !scoped ? <div className="sp-page-section"><h1>无法打开这个小组</h1><p>小组不存在，或你当前没有访问权限。</p><button onClick={() => navigate("overview", "organization")}>返回工作区主页</button></div> : view === "overview" ? household ? <Overview {...scoped} /> : <OrganizationHome {...props} selectHousehold={selectHousehold} /> : view === "tasks" ? <Tasks {...scoped} /> : view === "calendar" ? <Calendar {...scoped} /> : view === "household" ? <Members {...scoped} activeId={household?.id} /> : view === "journey" ? <Journey {...scoped} /> : <Applications {...props} />}
