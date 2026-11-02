@@ -13,7 +13,8 @@ export interface Visit { href: string; title: string; at: number }
 interface NavigationState { entries: Visit[]; index: number }
 export function normalizeRoute(role:Role, route:SpaceRoute):SpaceRoute {
   const allowed = canAccessWorkspaceView(role,route.view);
-  const view = allowed && (route.view !== 'journey' || route.householdId) ? route.view : 'overview';
+  // 六周旅程 works at workspace level too (a Host space is one group; elsewhere it shows each term).
+  const view = allowed ? route.view : 'overview';
   return {
     organizationId:route.organizationId,
     householdId:allowed && !globalViews.includes(view) ? route.householdId : '',

@@ -7,6 +7,7 @@ import type { Command } from "@/domain/commands";
 import { MemberName, Avatar, dateLabel, timeLabel, Sheet, Empty } from "./primitives";
 import { Practice } from "./Practice";
 import { memberTime } from "./member-time";
+import { CalendarGrid, DAY, MonthCalendar, calendarDay, calendarEvents, termWeekStart } from "./CalendarGrid";
 export interface ViewProps {
   openDirect?: (id: string) => Promise<void>; data: Snapshot; role: Role; pending: Set<string>; navigate: (view: string) => void;
   openPractice: (assignment: Assignment, submissionId?: string) => void; openSession: (session: Session) => void;
@@ -50,10 +51,9 @@ function TaskResponses(props: ViewProps & { query?: string; onlyWaiting?: boolea
     })}{visible.length === 0 && <Empty>这里暂时没有{query ? "相关练习" : "待办"}。</Empty>}</div>
   </section>;
 }
-export function Calendar({ data, openSession }: ViewProps) {
-  const [scope, setScope] = useState("upcoming");
-  const sessions = data.sessions.filter(s => scope === "all" || s.status === "scheduled" && Date.parse(s.endsAt) > Date.now()).sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-  return <section className="sp-page-section"><div className="sp-section-head"><h1>日程</h1><div className="sp-filters"><button aria-pressed={scope === "upcoming"} onClick={() => setScope("upcoming")}>即将开始</button><button aria-pressed={scope === "all"} onClick={() => setScope("all")}>全部</button></div></div><p className="sp-caption">北京时间 · 课程详情包含 Host 当地时间</p><div className="sp-list">{sessions.map(s => <button className="sp-schedule-row" key={s.id} onClick={() => openSession(s)}><span>{dateLabel(s.startsAt)}<small>{timeLabel(s.startsAt)}–{timeLabel(s.endsAt)}</small></span><span><strong>{s.title}</strong><small>{data.households.find(h => h.id === s.householdId)?.name}</small></span><small>{s.status === "completed" ? "已结束" : s.status === "cancelled" ? "已取消" : "查看安排"}</small></button>)}{!sessions.length && <Empty>还没有排定的 iriva meeting。</Empty>}</div></section>;
+export function Calendar({ data, role, openSession, openPractice }: ViewProps) {
+  return <section className="sp-page-section sp-term-calendar"><div className="sp-section-head"><div><h1>日程</h1><p className="sp-caption">北京时间 · 点开 iriva meeting 可查看 Host 当地时间</p></div></div>
+    <MonthCalendar data={data} role={role} onSession={openSession} onAssignment={a => openPractice(a)} /></section>;
 }
 export function Members({ data, activeId, openDirect }: ViewProps & { activeId?: string }) {
   const [now, setNow] = useState<Date>();
@@ -71,10 +71,23 @@ export function Members({ data, activeId, openDirect }: ViewProps & { activeId?:
   }, []);
   return <section className="sp-page-section"><h1>{activeId ? "小组成员" : "工作区伙伴"}</h1>{data.households.map(h => <details className="sp-household" key={h.id} open={data.households.length === 1 || h.id === activeId}><summary><strong>{h.name}</strong><span>{data.memberships.filter(m => m.householdId === h.id && m.role === "learner").length}/{h.capacity} 位学员</span></summary><p>{h.theme}</p>{data.memberships.filter(m => m.householdId === h.id).map(m => { const user = data.users.find(u => u.id === m.userId); const local = now && memberTime(user?.timezone, now); return <div className="sp-member" key={m.id}><Avatar user={user} /><div className="sp-member-info"><strong><MemberName user={user}/></strong><p className="sp-member-location"><span>{user?.city || "城市未填写"}</span>{local ? <><time dateTime={now?.toISOString()} title={`${local.date} · ${user?.timezone}`}>{local.time}</time><span title={user?.timezone}>{local.offset}</span></> : <span>{now ? "时区未设置" : "读取当地时间…"}</span>}</p></div><small>{m.role === "host" ? "Host" : "学员"}</small>{m.userId !== data.actor.userId && openDirect && <button className="sp-text" onClick={() => void openDirect(m.userId)}>私聊</button>}</div>; })}</details>)}</section>;
 }
-export function Journey({ data }: ViewProps) {
-  const start = data.terms[0]?.startsOn;
-  const week = start ? Math.max(0, Math.min(6, Math.floor((Date.now() - Date.parse(start + "T00:00:00+08:00")) / 604800000) + 1)) : 0;
-  return <section className="sp-page-section"><h1>六周旅程</h1><p className="sp-caption">{data.terms[0]?.name}</p><ol className="sp-journey">{["相识", "讲自己的故事", "日常与社交", "表达观点", "走进真实场景", "共同作品", "带着连接出发"].map((label, index) => <li key={label} aria-current={index === week ? "step" : undefined}><span>{index === 0 ? "出发前" : `第 ${index} 周`}</span><strong>{label}</strong><small>{index === week ? "进行中" : index < week ? "已走过" : ""}</small></li>)}</ol></section>;
+const journeyThemes = ["讲自己的故事", "日常与社交", "表达观点", "走进真实场景", "共同作品", "结业 · 带着连接出发"];
+/** Six-week term as a calendar: one row per course week, real dates, every dated event in its cell. */
+export function Journey({ data, role, openSession, openPractice }: ViewProps) {
+  const [termId, setTermId] = useState(data.terms[0]?.id);
+  const term = data.terms.find(t => t.id === termId) || data.terms[0];
+  if (!term) return <section className="sp-page-section"><h1>六周旅程</h1><Empty>学期还没有排定。</Empty></section>;
+  const first = termWeekStart(term, 1);
+  const week = Math.floor((Date.now() - first) / 604800000) + 1;
+  const weeks = journeyThemes.map((_, w) => Array.from({ length: 7 }, (_, d) => calendarDay(first + (w * 7 + d) * DAY + 12 * 3600000)));
+  // Only this term's groups, so a multi-group workspace doesn't mix terms.
+  const households = new Set(data.households.filter(h => h.termId === term.id).map(h => h.id));
+  const scoped = { ...data, terms: [term], households: data.households.filter(h => households.has(h.id)), sessions: data.sessions.filter(s => households.has(s.householdId)), assignments: data.assignments.filter(a => households.has(a.householdId)) };
+  const status = week < 1 ? `${Math.ceil((first - Date.now()) / DAY)} 天后开学` : week > 6 ? "本学期已结业" : `第 ${week} 周 · ${journeyThemes[week - 1]}`;
+  return <section className="sp-page-section sp-term-calendar">
+    <div className="sp-section-head"><div><h1>六周旅程</h1><p className="sp-caption">{data.terms.length > 1 ? <select aria-label="选择学期" value={term.id} onChange={e => setTermId(e.target.value)}>{data.terms.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select> : term.name} · {weeks[0][0].month}月{weeks[0][0].day}日 – {weeks[5][6].month}月{weeks[5][6].day}日 · 北京时间</p></div><span className="sp-term-status">{status}</span></div>
+    <CalendarGrid weeks={weeks} events={calendarEvents(scoped, role)} currentWeek={week - 1} label={w => <><strong>第 {w + 1} 周</strong><small>{journeyThemes[w]}</small></>} onSession={openSession} onAssignment={a => openPractice(a)} />
+  </section>;
 }
 export function SessionDetail({ session, data, role, onlineMutation, notify, onClose }: ViewProps & { session: Session; onClose: () => void }) {
   const [editing, setEditing] = useState(false), [error, setError] = useState("");

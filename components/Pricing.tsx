@@ -47,7 +47,7 @@ export function Pricing() {
             </p>
             <p className="mt-2 text-sm text-muted">首期价，正价 ¥{t.list[freq]} / 学期</p>
             <ul className="mt-6 flex flex-col gap-2.5 border-t border-line pt-6 text-[15px]">
-              {[`Host：${t.host}`, `场景：${t.scene}`, `和 Host 相处约 ${hostHours[freq]} 小时`, t.extra].map((item) => (
+              {[`Host：${t.host}`, `场景：${t.scene}`, `和 Host 相处约 ${hostHours[freq]} 小时`, ...t.extras].map((item) => (
                 <li key={item} className="flex gap-2.5">
                   <Check aria-hidden className="mt-[3px] size-[18px] flex-none text-brand" strokeWidth={2.4} />
                   <span>{item}</span>

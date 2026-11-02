@@ -51,7 +51,7 @@ export function HostDirectory({ account, org, query, resetSearch, openConversati
           <div className="sp-host-details"><span><Clock3 aria-hidden="true"/>{host.timezone}</span>{host.hostFeatured ? <span className="sp-host-badge"><Sparkles aria-hidden="true"/>明星 Host</span> : host.hostFullTime ? <span className="sp-host-badge">全职 Host</span> : null}</div>
           <div className="sp-host-qualifications" aria-label="专业资质">{host.hostQualifications?.map(q => <span key={q}>{q}</span>)}</div>
           <p className="sp-host-bio">{host.signature || '用真实对话，陪你把英语说得更自然。'}</p>
-          <div className="sp-host-card-footer"><small>{booking ? { pending: '已发送约谈邀请', accepted: '已确定 · 等待运营', rejected: '约谈已结束' }[booking.status] : host.hostFeatured ? 'Pro / Max 专属' : '可预约交流'}</small>
+          <div className="sp-host-card-footer"><small>{booking ? { pending: '已发送约谈邀请', accepted: '已确定 · 等待运营', rejected: '约谈已结束' }[booking.status] : host.hostFeatured ? 'Pro / 专家档专属' : '可预约交流'}</small>
             {booking || allowed ? <button disabled={!!busy} onClick={() => void contact(host.id)}>{busy === host.id ? '正在打开…' : booking ? '打开私聊' : '联系'}<ArrowRight aria-hidden="true"/></button> : <a href={billingHref('plans', org)}><LockKeyhole aria-hidden="true"/>{host.hostFeatured ? '升级 Pro' : '选择套餐'}</a>}
           </div>
         </article>;

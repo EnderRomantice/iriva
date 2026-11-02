@@ -11,7 +11,7 @@ export function cardCatalog(state:State, actor:Actor):CardPreview[] {
   const memberIds = new Set(state.organizationMemberships.map(m => m.userId));
   for (const user of state.users.filter(u => memberIds.has(u.id))) {
     add('user',user.id,user.name,user.signature || '',[user.occupation,user.city,user.timezone]);
-    if (hostIds.has(user.id)) add('host',user.id,user.name,user.signature || '一起在真实的对话里练习英语。',[user.occupation,user.city,user.timezone,...(user.hostQualifications || []),user.hostFeatured ? '明星 Host · Pro / Max' : user.hostFullTime ? '全职 Host' : 'Host']);
+    if (hostIds.has(user.id)) add('host',user.id,user.name,user.signature || '一起在真实的对话里练习英语。',[user.occupation,user.city,user.timezone,...(user.hostQualifications || []),user.hostFeatured ? '明星 Host · Pro / 专家档' : user.hostFullTime ? '全职 Host' : 'Host']);
   }
   const accessible = new Set(state.households.filter(h => actor.role === 'ops' || (actor.role === 'host' ? h.hostId === actor.userId : state.memberships.some(m => m.householdId === h.id && m.userId === actor.userId && m.role === 'learner'))).map(h => h.id));
   const sharedGroups = new Set(state.messages.flatMap(m => (m.cards || []).filter(c => c.type === 'group').map(c => c.entityId)));

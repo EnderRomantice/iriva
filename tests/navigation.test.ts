@@ -33,7 +33,7 @@ test("organization navigation leaves a group while group tabs retain their scope
   assert.equal(viewRoute(group, "calendar", "household").householdId, "group-2");
   assert.equal(viewRoute(group, "applications", "household").householdId, "");
   assert.equal(viewRoute(group, "overview", "organization").organizationId, demoOrganizationId);
-  assert.equal(readRoute("/host?view=journey", "host").view, "overview");
+  assert.equal(readRoute("/host?view=journey", "host").view, "journey", "journey opens without a selected group");
   assert.equal(readRoute("/ops?household=group-2&view=applications", "ops").householdId, "");
   assert.notEqual(routeHref("host", viewRoute(group, "calendar", "organization")), routeHref("host", viewRoute(group, "calendar", "household")));
 });

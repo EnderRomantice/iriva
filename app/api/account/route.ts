@@ -99,7 +99,7 @@ export async function POST(request:Request) {
       const hostId=z.uuid().parse(body.hostId);
       if(!state.organizationMemberships.some(m=>m.organizationId===organizationId&&m.userId===hostId&&m.role==='host')) throw new DomainError(404,'Host 不存在。');
       const host=state.users.find(u=>u.id===hostId);
-      if(!canContactHost(user.plan, !!host?.hostFeatured)) throw new DomainError(403,'明星 Host 需要 Pro 或 Max 套餐。');
+      if(!canContactHost(user.plan, !!host?.hostFeatured)) throw new DomainError(403,'明星 Host 需要 Pro 或专家档套餐。');
       const missing = missingProfileFields(user);
       if(missing.length) throw new DomainError(422, `请先完善个人资料：${missing.join('、')}。`);
       const conversation=await (await workspaceService()).execute({...actor,organizationId},{kind:'conversation.open',id:randomUUID(),entityId:randomUUID(),baseVersion:0,payload:{userId:hostId}});

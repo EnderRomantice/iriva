@@ -8,7 +8,7 @@ import { Sheet } from "./primitives";
 const colors = [{ name: "海湾", value: "#12658a" }, { name: "茄紫", value: "#4a154b" }, { name: "松林", value: "#315c4a" }, { name: "石墨", value: "#414854" }];
 export function Settings({ preferences, setPreferences, role, mode, error, onClose }: { preferences: Preferences; setPreferences: Dispatch<SetStateAction<Preferences>>; role: Role; mode: NetworkMode; error: string; onClose: () => void }) {
   const update = (patch: Partial<Preferences>) => setPreferences(p => ({ ...p, ...patch }));
-  const options = preferences.order.filter(v => v !== "journey" && isRailView(role,v));
+  const options = preferences.order.filter(v => isRailView(role,v));
   const move = (view: View, direction: number) => {
     const index = preferences.order.indexOf(view), target = index + direction;
     if (target < 0 || target >= preferences.order.length) return;

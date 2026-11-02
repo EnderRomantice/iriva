@@ -2,7 +2,7 @@
 import { BillingSkeleton } from './Skeleton';
 import { useEffect, useState } from 'react';
 import { canManageSubscription, workspaceHomeHref } from '@/domain/workspace-access';
-import { plans } from '@/domain/account';
+import { plans, planTag } from '@/domain/account';
 import { defaultOrganizationId } from '@/domain/workspace';
 import { accountRequest, AccountError, type Account } from './account-client';
 import { billingHref, continueToSupport } from './billing-navigation';
@@ -63,11 +63,11 @@ export function BillingPage({ checkout = false }: { checkout?: boolean }) {
       </div>
     </> : <section className="sp-plans-content">
       <div className="sp-plans-intro"><h1>选择你的节奏，<br/>开始一段新的同行。</h1><p>一个学期六周，和真实的人一起开口、探索、成长。</p></div>
-      <div className="sp-plans-toolbar"><span>当前：{(account.user.plan || 'free').toUpperCase()}{(!account.user.plan || account.user.plan === 'free') ? ' · 访客' : ''}</span><div className="sp-billing-frequency" role="group" aria-label="每周 iriva meeting 频次">{([1, 2] as const).map(n => <button key={n} aria-pressed={frequency === n} disabled={!!busy} onClick={() => setFrequency(n)}>每周 {n} 次 iriva meeting</button>)}</div></div>
+      <div className="sp-plans-toolbar"><span>当前：{planTag(account.user.plan || 'free')}{(!account.user.plan || account.user.plan === 'free') ? ' · 访客' : ''}</span><div className="sp-billing-frequency" role="group" aria-label="每周 iriva meeting 频次">{([1, 2] as const).map(n => <button key={n} aria-pressed={frequency === n} disabled={!!busy} onClick={() => setFrequency(n)}>每周 {n} 次 iriva meeting</button>)}</div></div>
       <div className="sp-billing-plans">{plans.map(plan => <article id={`plan-${plan.id}`} key={plan.id} className={`sp-billing-plan sp-billing-plan-${plan.id}`}><div className="sp-plan-heading"><span>{plan.label}</span>{plan.id === 'pro' && <small>推荐</small>}</div><h2>{plan.name}</h2><p className="sp-billing-plan-description">{plan.description}</p><div className="sp-billing-price">¥{(plan.prices[frequency - 1] / 100).toLocaleString()}<small>{plan.id === 'free' ? '' : ' / 学期'}</small></div><button className={plan.id === 'pro' ? 'sp-billing-primary' : 'sp-billing-secondary'} disabled={!!busy || plan.id === 'free' || account.user.plan === plan.id} onClick={() => { if (plan.id !== 'free') void choose(plan.id); }}>{busy === plan.id ? '正在准备订单…' : (account.user.plan || 'free') === plan.id ? '当前套餐' : plan.id === 'free' ? '免费访客' : `选择 ${plan.name} →`}</button><ul>{plan.benefits.map(b => <li key={b}><span>✓</span>{b}</li>)}</ul></article>)}</div>
       <p className="sp-billing-caption">首期价格 · 按学期付费 · 入组由运营协助安排</p>
       {error && <p className="sp-error" role="alert">{error}</p>}
-      {account.orders.length > 0 && <details className="sp-billing-orders"><summary>我的订单（{account.orders.length}）</summary>{account.orders.map(o => <a key={o.id} href={billingHref('checkout', org, o.id)}><span>{o.plan.toUpperCase()} · 每周 {o.frequency} 次</span><span>¥{o.amount_minor / 100} · {o.status === 'paid' ? '已付款' : '待付款'} →</span></a>)}</details>}
+      {account.orders.length > 0 && <details className="sp-billing-orders"><summary>我的订单（{account.orders.length}）</summary>{account.orders.map(o => <a key={o.id} href={billingHref('checkout', org, o.id)}><span>{planTag(o.plan)} · 每周 {o.frequency} 次</span><span>¥{o.amount_minor / 100} · {o.status === 'paid' ? '已付款' : '待付款'} →</span></a>)}</details>}
     </section>}
     {account && <footer className="sp-billing-footer"><button onClick={() => continueToSupport(account, org)}>先聊聊看 <span aria-hidden="true">↗</span></button></footer>}
   </main>;

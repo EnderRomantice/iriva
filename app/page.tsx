@@ -286,7 +286,7 @@ function Price() {
           <div className="border-l-2 border-line pl-5">
             <h3 className="font-black">和你现在的花费比一比</h3>
             <p className="mt-2 text-muted">
-              按欧美外教一对一约 ¥640/小时计，¥3,980 大约能买 6 小时。在这里，同样的预算是一整个学期：约 15 小时和 Host 相处、一位固定伙伴、全程 AI 教练和一份前后对比报告。
+              按欧美外教一对一约 ¥640/小时计，¥3,980 大约能买 6 小时。在这里，同样的预算是一整个学期：约 15 小时和 Host 相处、一位固定伙伴、专属 AI 口语陪练和一份结业报告。
             </p>
           </div>
           <div className="border-l-2 border-brand pl-5">

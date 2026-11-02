@@ -1,4 +1,5 @@
 "use client";
+import { planTag } from '@/domain/account';
 import { useEffect, useRef, type ReactNode } from "react";
 import { demoPortraits } from "./avatars";
 import type { User } from "@/domain/models";
@@ -14,7 +15,7 @@ export function Avatar({ user, presence }: { user?: Pick<User, "id" | "name" | "
 
 export function PlanTag({ plan }: { plan?: User['plan'] }) {
   if (!plan || plan === 'free') return null;
-  return <span className={`sp-plan-tag sp-plan-tag-${plan}`} aria-label={`${plan.toUpperCase()} 会员`}>{plan.toUpperCase()}</span>;
+  return <span className={`sp-plan-tag sp-plan-tag-${plan}`} aria-label={`${planTag(plan)} 会员`}>{planTag(plan)}</span>;
 }
 export function MemberName({ user, fallback = '成员' }: { user?: Pick<User, 'name' | 'plan'>; fallback?: string }) {
   return <span className="sp-member-name"><span>{user?.name || fallback}</span><PlanTag plan={user?.plan}/></span>;

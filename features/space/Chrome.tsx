@@ -50,9 +50,12 @@ export function Chrome({ role, data, user, household, channel, navigation, prefe
   function toggleStar() { if (!household) return; const next = starred ? favorite.filter(id => id !== household.id) : [...favorite, household.id]; setFavorite(next); try { localStorage.setItem(`iriva-starred-${navigation.route?.organizationId}`, JSON.stringify(next)); } catch {} }
   function open(kind: typeof menu, element: HTMLElement) { if (menu === kind && anchor.current === element) { setMenu(undefined); return; } anchor.current = element; setMenu(kind); }
   function go(value: string, global = false) { (global ? navigateOrganization : navigate)(value); setMobile(false); setMenu(undefined); }
-  const allowed = (v: View) => isRailView(role,v);
-  const navItems = preferences.order.filter(v => v !== "journey" && allowed(v) && !preferences.hidden.includes(v));
-  const hiddenItems = preferences.order.filter(v => v !== "journey" && allowed(v) && preferences.hidden.includes(v));
+  // A Host space is exactly one group, so the group list, stars, finder and tab bar add nothing there.
+  const ownedGroup = organization?.kind === "host";
+  // In a Host space the workspace *is* the group: everything lives in the rail and the in-group tab bar is not shown.
+  const allowed = (v: View) => isRailView(role,v) || (v === "manage" && role === "host" && ownedGroup);
+  const navItems = preferences.order.filter(v => allowed(v) && !preferences.hidden.includes(v));
+  const hiddenItems = preferences.order.filter(v => allowed(v) && preferences.hidden.includes(v));
   const railItems = [...navItems, "settings"] as (View | "settings")[];
   const needsMore = true;
   const visibleItems = railItems.slice(0, needsMore ? Math.max(0, railSlots - 1) : railSlots);
@@ -63,8 +66,6 @@ export function Chrome({ role, data, user, household, channel, navigation, prefe
   const chatChannels = data?.channels.filter(c => c.kind !== "direct" && c.name.toLowerCase().includes(groupQuery.toLowerCase())) || [];
   const directChannels = data?.channels.filter(c => c.kind === "direct" && channelName(data,c).toLowerCase().includes(groupQuery.toLowerCase())) || [];
   const isChat = view === "channels" || view === "direct";
-  // A Host space is exactly one group, so the group list, stars and finder add nothing there.
-  const ownedGroup = organization?.kind === "host";
   const hasSidebar = isChat || (!!household && !query && !ownedGroup);
   const sidebarTitle = view === "channels" ? "频道" : view === "direct" ? "私聊" : "小组";
   const work = role === "ops" ? "applications" : "tasks";
@@ -108,7 +109,7 @@ export function Chrome({ role, data, user, household, channel, navigation, prefe
       </aside>
       {mobile && <button className="sp-nav-backdrop" aria-label="关闭导航遮罩" onClick={() => setMobile(false)} />}
       <aside className={`sp-sidebar ${mobile ? "is-open" : ""}`} aria-label={hasSidebar ? `${sidebarTitle}侧栏` : "移动端导航"}>
-        <div className="sp-workspace-title"><button className="sp-workspace-name" aria-label={`${title} 工作区菜单`} aria-expanded={menu === "organizations"} onClick={e => open("organizations", e.currentTarget)}><strong>{title}</strong><ChevronDown /></button><button className="sp-icon-button" aria-label="自定义工作区" title="自定义工作区" onClick={settings}><Settings /></button><button className="sp-mobile-close sp-icon-button" aria-label="关闭导航" onClick={() => setMobile(false)}><X /></button></div>
+        <div className="sp-workspace-title"><button className="sp-workspace-name" aria-label={`${title} 工作区菜单`} aria-expanded={menu === "organizations"} onClick={e => open("organizations", e.currentTarget)}><strong>{title}</strong><ChevronDown /></button><button className="sp-mobile-close sp-icon-button" aria-label="关闭导航" onClick={() => setMobile(false)}><X /></button></div>
         <div className="sp-sidebar-scroll">
           <nav className="sp-mobile-global" aria-label="移动端主导航">{navItems.map(item => { const Icon = icons[item]; return <button key={item} aria-current={!navigation.route?.householdId && view === item ? "page" : undefined} onClick={() => go(item, true)}><Icon /><span>{globalLabels[item]}</span></button>; })}{hiddenItems.map(item => { const Icon = icons[item]; return <button key={item} onClick={() => go(item, true)}><Icon /><span>{globalLabels[item]}</span></button>; })}<button onClick={e => open("create", e.currentTarget)}><Plus /><span>建立</span></button></nav>
           {hasSidebar && <><div className="sp-context-title">{sidebarTitle}</div><label className="sp-find"><Search /><input aria-label={`查找${sidebarTitle}`} placeholder={`查找${sidebarTitle}…`} value={groupQuery} onChange={e => setGroupQuery(e.target.value)} /></label>
@@ -123,7 +124,7 @@ export function Chrome({ role, data, user, household, channel, navigation, prefe
       </aside>
       <div className="sp-main">
         <header className="sp-channel-header"><div>{hasSidebar && preferences.collapsed && <button className="sp-icon-button" aria-label="展开侧栏" onClick={() => setPreferences(p => ({ ...p, collapsed: false }))}><PanelLeftOpen /></button>}{household && !query && !ownedGroup && <button className="sp-icon-button sp-star" aria-label={starred ? "取消小组星标" : "将小组加星标"} aria-pressed={starred} onClick={toggleStar}><Star fill={starred ? "currentColor" : "none"} /></button>}<h1>{channel && data ? <>{channel.kind === "direct" ? <Avatar user={directPeer(data,channel.id)}/> : channel.kind === "private" ? <LockKeyhole/> : <Hash/>}{channelName(data,channel)}{channel.kind === "direct" && <PlanTag plan={directPeer(data,channel.id)?.plan}/>}</> : query && view !== "hosts" && view !== "profile" ? "工作区搜索" : household ? <><Hash />{household.name}</> : globalTitle}</h1>{!household && !channel && !query && <span className="sp-header-context">{title}</span>}</div>{channel && <span className="sp-header-context">{channel.kind === "private" ? "仅自己可见" : channel.kind === "direct" ? "私聊" : "公开频道"}</span>}{household && !query && <div className="sp-channel-tools"><button className="sp-member-count" aria-label="查看小组成员" onClick={() => go("household")}><Avatar user={data?.users.find(u => u.id === household.hostId)} /><span>{memberCount ?? "—"}</span></button><button className="sp-icon-button" aria-label="小组菜单" onClick={e => open("channel", e.currentTarget)}><MoreHorizontal /></button></div>}</header>
-        {household && !query && <nav className="sp-page-tabs" aria-label="小组内容导航">{(["overview", ...(role === "ops" ? [] : [work]), "calendar", "household", "journey", ...(role === "host" && ownedGroup ? ["manage"] : [])] as View[]).map(item => { const Icon = item === "overview" ? MessageCircle : icons[item]; return <button key={item} aria-current={view === item ? "page" : undefined} onClick={() => go(item)}><Icon />{item === "overview" ? "本周" : item === "household" ? "成员" : viewLabels[item]}</button>; })}</nav>}
+        {household && !query && !ownedGroup && <nav className="sp-page-tabs" aria-label="小组内容导航">{(["overview", ...(role === "ops" ? [] : [work]), "calendar", "household", "journey", ...(role === "host" && ownedGroup ? ["manage"] : [])] as View[]).map(item => { const Icon = item === "overview" ? MessageCircle : icons[item]; return <button key={item} aria-current={view === item ? "page" : undefined} onClick={() => go(item)}><Icon />{item === "overview" ? "本周" : item === "household" ? "成员" : viewLabels[item]}</button>; })}</nav>}
         {children}
       </div>
     </div>
