@@ -12,4 +12,11 @@ export async function accountRequest(body?:object):Promise<any> {
   const response=await fetch('/api/account',{method:body?'POST':'GET',headers:{'Content-Type':'application/json','x-workspace-id':new URLSearchParams(location.search).get('org')||'',...(['host','ops'].includes(role)?{'x-demo-role':role}:{})},body:body?JSON.stringify(body):undefined,cache:'no-store'});
   const result=await response.json();if(!response.ok)throw new AccountError(result.error, response.status);return result;
 }
-export async function logout() { await accountRequest({action:'logout'}); sessionStorage.clear(); location.href='/apply'; }
+export async function logout() { await accountRequest({action:'logout'}); forgetCachedAccounts(); sessionStorage.clear(); location.href='/apply'; }
+/** Last known account per workspace, so a reload or workspace switch paints immediately and revalidates in the background. */
+const accountCacheKey=(role:Role,org?:string)=>`iriva-account:${role}:${org||''}`;
+export function readCachedAccount(role:Role,org?:string):Account|undefined {
+  try { const value=JSON.parse(localStorage.getItem(accountCacheKey(role,org))||'null'); return value?.role===role&&value.user?.id?value:undefined; } catch { return undefined; }
+}
+export function cacheAccount(role:Role,org:string|undefined,account:Account) { try { localStorage.setItem(accountCacheKey(role,org),JSON.stringify(account)); } catch {} }
+export function forgetCachedAccounts() { try { Object.keys(localStorage).filter(key=>key.startsWith('iriva-account:')).forEach(key=>localStorage.removeItem(key)); } catch {} }

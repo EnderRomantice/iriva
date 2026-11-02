@@ -21,7 +21,7 @@ export function WorkspaceManagement({ account, onRefresh }: { account: Account; 
       const result = await accountRequest(body);
       form?.reset();
       setNotice({ scope, kind: 'status', text: success(result) });
-      await onRefresh();
+      void onRefresh();
     } catch (e) {
       setNotice({ scope, kind: 'error', text: e instanceof Error ? e.message : '没有保存成功，请重试。' });
     } finally { lock.current = false; setBusy(false); }

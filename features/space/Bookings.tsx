@@ -5,13 +5,17 @@ import { Avatar, Empty } from './primitives';
 import type { Snapshot } from '@/domain/models';
 
 export const bookingLabels = { pending:'待约谈', accepted:'已确定加入 · 等待运营', rejected:'已拒绝' };
-export function Bookings({account,data,query,onRefresh,contact}:{account:Account;data:Snapshot;query:string;onRefresh:()=>Promise<void>;contact:(booking:Booking)=>void}) {
+export function Bookings({account,data,query,onRefresh,patchAccount,contact}:{account:Account;data:Snapshot;query:string;onRefresh:()=>Promise<void>;patchAccount:(update:(account:Account)=>Account)=>void;contact:(booking:Booking)=>void}) {
   const [filter,setFilter]=useState('all'),[busy,setBusy]=useState(''),[message,setMessage]=useState(''),[error,setError]=useState('');
   const rows=account.bookings.filter(b => (filter==='all'||b.status===filter) && `${b.learner_name} ${b.host_name}`.toLowerCase().includes(query.toLowerCase()));
   async function update(booking:Booking,status:'accepted'|'rejected') {
-    if(busy)return; setBusy(booking.id);setMessage('');setError('');
-    try{await accountRequest({action:'booking',id:booking.id,status});await onRefresh();setMessage('约谈结论已保存。');}
-    catch(e){setError(e instanceof Error?e.message:'操作失败，请重试。');}finally{setBusy('');}
+    if(busy)return; setMessage('');setError('');
+    // Optimistic: show the new status now, roll back if the server refuses.
+    const previous=booking.status;
+    const setStatus=(value:Booking['status'])=>patchAccount(a=>({...a,bookings:a.bookings.map(b=>b.id===booking.id?{...b,status:value}:b)}));
+    setStatus(status);setMessage('约谈结论已保存。');
+    try{await accountRequest({action:'booking',id:booking.id,status});void onRefresh();}
+    catch(e){setStatus(previous);setMessage('');setError(e instanceof Error?e.message:'操作失败，请重试。');}
   }
   return <section className="sp-page-section sp-bookings-page" aria-label="报名约谈管理">
     <div className="sp-section-head"><h2>约谈</h2><span className="sp-caption">{account.bookings.length} 条记录</span></div>

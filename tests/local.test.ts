@@ -83,3 +83,37 @@ test('card drafts and card-only outbox messages survive local database reopen', 
   assert.equal(operations.length,1);
   assert.deepEqual(projectSnapshot(snapshot,operations).messages.find(m => m.id === command.entityId)?.cards,cards);
 });
+
+test("online-only commands project optimistically before the server answers", async () => {
+  const { directChannelId } = await import("../local/direct-channel");
+  const { createHash } = await import("node:crypto");
+  const me = snapshot.actor.userId, peer = randomUUID(), householdId = randomUUID(), messageId = randomUUID();
+  const base: Snapshot = { ...snapshot, actor: { ...snapshot.actor, organizationId: "10000000-0000-4000-8000-000000001001" },
+    messages: [{ id: messageId, version: 1, createdAt: snapshot.serverTime, updatedAt: snapshot.serverTime, channelId: randomUUID(), authorId: peer, body: "hi", reactions: [] }],
+    households: [{ id: householdId, version: 1, createdAt: "", updatedAt: "", name: "A", termId: randomUUID(), hostId: me, timezone: "Asia/Shanghai", capacity: 4, theme: "" }],
+    applications: [{ id: randomUUID(), version: 1, createdAt: "", updatedAt: "", userId: peer, goal: "g", availability: "a", status: "new" }],
+    sessions: [{ id: randomUUID(), version: 1, createdAt: "", updatedAt: "", householdId, title: "s", description: "", startsAt: "2030-01-01T00:00:00.000Z", endsAt: "2030-01-01T01:00:00.000Z", status: "scheduled", meetingUrl: "" }] };
+  const direct = await directChannelId(base.actor.organizationId, me, peer);
+  const hash = createHash("sha256").update(`${base.actor.organizationId}:${[me, peer].sort().join(":")}`).digest("hex");
+  assert.equal(direct, `${hash.slice(0,8)}-${hash.slice(8,12)}-5${hash.slice(13,16)}-8${hash.slice(17,20)}-${hash.slice(20,32)}`, "client id must match the server's");
+  const op = (command: Command) => ({ command, queuedAt: new Date().toISOString() });
+  const channelId = randomUUID(), assignmentId = randomUUID();
+  const view = projectSnapshot(base, [
+    op({ id: randomUUID(), entityId: messageId, baseVersion: 1, kind: "message.react", payload: { emoji: "👍", active: true } }),
+    op({ id: randomUUID(), entityId: channelId, baseVersion: 0, kind: "channel.create", payload: { name: "c", description: "", kind: "private" } }),
+    op({ id: randomUUID(), entityId: direct, baseVersion: 0, kind: "conversation.open", payload: { userId: peer } }),
+    op({ id: randomUUID(), entityId: assignmentId, baseVersion: 0, kind: "assignment.create", payload: { householdId, title: "t", description: "d", category: "practice", dueAt: "2030-01-01T00:00:00.000Z", week: 1 } }),
+    op({ id: randomUUID(), entityId: base.sessions[0].id, baseVersion: 1, kind: "session.reschedule", payload: { startsAt: "2030-02-01T00:00:00.000Z", endsAt: "2030-02-01T01:00:00.000Z" } }),
+    op({ id: randomUUID(), entityId: base.applications[0].id, baseVersion: 1, kind: "application.enroll", payload: { householdId } }),
+  ]);
+  assert.deepEqual(view.messages[0].reactions, [{ userId: me, emoji: "👍" }]);
+  assert.ok(view.channels.some(c => c.id === channelId && c.ownerId === me));
+  assert.equal(view.channelParticipants.filter(p => p.channelId === direct).length, 2);
+  assert.ok(view.assignments.some(a => a.id === assignmentId));
+  assert.equal(view.sessions[0].startsAt, "2030-02-01T00:00:00.000Z");
+  assert.equal(view.applications[0].status, "enrolled");
+  assert.ok(view.memberships.some(m => m.userId === peer && m.householdId === householdId));
+  assert.equal(base.channels.length, 0, "projection never mutates the server snapshot");
+  const undo = projectSnapshot(view, [op({ id: randomUUID(), entityId: messageId, baseVersion: 2, kind: "message.react", payload: { emoji: "👍", active: false } })]);
+  assert.deepEqual(undo.messages[0].reactions, []);
+});

@@ -17,34 +17,58 @@ export async function fetchSnapshot(role: WorkspaceScope): Promise<Snapshot> {
   return response.json();
 }
 const running = new Map<WorkspaceScope, Promise<void>>();
-export function synchronize(role: WorkspaceScope): Promise<void> {
+const followUps = new Map<WorkspaceScope, Promise<void>>();
+/**
+ * Push the outbox, then pull one fresh snapshot.
+ * `fresh` guarantees the returned promise covers a pass that *starts after* this call,
+ * so a just-queued or just-acknowledged change is reflected (instead of piggybacking on
+ * a poll that began earlier and would return stale data).
+ */
+export function synchronize(role: WorkspaceScope, { fresh = false } = {}): Promise<void> {
   const active = running.get(role);
-  if (active) return active;
+  if (active) {
+    if (!fresh) return active;
+    let next = followUps.get(role);
+    if (!next) {
+      next = active.catch(() => {}).then(() => { followUps.delete(role); return synchronize(role); });
+      followUps.set(role, next);
+    }
+    return next;
+  }
   const work = async () => {
     const operations = await localDb.outbox.where("role").equals(role).sortBy("seq");
     const blocked = new Set(operations.filter(o => o.status === "conflict").map(o => o.entityId));
-    for (const operation of operations) {
-      if (blocked.has(operation.entityId)) continue;
-      const response = await request(role, "/api/mutations", operation.command);
-      if (!response.ok) {
-        const error = (await response.json()).error || "同步失败";
-        if (response.status >= 400 && response.status < 500) {
-          await localDb.outbox.update(operation.seq!, { status: "conflict", error });
-          blocked.add(operation.entityId);
-          continue;
-        }
-        throw new Error(error);
-      }
-      // Keep the command until both acknowledgement and fresh server data arrive.
-      // A lost response is safe: retrying the same command ID is idempotent.
-      const fresh = await fetchSnapshot(role);
+    const acknowledged: number[] = [];
+    // Keep commands until both acknowledgement and fresh server data arrive, then swap
+    // them atomically so optimistic rows never flicker. A lost response is safe:
+    // retrying the same command ID is idempotent.
+    const commit = async () => {
+      const snapshot = await fetchSnapshot(role);
       await localDb.transaction("rw", localDb.snapshots, localDb.outbox, async () => {
-        await localDb.snapshots.put({ role, data: fresh });
-        await localDb.outbox.delete(operation.seq!);
+        await localDb.snapshots.put({ role, data: snapshot });
+        if (acknowledged.length) await localDb.outbox.bulkDelete(acknowledged);
       });
+    };
+    try {
+      for (const operation of operations) {
+        if (blocked.has(operation.entityId)) continue;
+        const response = await request(role, "/api/mutations", operation.command);
+        if (!response.ok) {
+          const error = (await response.json().catch(() => ({}))).error || "同步失败";
+          if (response.status >= 400 && response.status < 500) {
+            await localDb.outbox.update(operation.seq!, { status: "conflict", error });
+            blocked.add(operation.entityId);
+            continue;
+          }
+          throw new Error(error);
+        }
+        acknowledged.push(operation.seq!);
+      }
+    } catch (error) {
+      if (acknowledged.length) await commit().catch(() => {});
+      throw error;
     }
-    const fresh = await fetchSnapshot(role);
-    await localDb.snapshots.put({ role, data: fresh });
+    await commit();
   };
   const task = (async () => { if (navigator.locks) await navigator.locks.request(`iriva-sync-${role}`, work); else await work(); })().finally(() => running.delete(role));
   running.set(role, task);

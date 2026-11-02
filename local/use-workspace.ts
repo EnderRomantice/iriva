@@ -1,9 +1,9 @@
 "use client";
 import type { WorkspaceScope } from "@/domain/workspace";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { Command } from "@/domain/commands";
-import { enqueue, localDb, projectSnapshot } from "./database";
+import { enqueue, localDb, projectSnapshot, type PendingOperation } from "./database";
 import { networkMode, request, synchronize, type NetworkMode } from "./sync";
 
 export function useWorkspace(role: WorkspaceScope) {
@@ -14,16 +14,21 @@ export function useWorkspace(role: WorkspaceScope) {
   const [mode, setMode] = useState<NetworkMode>("online");
   const [connected, setConnected] = useState(true);
   const [shellStatus, setShellStatus] = useState("正在检查离线打开能力…");
-  const refresh = useCallback(async () => {
+  // Online-only commands live here while in flight, so the UI shows them immediately.
+  const [optimistic, setOptimistic] = useState<PendingOperation[]>([]);
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const refresh = useCallback(async (fresh = true) => {
     setBusy(true);
-    try { await synchronize(role); setError(""); }
+    // Let in-flight online commands land first, so queued messages never reach the
+    // server ahead of e.g. the channel they belong to.
+    try { await queue.current.catch(() => {}); await synchronize(role, { fresh }); setError(""); }
     catch (error) { setError(error instanceof Error ? error.message : "暂时无法连接服务器"); }
     finally { setBusy(false); }
   }, [role]);
   useEffect(() => {
-    const update = () => { setMode(networkMode()); setConnected(navigator.onLine); void refresh(); };
+    const update = () => { setMode(networkMode()); setConnected(navigator.onLine); void refresh(false); };
     update();
-    const interval = setInterval(() => { if (document.visibilityState === "visible") void refresh(); }, 3000);
+    const interval = setInterval(() => { if (document.visibilityState === "visible") void refresh(false); }, 3000);
     window.addEventListener("online", update); window.addEventListener("offline", update); window.addEventListener("iriva-network", update); window.addEventListener("focus", update);
     let stopped = false;
     const warm = () => {
@@ -43,13 +48,27 @@ export function useWorkspace(role: WorkspaceScope) {
     } else setShellStatus("此浏览器不支持离线重新打开。已打开页面的草稿仍会保存在本机。");
     return () => { stopped = true; window.removeEventListener("load", warm); if ("serviceWorker" in navigator) { navigator.serviceWorker.removeEventListener("message", workerMessage); navigator.serviceWorker.removeEventListener("controllerchange", warm); } clearInterval(interval); window.removeEventListener("online", update); window.removeEventListener("offline", update); window.removeEventListener("iriva-network", update); window.removeEventListener("focus", update); };
   }, [refresh]);
-  const mutate = async (command: Command) => { await enqueue(role, command); void refresh(); };
-  const onlineMutation = async (command: Command) => {
-    const response = await request(role, "/api/mutations", command);
-    if (!response.ok) throw new Error((await response.json()).error);
-    const result = await response.json() as { version: number; entityId?: string };
-    await refresh();
-    return result;
-  };
-  return { data: cache ? projectSnapshot(cache.data, operations) : undefined, operations, error, busy, offline: mode === "offline" || !connected, mode, shellStatus, refresh, mutate, onlineMutation };
+  const mutate = useCallback(async (command: Command) => { await enqueue(role, command); void refresh(); }, [role, refresh]);
+  /**
+   * Applies the command to the UI right away and sends it in the background.
+   * Commands are sent in order; the optimistic row is dropped only after a fresh
+   * snapshot containing the server's version has landed (or immediately on failure).
+   * Callers should not await this for UI transitions — only to learn about errors.
+   */
+  const onlineMutation = useCallback((command: Command) => {
+    const entry: PendingOperation = { id: command.id, role, entityId: command.entityId, command, status: "pending", queuedAt: new Date().toISOString() };
+    setOptimistic(list => [...list, entry]);
+    const drop = () => setOptimistic(list => list.filter(item => item.id !== command.id));
+    const sent = queue.current.catch(() => {}).then(async () => {
+      const response = await request(role, "/api/mutations", command);
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || "暂时无法保存，请稍后重试。");
+      return body as { version: number; entityId?: string };
+    });
+    queue.current = sent;
+    sent.then(() => refresh().finally(drop), drop);
+    return sent;
+  }, [role, refresh]);
+  const data = useMemo(() => cache ? projectSnapshot(cache.data, [...operations, ...optimistic]) : undefined, [cache, operations, optimistic]);
+  return { data, operations, error, busy, offline: mode === "offline" || !connected, mode, shellStatus, refresh, mutate, onlineMutation };
 }

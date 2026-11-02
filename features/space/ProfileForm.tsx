@@ -1,25 +1,25 @@
 "use client";
 import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { missingProfileFields, profileSchema } from '@/domain/account';
-import { accountRequest, type Account } from './account-client';
+import type { z } from 'zod';
+import type { Account } from './account-client';
 import { Avatar, MemberName } from './primitives';
 
-export function ProfileForm({ account, onSaved, onLogout }: { account: Account; onSaved: () => Promise<void>; onLogout: () => void }) {
+export function ProfileForm({ account, onSave, onLogout }: { account: Account; onSave: (profile: z.infer<typeof profileSchema>) => Promise<unknown>; onLogout: () => void }) {
   const user = account.user;
   const [avatar, setAvatar] = useState(user.avatar.startsWith('data:image/') ? user.avatar : '');
-  const [busy, setBusy] = useState(false), [reading, setReading] = useState(false), [message, setMessage] = useState('');
+  const [reading, setReading] = useState(false), [message, setMessage] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
   const missing = missingProfileFields(user);
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || reading) return;
+    if (reading) return;
     const values = { ...Object.fromEntries(new FormData(event.currentTarget)), avatar };
     const result = profileSchema.safeParse(values);
     if (!result.success) { setMessage(avatar ? '请检查并填写所有必填内容。' : '请先上传头像。'); return; }
-    setBusy(true); setMessage('');
-    try { await accountRequest({ action: 'profile', profile: result.data }); await onSaved(); }
-    catch (e) { setMessage(e instanceof Error ? e.message : '保存失败，请重试。'); }
-    finally { setBusy(false); }
+    setMessage('');
+    // Optimistic: the parent applies the change and moves on; a failure rolls back and is reported here too.
+    onSave(result.data).catch(e => setMessage(e instanceof Error ? e.message : '保存失败，请重试。'));
   }
   function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -40,7 +40,7 @@ export function ProfileForm({ account, onSaved, onLogout }: { account: Account; 
     <form className="sp-profile-form" onSubmit={event => void save(event)}>
       <div className="sp-profile-avatar-field"><span className="sp-profile-field-label">头像 *</span><div className="sp-profile-avatar-row">
         <div className="sp-profile-preview"><Avatar user={{ ...user, avatar: avatar || user.avatar }}/></div>
-        <div className="sp-profile-avatar-actions"><strong><MemberName user={user}/></strong><button type="button" disabled={busy || reading} onClick={() => fileInput.current?.click()}>{reading ? '读取中…' : avatar ? '更换头像' : '上传头像'}</button><small>PNG、JPEG 或 WebP，最大 500 KB</small></div>
+        <div className="sp-profile-avatar-actions"><strong><MemberName user={user}/></strong><button type="button" disabled={reading} onClick={() => fileInput.current?.click()}>{reading ? '读取中…' : avatar ? '更换头像' : '上传头像'}</button><small>PNG、JPEG 或 WebP，最大 500 KB</small></div>
         <input ref={fileInput} className="sp-profile-file" type="file" aria-label="上传头像" accept="image/png,image/jpeg,image/webp" tabIndex={-1} hidden onChange={upload}/>
       </div></div>
       <div className="sp-profile-fields">
@@ -53,8 +53,8 @@ export function ProfileForm({ account, onSaved, onLogout }: { account: Account; 
         <label>八字<input name="birthChart" maxLength={100} defaultValue={user.birthChart}/></label>
         <label>身份 / 专业<input name="occupation" maxLength={100} defaultValue={user.occupation}/></label>
       </div>
-      <button className="sp-primary" disabled={busy || reading}>{busy ? '保存中…' : '保存个人资料'}</button>
+      <button className="sp-primary" disabled={reading}>保存个人资料</button>
     </form>
-    <button className="sp-logout" disabled={busy || reading} onClick={onLogout}>退出登录</button>
+    <button className="sp-logout" disabled={reading} onClick={onLogout}>退出登录</button>
   </>;
 }

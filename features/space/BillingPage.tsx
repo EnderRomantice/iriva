@@ -1,4 +1,5 @@
 "use client";
+import { BillingSkeleton } from './Skeleton';
 import { useEffect, useState } from 'react';
 import { canManageSubscription, workspaceHomeHref } from '@/domain/workspace-access';
 import { plans } from '@/domain/account';
@@ -52,7 +53,7 @@ export function BillingPage({ checkout = false }: { checkout?: boolean }) {
   const selected = plans.find(p => p.id === order?.plan);
   return <main className="sp-billing-page">
     <header className="sp-billing-header"><a href="/" className="sp-billing-logo">iriva</a><span>{checkout ? '确认你的学习计划' : '选择你的学习计划'}</span></header>
-    {!account ? <div className="sp-billing-loading"><p role="status">{error || '正在准备你的学习计划…'}</p>{error && <button onClick={() => void load()}>重新加载</button>}</div> : checkout ? <>
+    {!account ? error ? <div className="sp-billing-loading"><p role="status">{error}</p><button onClick={() => void load()}>重新加载</button></div> : <BillingSkeleton /> : checkout ? <>
       <div className="sp-checkout-wrap">
         <a className="sp-billing-back" href={billingHref('plans', org)}>← 返回套餐</a>
         {!order || !selected ? <div className="sp-checkout-empty"><h1>未找到这个订单</h1><p>请返回套餐页重新选择。</p></div> : <div className="sp-checkout-grid">

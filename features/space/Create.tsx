@@ -59,14 +59,23 @@ function CreateForm({ kind, data, householdId, onClose, save, onCreated }: Props
     void writes.current.then(() => { if (revision === sequence.current) { setSaved(true); setError(""); } }).catch(() => setError("本机草稿保存失败，请保留输入后重试。"));
   }
   async function submit(event: React.FormEvent) {
-    event.preventDefault(); setBusy(true); setError("");
+    event.preventDefault(); if (busy) return; setBusy(true); setError("");
     try {
       await writes.current;
       const utc = (value: string) => new Date(`${value}:00+08:00`).toISOString();
+      // Mirror the server's rules so the sheet can close optimistically without surprises.
+      if (kind === "assignment" && Date.parse(utc(form.dueAt)) <= Date.now()) throw new Error("截止时间必须晚于当前时间。");
+      if (kind === "session") {
+        const startsAt = utc(form.startsAt), endsAt = utc(form.endsAt);
+        if (!(Date.parse(endsAt) > Date.parse(startsAt) && Date.parse(startsAt) > Date.now())) throw new Error("请选择未来的时间，结束时间必须晚于开始时间。");
+        const hosted = new Set(data.households.filter(h => h.hostId === data.actor.userId).map(h => h.id));
+        if (data.sessions.some(s => s.status === "scheduled" && hosted.has(s.householdId) && s.startsAt < endsAt && s.endsAt > startsAt)) throw new Error("该时间与你的其他 iriva meeting 冲突。");
+      }
+      if (kind === "household" && data.households.some(h => h.termId === form.termId && h.name.toLowerCase() === form.name.trim().toLowerCase())) throw new Error("这个学期已有同名小组。");
       const base = { ...identity, baseVersion: 0 };
       const command = commandSchema.parse(kind === "household" ? { ...base, kind: "household.create", payload: { name: form.name, theme: form.theme, termId: form.termId, hostId: form.hostId, capacity: Number(form.capacity) } } : kind === "assignment" ? { ...base, kind: "assignment.create", payload: { householdId: form.householdId, title: form.title, description: form.description, category: form.category, week: Number(form.week), dueAt: utc(form.dueAt) } } : { ...base, kind: "session.create", payload: { householdId: form.householdId, title: form.title, description: form.description, startsAt: utc(form.startsAt), endsAt: utc(form.endsAt) } });
-      await save(command);
-      await localDb.drafts.delete(`${scope}:${draftKey}`);
+      // The draft stays until the server confirms, so a failed request never loses input.
+      void save(command).then(() => localDb.drafts.delete(`${scope}:${draftKey}`)).catch(() => {});
       onCreated(kind, kind === "household" ? identity.entityId : form.householdId);
     } catch (e) { setError(e instanceof Error ? e.message : "未能建立，输入已保留。"); }
     finally { setBusy(false); }
