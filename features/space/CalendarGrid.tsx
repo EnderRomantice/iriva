@@ -73,7 +73,8 @@ export function CalendarGrid({ weeks, events, label, currentWeek, muted, onSessi
         const list = byDay.get(d.key) || [];
         const first = d.day === "1" || (w === 0 && i === 0);
         return <div role="gridcell" key={d.key} aria-label={`${d.month}月${d.day}日 ${d.weekday}`} className={`sp-cal-day${d.key === today ? " is-today" : ""}${d.key < today ? " is-past" : ""}${muted?.(d) ? " is-outside" : ""}${list.length ? " has-events" : ""}`}>
-          <span className="sp-cal-date"><span className="sp-cal-weekday">{d.weekday}</span>{first ? `${d.month}月${d.day}日` : d.day}</span>
+          <span className="sp-cal-date" aria-current={d.key === today ? "date" : undefined}><span className="sp-cal-weekday">{d.weekday}</span>{first ? `${d.month}月${d.day}日` : d.day}{d.key === today && " 今天"}</span>
+          {d.key === today && !list.length && <span className="sp-caption">今天暂无日程</span>}
           {list.map(e => {
             const content = <>
               <span className="sp-cal-event-meta">{e.time && <time>{e.time}</time>}{e.label}</span>
@@ -101,8 +102,11 @@ export function MonthCalendar({ data, role, onSession, onAssignment }: { data: S
   const weeks = Array.from({ length: rows }, (_, w) => Array.from({ length: 7 }, (_, d) => calendarDay(start + (w * 7 + d) * DAY + 12 * 3600000)));
   const shift = (delta: number) => { const date = new Date(Date.UTC(year, month - 1 + delta, 1)); setAnchor(`${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`); };
   const thisMonth = dayKey(Date.now()).slice(0, 7);
+  const events = calendarEvents(data, role);
+  const hasMonthlyEvents = events.some(e => e.day.startsWith(anchor));
   return <>
     <div className="sp-cal-toolbar"><strong>{year} 年 {month} 月</strong><div><button className="sp-icon-button" aria-label="上个月" onClick={() => shift(-1)}><ChevronLeft /></button>{anchor !== thisMonth && <button onClick={() => setAnchor(thisMonth)}>今天</button>}<button className="sp-icon-button" aria-label="下个月" onClick={() => shift(1)}><ChevronRight /></button></div></div>
-    <CalendarGrid weeks={weeks} events={calendarEvents(data, role)} muted={d => !d.key.startsWith(anchor)} onSession={onSession} onAssignment={onAssignment} />
+    {!hasMonthlyEvents && <p className="sp-cal-empty" role="status">{month} 月暂无已安排的日程</p>}
+    <CalendarGrid weeks={weeks} events={events} muted={d => !d.key.startsWith(anchor)} onSession={onSession} onAssignment={onAssignment} />
   </>;
 }

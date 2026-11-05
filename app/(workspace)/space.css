@@ -869,6 +869,7 @@
 .sp-app button.sp-cal-event:hover { background:color-mix(in srgb,var(--event-color) 34%,var(--sp-paper)); }
 .sp-cal-plain .sp-cal-head,.sp-cal-plain .sp-cal-week { grid-template-columns:repeat(7,minmax(0,1fr)); }
 .sp-cal-day.is-outside { background:var(--sp-soft); }.sp-cal-day.is-outside .sp-cal-date { opacity:.5; }
+.sp-cal-empty { margin:0 0 12px; color:var(--sp-muted); font-size:14px; }
 .sp-cal-toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
 .sp-cal-toolbar strong { font-size:16px; }.sp-cal-toolbar>div { display:flex; align-items:center; gap:2px; }.sp-cal-toolbar button:not(.sp-icon-button) { font-size:12px; }
 .sp-term-calendar select { font:inherit; color:inherit; background:none; border:0; padding:0; cursor:pointer; text-decoration:underline dotted; }
