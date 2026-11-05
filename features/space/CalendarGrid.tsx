@@ -17,8 +17,7 @@ export function calendarDay(time: number): CalendarDay {
 }
 
 export type EventKind = "meeting" | "review" | "task" | "due" | "plan";
-export const eventLabels: Record<EventKind, string> = { meeting: "iriva meeting", review: "验收日", task: "任务开始", due: "任务截止", plan: "套餐到期" };
-export interface CalendarEvent { id: string; day: string; kind: EventKind; title: string; time?: string; session?: Session; assignment?: Assignment }
+export interface CalendarEvent { id: string; day: string; kind: EventKind; label: string; title: string; time?: string; session?: Session; assignment?: Assignment }
 
 export const termWeekStart = (term: Term, week: number) => midnight(term.startsOn) + (week - 1) * 7 * DAY;
 /** 验收日 = the last scheduled iriva meeting in week 6 of each term (the graduation share). */
@@ -46,14 +45,14 @@ export function calendarEvents(data: Snapshot, role: Role): CalendarEvent[] {
   for (const s of data.sessions) {
     if (s.status === "cancelled") continue;
     const kind = review.has(s.id) ? "review" : "meeting";
-    events.push({ id: s.id, day: dayKey(s.startsAt), kind, title: `${kind === "review" ? "验收 · " : ""}${s.title}${group(s.householdId)}`, time: timeLabel(s.startsAt), session: s });
+    events.push({ id: s.id, day: dayKey(s.startsAt), kind, label: kind === "review" ? "验收日" : "iriva meeting", title: `${s.title}${group(s.householdId)}`, time: timeLabel(s.startsAt), session: s });
   }
   for (const a of data.assignments) {
     const household = data.households.find(h => h.id === a.householdId), term = data.terms.find(t => t.id === household?.termId);
-    if (term) events.push({ id: `${a.id}:start`, day: dayKey(termWeekStart(term, a.week)), kind: "task", title: `${a.title}${group(a.householdId)}`, assignment: a });
-    events.push({ id: `${a.id}:due`, day: dayKey(a.dueAt), kind: "due", title: `截止 · ${a.title}${group(a.householdId)}`, time: timeLabel(a.dueAt), assignment: a });
+    if (term) events.push({ id: `${a.id}:start`, day: dayKey(termWeekStart(term, a.week)), kind: "task", label: "任务开始", title: `${a.title}${group(a.householdId)}`, assignment: a });
+    events.push({ id: `${a.id}:due`, day: dayKey(a.dueAt), kind: "due", label: "任务截止", title: `${a.title}${group(a.householdId)}`, time: timeLabel(a.dueAt), assignment: a });
   }
-  for (const term of data.terms) events.push({ id: `${term.id}:end`, day: term.endsOn, kind: "plan", title: role === "learn" ? `套餐到期 · ${term.name}` : `学期结束 · ${term.name}` });
+  for (const term of data.terms) events.push({ id: `${term.id}:end`, day: term.endsOn, kind: "plan", label: role === "learn" ? "套餐到期" : "学期结束", title: term.name });
   const order: Record<EventKind, number> = { plan: 0, review: 1, meeting: 2, task: 3, due: 4 };
   return events.sort((a, b) => order[a.kind] - order[b.kind] || (a.time || "").localeCompare(b.time || ""));
 }
@@ -66,7 +65,7 @@ export function CalendarGrid({ weeks, events, label, currentWeek, muted, onSessi
   const today = dayKey(Date.now());
   const byDay = new Map<string, CalendarEvent[]>();
   for (const e of events) byDay.set(e.day, [...byDay.get(e.day) || [], e]);
-  return <><div className={`sp-cal${label ? "" : " sp-cal-plain"}`} role="grid">
+  return <div className={`sp-cal${label ? "" : " sp-cal-plain"}`} role="grid">
     <div className="sp-cal-head" role="row">{label && <span aria-hidden="true" />}{weeks[0].map(d => <span role="columnheader" key={d.weekday}>{d.weekday}</span>)}</div>
     {weeks.map((days, w) => <div className="sp-cal-week" role="row" key={days[0].key} aria-current={w === currentWeek ? "true" : undefined}>
       {label && <div className="sp-cal-label" role="rowheader">{label(w)}</div>}
@@ -76,16 +75,18 @@ export function CalendarGrid({ weeks, events, label, currentWeek, muted, onSessi
         return <div role="gridcell" key={d.key} aria-label={`${d.month}月${d.day}日 ${d.weekday}`} className={`sp-cal-day${d.key === today ? " is-today" : ""}${d.key < today ? " is-past" : ""}${muted?.(d) ? " is-outside" : ""}${list.length ? " has-events" : ""}`}>
           <span className="sp-cal-date"><span className="sp-cal-weekday">{d.weekday}</span>{first ? `${d.month}月${d.day}日` : d.day}</span>
           {list.map(e => {
-            const content = <>{e.time && <time>{e.time}</time>}{e.title}</>;
+            const content = <>
+              <span className="sp-cal-event-meta">{e.time && <time>{e.time}</time>}{e.label}</span>
+              <span>{e.title}</span>
+            </>;
             const open = e.session ? () => onSession(e.session!) : e.assignment ? () => onAssignment(e.assignment!) : undefined;
-            return open ? <button key={e.id} className={`sp-cal-event is-${e.kind}`} title={`${eventLabels[e.kind]} · ${e.title}`} onClick={open}>{content}</button>
-              : <span key={e.id} className={`sp-cal-event is-${e.kind}`} title={`${eventLabels[e.kind]} · ${e.title}`}>{content}</span>;
+            return open ? <button key={e.id} className={`sp-cal-event is-${e.kind}`} onClick={open}>{content}</button>
+              : <span key={e.id} className={`sp-cal-event is-${e.kind}`}>{content}</span>;
           })}
         </div>;
       })}
     </div>)}
-  </div>
-  <div className="sp-cal-legend" aria-hidden="true">{(Object.keys(eventLabels) as EventKind[]).map(kind => <span key={kind}><i className={`is-${kind}`} />{eventLabels[kind]}</span>)}</div></>;
+  </div>;
 }
 
 /** Month view, Monday first, with previous/next navigation. */

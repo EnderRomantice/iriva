@@ -853,33 +853,34 @@
 .sp-cal-date { font-size:12px; font-variant-numeric:tabular-nums; padding:2px 4px; align-self:flex-start; border-radius:4px; }
 .sp-cal-weekday { display:none; }
 .sp-cal-day.is-today .sp-cal-date { background:var(--sp-accent); color:var(--sp-accent-on); font-weight:700; }
-.sp-app .sp-cal-event { display:block; width:100%; text-align:left; font-size:11px; line-height:1.35; padding:3px 6px; border-radius:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.sp-app .sp-cal-event time { font-weight:700; margin-right:4px; font-variant-numeric:tabular-nums; }
-.sp-app .sp-cal-event.is-meeting { background:var(--sp-active); color:var(--sp-ink); }
-.sp-app .sp-cal-event.is-review { background:var(--sp-accent); color:var(--sp-accent-on); font-weight:700; }
-.sp-app .sp-cal-event.is-task { background:var(--sp-soft); color:var(--sp-ink); box-shadow:inset 2px 0 0 var(--sp-muted); }
-.sp-app .sp-cal-event.is-due { background:none; color:var(--sp-muted); border:1px dashed var(--sp-line); }
-.sp-app .sp-cal-event.is-plan { background:color-mix(in srgb,#c48a1d 16%,transparent); color:color-mix(in srgb,#c48a1d 70%,var(--sp-ink)); }
-.sp-app button.sp-cal-event:hover { filter:brightness(.96); }
+.sp-cal-event.is-meeting { --event-color:#3789d5; }
+.sp-cal-event.is-review { --event-color:#9863cf; }
+.sp-cal-event.is-task { --event-color:#339672; }
+.sp-cal-event.is-due { --event-color:#db6264; }
+.sp-cal-event.is-plan { --event-color:#ce951b; }
+.sp-app .sp-cal-event {
+  display:grid; gap:2px; width:100%; padding:5px 7px; text-align:left;
+  font-size:12px; line-height:1.4; overflow-wrap:anywhere; color:var(--sp-ink);
+  background:color-mix(in srgb,var(--event-color) 23%,var(--sp-paper));
+  border-inline-start:3px solid var(--event-color); border-radius:4px;
+}
+.sp-cal-event-meta { display:flex; flex-wrap:wrap; gap:0 5px; font-size:11px; font-weight:700; }
+.sp-cal-event time { font-variant-numeric:tabular-nums; }
+.sp-app button.sp-cal-event:hover { background:color-mix(in srgb,var(--event-color) 34%,var(--sp-paper)); }
 .sp-cal-plain .sp-cal-head,.sp-cal-plain .sp-cal-week { grid-template-columns:repeat(7,minmax(0,1fr)); }
 .sp-cal-day.is-outside { background:var(--sp-soft); }.sp-cal-day.is-outside .sp-cal-date { opacity:.5; }
 .sp-cal-toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
 .sp-cal-toolbar strong { font-size:16px; }.sp-cal-toolbar>div { display:flex; align-items:center; gap:2px; }.sp-cal-toolbar button:not(.sp-icon-button) { font-size:12px; }
 .sp-term-calendar select { font:inherit; color:inherit; background:none; border:0; padding:0; cursor:pointer; text-decoration:underline dotted; }
-.sp-cal-legend { display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:12px; font-size:12px; color:var(--sp-muted); }
-.sp-cal-legend span { display:flex; align-items:center; gap:6px; }
-.sp-cal-legend i { width:10px; height:10px; border-radius:3px; }
-.sp-cal-legend i.is-meeting { background:var(--sp-active); }.sp-cal-legend i.is-review { background:var(--sp-accent); }.sp-cal-legend i.is-task { background:var(--sp-soft); box-shadow:inset 2px 0 0 var(--sp-muted); }.sp-cal-legend i.is-due { border:1px dashed var(--sp-muted); }.sp-cal-legend i.is-plan { background:color-mix(in srgb,#c48a1d 40%,transparent); }
 @media (max-width:760px) {
   .sp-cal { border:0; border-radius:0; }
   .sp-cal-head { display:none; }
   .sp-cal-week { display:block; border-bottom:0; margin-bottom:14px; }
   .sp-cal-label { flex-direction:row; align-items:baseline; gap:8px; border-right:0; border-bottom:1px solid var(--sp-line); padding:8px 2px; }
   .sp-cal-week[aria-current="true"] .sp-cal-label { background:none; }
-  .sp-cal-day { display:none; min-height:0; border-right:0; flex-direction:row; flex-wrap:wrap; align-items:center; gap:6px; padding:10px 2px; border-bottom:1px solid var(--sp-line); }
+  .sp-cal-day { display:none; min-height:0; border-right:0; gap:6px; padding:10px 2px; border-bottom:1px solid var(--sp-line); }
   .sp-cal-day.has-events:not(.is-outside),.sp-cal-day.is-today { display:flex; }
   .sp-cal-date { min-width:72px; }.sp-cal-weekday { display:inline; margin-right:6px; }
   .sp-term-calendar .sp-section-head { grid-template-columns:1fr; }
   .sp-cal-plain .sp-cal-week { margin-bottom:0; }
-  .sp-app .sp-cal-event { width:auto; flex:1 1 100%; margin-left:78px; font-size:12px; }
 }
