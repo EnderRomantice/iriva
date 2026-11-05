@@ -13,7 +13,6 @@ import {
   nav,
   ourWay,
   refunds,
-  roundtable,
   takeaways,
   values,
 } from "@/lib/content";
@@ -27,7 +26,6 @@ const container = "mx-auto w-full max-w-[1200px] px-4 sm:px-6 lg:px-8";
 const h2 = "text-[30px] leading-[1.25] font-black text-balance sm:text-[40px]";
 const lead = "mt-4 max-w-[640px] text-[18px] text-muted text-pretty";
 const formatIcons = [UsersRound, MessageCircle, Handshake, NotebookPen];
-const totalMinutes = roundtable.reduce((sum, r) => sum + r.minutes, 0);
 
 export default function Home() {
   return (
@@ -195,28 +193,6 @@ function How() {
               </div>
             );
           })}
-        </div>
-
-        <div className="mt-20">
-          <h3 className="text-[22px] font-black">一次 iriva meeting 的 {totalMinutes} 分钟</h3>
-          {/* Segment widths are proportional to each block's real length. */}
-          <ol className="mt-6 flex flex-col gap-2 md:flex-row md:gap-1">
-            {roundtable.map((r) => (
-              <li
-                key={r.time}
-                style={{ flexGrow: r.minutes, flexBasis: 0 }}
-                className="min-w-0 md:min-w-[96px]"
-              >
-                <div className={`h-2.5 rounded-full ${r.highlight ? "bg-brand" : "bg-line"}`} />
-                <p className={`mt-3 text-[14px] ${r.highlight ? "font-bold text-brand" : "text-muted"}`}>{r.time}</p>
-                <p className="font-bold">{r.name}</p>
-                {r.note && <p className="text-[14px] text-muted">{r.note}</p>}
-              </li>
-            ))}
-          </ol>
-          <p className="mt-8 max-w-[720px] text-muted">
-            Host 说得少、听得多，不当场纠错，不替你把话说完，会照顾安静的人。纠错交给 AI 在课后私下给你。
-          </p>
         </div>
       </div>
     </section>

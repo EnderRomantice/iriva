@@ -74,14 +74,6 @@ export const formats = [
   },
 ];
 
-export const roundtable = [
-  { time: "0–15 分钟", minutes: 15, name: "签到", note: "讲一件这周的事" },
-  { time: "15–60 分钟", minutes: 45, name: "主题对话", note: "故事、文化、讨论" },
-  { time: "60–70 分钟", minutes: 10, name: "休息", note: "" },
-  { time: "70–110 分钟", minutes: 40, name: "两人一组", note: "开口最多的时段", highlight: true },
-  { time: "110–120 分钟", minutes: 10, name: "收尾", note: "每人一句今天的收获" },
-];
-
 export const journey = [
   { week: "第 0 周", title: "相识", body: "口语录音、目标问卷、组成 Household、欢迎会" },
   { week: "第 1 周", title: "讲自己的故事", body: "不再在脑子里先翻译" },
