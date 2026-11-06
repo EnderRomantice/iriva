@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { Sql } from 'postgres';
 import type { SqliteRepository } from '../repositories/sqlite-repository';
 
-export const migrationTables = ['users','organizations','terms','households','organization_memberships','memberships','sessions','assignments','submissions','feedback','applications','enrollments','channels','channel_participants','messages','mutation_receipts','audit_events','credentials','auth_sessions','bookings','plan_orders','email_challenges','email_identities','host_grants','group_requests'] as const;
+export const migrationTables = ['users','organizations','terms','households','organization_memberships','memberships','sessions','assignments','submissions','feedback','applications','enrollments','channels','channel_participants','messages','mutation_receipts','audit_events','credentials','auth_sessions','bookings','plan_orders','email_challenges','email_identities','host_grants','group_requests','iriva_memory','iriva_contacts'] as const;
 export type DataSnapshot = Record<string, Record<string, unknown>[]>;
 const jsonColumns = new Set(['host_qualifications','reactions','cards']);
 const epochColumns = new Set(['expires_at','verified_at']);
@@ -25,7 +25,11 @@ export function sqliteSnapshot(repo:SqliteRepository):DataSnapshot {
   return repo.atomic(()=>Object.fromEntries(migrationTables.map(table=>[table,repo.db.prepare(`SELECT * FROM ${table}`).all() as Record<string,unknown>[]])));
 }
 export async function applyPostgresMigrations(sql:Sql) {
-  const filename='20261101224532_iriva_postgres.sql';
+  for (const filename of ['20261101224532_iriva_postgres.sql','20261106000000_iriva_assistant.sql']) {
+    await applyMigration(sql,filename);
+  }
+}
+async function applyMigration(sql:Sql, filename:string) {
   const source=readFileSync(path.join(process.cwd(),'supabase/migrations',filename),'utf8');
   const checksum=createHash('sha256').update(source).digest('hex');
   await sql.begin(async tx=>{
@@ -40,7 +44,7 @@ export async function applyPostgresMigrations(sql:Sql) {
     }
     await tx.unsafe(source);
     await tx`INSERT INTO iriva._migrations (name,checksum) VALUES (${filename},${checksum})`;
-    await tx`CREATE TABLE iriva._imports (fingerprint text PRIMARY KEY, imported_at timestamptz NOT NULL DEFAULT now())`;
+    await tx`CREATE TABLE IF NOT EXISTS iriva._imports (fingerprint text PRIMARY KEY, imported_at timestamptz NOT NULL DEFAULT now())`;
   });
 }
 export async function verifyPostgresSnapshot(sql:Sql,snapshot:DataSnapshot) {

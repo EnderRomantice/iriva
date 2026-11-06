@@ -136,3 +136,9 @@ TEST_POSTGRES_ADMIN_URL=postgres://localhost:5432/postgres npm run test:postgres
 ```
 
 此命令仅允许本机地址，创建并删除专属临时测试数据库，不修改现有数据库。`npm test` 保留 SQLite 与纯逻辑测试。
+
+### Iriva 工作区助手
+
+在服务端配置 `OPENROUTER_API_KEY`，可用 `OPENROUTER_MODEL` 指定支持工具调用的模型。现有 PostgreSQL 部署需使用迁移账号设置 `SUPABASE_DATABASE_URL`，在发布前运行 `npm run db:migrate:supabase -- --schema-only`。本地 SQLite 会在打开时升级。
+
+Iriva 使用 [Wayline Agent Runtime](https://github.com/singlebase-us/wayline-agent-runtime/tree/6b2d7620bb3c0f2bab1994c95e993bc48280d7f9)。仓库内的 npm 包由该提交运行 `npm ci && npm pack` 生成。顶层会话只能创建、追问本轮的子 Agent。长期记忆按用户保存在服务端，对话记录按账号、角色和工作区保存在当前浏览器标签页。

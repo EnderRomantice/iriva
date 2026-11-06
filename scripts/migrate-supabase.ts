@@ -11,6 +11,11 @@ async function main(){
   const source=process.env.SQLITE_PATH||path.join(process.cwd(),'data/iriva.sqlite');
   const url=process.env.SUPABASE_DATABASE_URL;
   if(!url)throw new Error('SUPABASE_DATABASE_URL must contain the admin connection string.');
+  if(process.argv.includes('--schema-only')) {
+    const sql=postgres(url,{max:1,prepare:false,ssl:postgresTls(url),connect_timeout:15});
+    try { await applyPostgresMigrations(sql); } finally { await sql.end(); }
+    return;
+  }
   if(!existsSync(source))throw new Error('SQLite source does not exist; refusing to migrate an empty database.');
   const directory=path.join(process.cwd(),'data/backups');
   mkdirSync(directory,{recursive:true,mode:0o700});

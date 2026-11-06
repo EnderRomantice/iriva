@@ -1,0 +1,103 @@
+.iriva-chat {
+  width: min(100%, 820px);
+  height: 100%;
+  min-height: 230px;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 16px clamp(12px, 3vw, 36px);
+}
+.iriva-welcome {
+  margin: auto;
+  text-align: center;
+  padding: 24px 0;
+}
+.iriva-welcome > svg {
+  width: 36px;
+  height: 36px;
+  color: var(--sp-accent);
+}
+.iriva-welcome h2 {
+  margin: 14px 0 24px;
+}
+.iriva-welcome button {
+  border: 1px solid var(--sp-line);
+  margin: 4px;
+}
+.iriva-log {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.iriva-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 4px;
+}
+.iriva-entry {
+  max-width: 92%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.iriva-user {
+  align-self: flex-end;
+  border-radius: 16px 16px 4px 16px;
+  background: var(--sp-tint);
+  padding: 10px 16px;
+}
+.iriva-answer strong {
+  display: block;
+  color: var(--sp-accent);
+  margin-bottom: 4px;
+}
+.iriva-progress,
+.iriva-log small {
+  color: var(--sp-muted);
+  font-size: 13px;
+}
+.iriva-memory {
+  color: var(--sp-accent);
+  font-size: 14px;
+}
+.iriva-memory summary {
+  cursor: pointer;
+}
+.iriva-memory svg {
+  width: 16px;
+  vertical-align: middle;
+}
+.iriva-error {
+  color: var(--sp-error);
+}
+.iriva-composer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  border: 1px solid var(--sp-line);
+  border-radius: 14px;
+  background: var(--sp-soft);
+  padding: 12px;
+  margin-top: 12px;
+}
+.iriva-composer textarea {
+  resize: none;
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  color: var(--sp-ink);
+  border: 0;
+  padding: 5px;
+}
+.iriva-composer button {
+  background: var(--sp-accent);
+  color: var(--sp-accent-on);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-content: center;
+}
+.iriva-composer button:hover {
+  background: var(--sp-brand);
+}

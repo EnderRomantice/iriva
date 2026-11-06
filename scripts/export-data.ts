@@ -7,9 +7,11 @@ const repo = new SqliteRepository(filename);
 // One consistent read transaction, including idempotency and audit history.
 const backup = repo.atomic(() => ({
   format: "iriva-portable-v1",
-  schemaVersion: 11,
+  schemaVersion: 12,
   exportedAt: new Date().toISOString(),
   data: repo.read(),
+  irivaMemory: repo.db.prepare('SELECT * FROM iriva_memory').all(),
+  irivaContacts: repo.db.prepare('SELECT * FROM iriva_contacts').all(),
   hostGrants: repo.db.prepare('SELECT * FROM host_grants').all(),
   groupRequests: repo.db.prepare('SELECT * FROM group_requests').all(),
   mutationReceipts: repo.db.prepare("SELECT * FROM mutation_receipts").all(),
@@ -19,4 +21,4 @@ const destination = process.argv[2] || path.join(process.cwd(), "data/exports", 
 mkdirSync(path.dirname(destination), { recursive: true });
 writeFileSync(destination, JSON.stringify(backup, null, 2), { mode: 0o600 });
 repo.db.close();
-console.log(`Exported IRIVA schema v11 to ${destination}`);
+console.log(`Exported IRIVA schema v12 to ${destination}`);

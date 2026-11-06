@@ -5,7 +5,7 @@ import type { Role } from "@/domain/models";
 import { defaultOrganizationId } from "@/domain/workspace";
 import { viewLabels, type View } from "./preferences";
 export interface SpaceRoute { organizationId: string; householdId: string; channelId?: string; profileReturn?: "hosts"; applicationTab?: "bookings"; view: View }
-const globalViews:View[] = ["applications","hosts","profile","channels","direct"];
+const globalViews:View[] = ["iriva","applications","hosts","profile","channels","direct"];
 export function viewRoute(route: SpaceRoute, view: View, scope: "organization" | "household"): SpaceRoute {
   return { ...route, channelId: undefined, profileReturn: undefined, applicationTab: undefined, view, householdId: scope === "organization" || globalViews.includes(view) ? "" : route.householdId };
 }

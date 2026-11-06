@@ -2,10 +2,10 @@ import type { WorkspaceView } from "@/domain/workspace-access";
 import { defaultOrganizationId, demoOrganizationId } from "@/domain/workspace";
 import { useThemeTransition } from "./theme-transition";
 import { useEffect, useState } from "react";
-export const viewLabels = { profile: "个人资料", hosts: "寻找 Host", overview: "本周", channels: "频道", direct: "私聊", tasks: "练习与反馈", calendar: "日程", household: "伙伴", applications: "报名", journey: "六周旅程", manage: "管理" } satisfies Record<WorkspaceView,string>;
+export const viewLabels = { iriva: "Iriva", profile: "个人资料", hosts: "寻找 Host", overview: "本周", channels: "频道", direct: "私聊", tasks: "练习与反馈", calendar: "日程", household: "伙伴", applications: "报名", journey: "六周旅程", manage: "管理" } satisfies Record<WorkspaceView,string>;
 export type View = keyof typeof viewLabels;
 export interface Preferences { color: string; dark: boolean; compact: boolean; collapsed: boolean; hidden: View[]; order: View[] }
-export const defaults: Preferences = { color: "#12658a", dark: false, compact: false, collapsed: false, hidden: ["journey"], order: ["overview", "channels", "direct", "hosts", "tasks", "applications", "manage", "calendar", "household", "journey"] };
+export const defaults: Preferences = { color: "#12658a", dark: false, compact: false, collapsed: false, hidden: ["journey"], order: ["overview", "iriva", "channels", "direct", "hosts", "tasks", "applications", "manage", "calendar", "household", "journey"] };
 export const preferenceKey = "iriva-space-preferences-v1";
 export function parsePreferences(raw: string | null): Preferences {
   try {

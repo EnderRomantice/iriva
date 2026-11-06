@@ -3,7 +3,7 @@ import { canManageSubscription, isRailView } from "@/domain/workspace-access";
 import { billingHref } from "./billing-navigation";
 import { logout } from "./account-client";
 import { Fragment, useEffect, useRef, useState, type Dispatch, type SetStateAction, type ReactNode, type RefObject } from "react";
-import { ArrowLeft, ArrowRight, Clock3, Search, CircleHelp, Home, MessageCircle, CalendarDays, MoreHorizontal, Settings, Moon, Sun, Plus, ChevronDown, Check, Hash, Star, PanelLeftClose, PanelLeftOpen, X, UsersRound, ListTodo, Map, ContactRound, Menu, LockKeyhole, UserCog } from "lucide-react";
+import { Sparkles, ArrowLeft, ArrowRight, Clock3, Search, CircleHelp, Home, MessageCircle, CalendarDays, MoreHorizontal, Settings, Moon, Sun, Plus, ChevronDown, Check, Hash, Star, PanelLeftClose, PanelLeftOpen, X, UsersRound, ListTodo, Map, ContactRound, Menu, LockKeyhole, UserCog } from "lucide-react";
 import type { Channel, Household, Organization, Role, Snapshot, User } from "@/domain/models";
 import { viewLabels, type Preferences, type View } from "./preferences";
 import { readRoute, type SpaceNavigation } from "./navigation";
@@ -12,7 +12,7 @@ import { createLabels, type CreateKind } from "./Create";
 import { channelName, directPeer } from "./chat-utils";
 import { RailIcon } from "./RailIcon";
 import { Popover } from "./Popover";
-const icons = { profile: ContactRound, hosts: ContactRound, channels: Hash, direct: MessageCircle, overview: Home, tasks: ListTodo, calendar: CalendarDays, household: UsersRound, applications: ContactRound, journey: Map, manage: UserCog };
+const icons = { iriva: Sparkles, profile: ContactRound, hosts: ContactRound, channels: Hash, direct: MessageCircle, overview: Home, tasks: ListTodo, calendar: CalendarDays, household: UsersRound, applications: ContactRound, journey: Map, manage: UserCog };
 interface Props {
   role: Role; data?: Snapshot; user?: User; household?: Household; channel?: Channel; navigation: SpaceNavigation;
   preferences: Preferences; setPreferences: Dispatch<SetStateAction<Preferences>>;
@@ -60,7 +60,7 @@ export function Chrome({ role, data, user, household, channel, navigation, prefe
   const needsMore = true;
   const visibleItems = railItems.slice(0, needsMore ? Math.max(0, railSlots - 1) : railSlots);
   const overflowItems = [...railItems.slice(visibleItems.length), ...hiddenItems];
-  const globalLabels: Record<View, string> = { profile: "个人资料", hosts: "Host", overview: "主页", channels: "频道", direct: "私聊", tasks: "练习", applications: "报名", calendar: "日程", household: "伙伴", journey: "旅程", manage: "管理" };
+  const globalLabels: Record<View, string> = { iriva: "Iriva", profile: "个人资料", hosts: "Host", overview: "主页", channels: "频道", direct: "私聊", tasks: "练习", applications: "报名", calendar: "日程", household: "伙伴", journey: "旅程", manage: "管理" };
   const groups = data?.households.filter(h => h.name.toLowerCase().includes(groupQuery.trim().toLowerCase())) || [];
   const globalTitle = view === "manage" ? "Host 与小组" : view === "overview" ? "主页" : view === "calendar" ? "全部日程" : view === "household" ? "工作区伙伴" : view === "tasks" ? "全部练习与反馈" : viewLabels[view];
   const chatChannels = data?.channels.filter(c => c.kind !== "direct" && c.name.toLowerCase().includes(groupQuery.toLowerCase())) || [];
@@ -91,7 +91,7 @@ export function Chrome({ role, data, user, household, channel, navigation, prefe
         <button className="sp-icon-button" title="前进" aria-label="前进" disabled={!navigation.canForward} onClick={navigation.forward}><ArrowRight /></button>
         <button className="sp-icon-button" title="历史记录" aria-label="历史记录" aria-expanded={menu === "history"} onClick={e => open("history", e.currentTarget)}><Clock3 /></button>
       </div>
-      <div className="sp-global-search"><Search aria-hidden="true" /><input ref={search} disabled={view === "profile"} aria-label={view === "hosts" ? "搜索 Host" : isChat ? "搜索消息或频道" : view === "applications" || role === "ops" ? "搜索报名" : "搜索练习"} placeholder={view === "profile" ? "个人资料" : view === "hosts" ? "搜索 Host 的姓名、城市或专业" : channel && data ? `搜索 ${channelName(data,channel)} 中的消息` : `搜索 ${title}`} value={query} onChange={e => setQuery(e.target.value)} />{query && <button className="sp-icon-button" aria-label="清除搜索" onClick={() => setQuery("")}><X /></button>}</div>
+      <div className="sp-global-search"><Search aria-hidden="true" /><input ref={search} disabled={view === "profile" || view === "iriva"} aria-label={view === "hosts" ? "搜索 Host" : isChat ? "搜索消息或频道" : view === "applications" || role === "ops" ? "搜索报名" : "搜索练习"} placeholder={view === "profile" ? "个人资料" : view === "hosts" ? "搜索 Host 的姓名、城市或专业" : channel && data ? `搜索 ${channelName(data,channel)} 中的消息` : `搜索 ${title}`} value={query} onChange={e => setQuery(e.target.value)} />{query && <button className="sp-icon-button" aria-label="清除搜索" onClick={() => setQuery("")}><X /></button>}</div>
       <button className="sp-help sp-icon-button" title="帮助" aria-label="帮助" onClick={e => open("help", e.currentTarget)}><CircleHelp /></button>
     </header>
     <div className={`sp-frame ${hasSidebar ? "" : "sp-without-sidebar"}`}>
