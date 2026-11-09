@@ -3,13 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, BookmarkCheck, Sparkles } from "lucide-react";
 import { Conversation, ConversationContent } from "@/components/ai-elements/conversation";
 import type { Role } from "@/domain/models";
-import { irivaDisplayText, irivaRevealDuration, irivaTextSegments } from "./iriva-text";
+import { irivaRevealDuration, irivaTextSegments } from "./iriva-text";
 import "./iriva.css";
 
 type Entry = { kind: "user" | "answer" | "progress" | "memory" | "error"; text: string; revealAt?: number };
 // Only entries received in this mounted conversation carry a reveal time.
 function IrivaText({ entry }: { entry: Entry }) {
-  const text = irivaDisplayText(entry.text, entry.kind as "answer" | "progress" | "error");
+  const text = entry.text;
   const [visible, setVisible] = useState(entry.revealAt === undefined ? text : "");
   const [started, setStarted] = useState(entry.revealAt === undefined);
   useEffect(() => {
@@ -101,7 +101,7 @@ export function IrivaChat({
       if (entry.kind === "progress" || entry.kind === "answer" || entry.kind === "error") {
         const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         const revealAt = reducedMotion ? performance.now() : Math.max(performance.now(), revealUntil.current);
-        revealUntil.current = reducedMotion ? revealAt : revealAt + irivaRevealDuration(irivaDisplayText(entry.text, entry.kind)) + 80;
+        revealUntil.current = reducedMotion ? revealAt : revealAt + irivaRevealDuration(entry.text) + 80;
         entry = { ...entry, revealAt };
       }
       setEntries((previous) => [...previous, entry]);
