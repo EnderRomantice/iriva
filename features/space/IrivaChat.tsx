@@ -3,9 +3,54 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, BookmarkCheck, Sparkles } from "lucide-react";
 import { Conversation, ConversationContent } from "@/components/ai-elements/conversation";
 import type { Role } from "@/domain/models";
+import { irivaDisplayText, irivaRevealDuration, irivaTextSegments } from "./iriva-text";
 import "./iriva.css";
 
-type Entry = { kind: "user" | "answer" | "progress" | "memory" | "error"; text: string };
+type Entry = { kind: "user" | "answer" | "progress" | "memory" | "error"; text: string; revealAt?: number };
+// Only entries received in this mounted conversation carry a reveal time.
+function IrivaText({ entry }: { entry: Entry }) {
+  const text = irivaDisplayText(entry.text, entry.kind as "answer" | "progress" | "error");
+  const [visible, setVisible] = useState(entry.revealAt === undefined ? text : "");
+  const [started, setStarted] = useState(entry.revealAt === undefined);
+  useEffect(() => {
+    if (entry.revealAt === undefined) return;
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const segments = irivaTextSegments(text);
+    const duration = irivaRevealDuration(text);
+    let frame = 0;
+    const finish = () => {
+      cancelAnimationFrame(frame);
+      setStarted(true);
+      setVisible(text);
+    };
+    const tick = (now: number) => {
+      if (motion.matches) { finish(); return; }
+      const elapsed = now - entry.revealAt!;
+      if (elapsed >= 0) {
+        setStarted(true);
+        const count = Math.min(segments.length, Math.ceil(segments.length * elapsed / duration));
+        setVisible(segments.slice(0, count).join(""));
+      }
+      if (elapsed < duration) frame = requestAnimationFrame(tick);
+    };
+    const onMotionChange = () => { if (motion.matches) finish(); };
+    motion.addEventListener("change", onMotionChange);
+    frame = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(frame);
+      motion.removeEventListener("change", onMotionChange);
+    };
+  }, [entry.revealAt, text]);
+  return (
+    <div hidden={!started} className={`iriva-entry iriva-${entry.kind}${entry.revealAt === undefined ? "" : ` t-stagger${started ? " is-shown" : ""}`}`}>
+      {entry.kind === "answer" && <strong>Iriva</strong>}
+      {/* Announce each complete message once, rather than every revealed character. */}
+      <span className="iriva-sr-only">{text}</span>
+      <span aria-hidden="true" className={entry.revealAt === undefined ? undefined : "t-stagger-line"}>{visible}</span>
+    </div>
+  );
+}
+
 const prompts = {
   learn: ["我接下来有什么日程？", "有哪些作业还没完成？", "查看我的好友"],
   host: ["查看我负责的小组", "汇总学生的作业提交情况", "我接下来有什么日程？"],
@@ -30,7 +75,7 @@ export function IrivaChat({
     try {
       return JSON.parse(sessionStorage.getItem(key) || "[]").filter(
         (e: Entry) => e && typeof e.text === "string",
-      );
+      ).map(({ kind, text }: Entry) => ({ kind, text }));
     } catch {
       return [];
     }
@@ -38,11 +83,12 @@ export function IrivaChat({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const active = useRef<AbortController | null>(null);
+  const revealUntil = useRef(0);
   const input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => () => active.current?.abort(), []);
   useEffect(() => {
     try {
-      sessionStorage.setItem(key, JSON.stringify(entries.slice(-160)));
+      sessionStorage.setItem(key, JSON.stringify(entries.slice(-160).map(({ kind, text }) => ({ kind, text }))));
     } catch {}
   }, [key, entries]);
   async function send() {
@@ -51,7 +97,15 @@ export function IrivaChat({
     const controller = new AbortController();
     active.current = controller;
     setBusy(true);
-    const append = (entry: Entry) => setEntries((previous) => [...previous, entry]);
+    const append = (entry: Entry) => {
+      if (entry.kind === "progress" || entry.kind === "answer" || entry.kind === "error") {
+        const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const revealAt = reducedMotion ? performance.now() : Math.max(performance.now(), revealUntil.current);
+        revealUntil.current = reducedMotion ? revealAt : revealAt + irivaRevealDuration(irivaDisplayText(entry.text, entry.kind)) + 80;
+        entry = { ...entry, revealAt };
+      }
+      setEntries((previous) => [...previous, entry]);
+    };
     append({ kind: "user", text: message });
     setDraft("");
     let finished = false;
@@ -125,7 +179,9 @@ export function IrivaChat({
         <Conversation className="iriva-log" aria-label="对话记录">
           <ConversationContent className="iriva-entries">
             {entries.map((e, i) => (
-              <div key={i} className={"iriva-entry iriva-" + e.kind}>
+              e.kind === "progress" || e.kind === "answer" || e.kind === "error" ? (
+                <IrivaText key={i} entry={e} />
+              ) : <div key={i} className={"iriva-entry iriva-" + e.kind}>
                 {e.kind === "memory" ? (
                   <details>
                     <summary>
@@ -134,10 +190,7 @@ export function IrivaChat({
                     <p>{e.text}</p>
                   </details>
                 ) : (
-                  <>
-                    {e.kind === "answer" && <strong>Iriva</strong>}
-                    {e.text}
-                  </>
+                  e.text
                 )}
               </div>
             ))}
