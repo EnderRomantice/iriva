@@ -29,6 +29,24 @@
   min-height: 0;
   overflow: hidden;
 }
+.iriva-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--sp-muted) 45%, transparent) transparent;
+}
+.iriva-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.iriva-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.iriva-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sp-muted) 45%, transparent);
+}
+.iriva-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--sp-muted);
+}
 .iriva-entries {
   display: flex;
   flex-direction: column;

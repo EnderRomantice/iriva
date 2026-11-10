@@ -177,7 +177,7 @@ export function IrivaChat({
         </div>
       ) : (
         <Conversation className="iriva-log" aria-label="对话记录">
-          <ConversationContent className="iriva-entries">
+          <ConversationContent className="iriva-entries" scrollClassName="iriva-scroll">
             {entries.map((e, i) => (
               e.kind === "progress" || e.kind === "answer" || e.kind === "error" ? (
                 <IrivaText key={i} entry={e} />
