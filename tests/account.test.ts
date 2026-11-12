@@ -48,7 +48,7 @@ test('registration → support → pending order → instant payment → booking
  try {
   const productionRequest=(body?:object,session=cookie,origin='https://iriva.life')=>new Request('https://iriva.life/api/account',{method:body?'POST':'GET',headers:{host:'iriva.life',origin,cookie:session,'content-type':'application/json'},body:body?JSON.stringify(body):undefined});
   assert.equal((await (await GET(productionRequest())).json()).testPaymentsAvailable,true);
-  assert.equal((await POST(productionRequest({action:'checkout.pay',orderId},''))).status,403);
+  assert.equal((await POST(productionRequest({action:'checkout.pay',orderId},''))).status,401);
   assert.equal((await POST(productionRequest({action:'checkout.pay',orderId},cookie,'https://other.example'))).status,403);
   assert.equal((await POST(productionRequest({action:'checkout.pay',orderId:randomUUID()}))).status,404);
   const payments=await Promise.all([POST(productionRequest({action:'checkout.pay',orderId,plan:'max',amountMinor:1})),POST(productionRequest({action:'checkout.pay',orderId}))]);
@@ -158,4 +158,15 @@ test('staff cannot create learner subscription orders',async()=>{
     assert.match((await response.json()).error,/学员/);
   }
   assert.equal(await count(),before);
+});
+
+test('production anonymous and legacy demo requests require login', async t => {
+ const previous = process.env.NODE_ENV;
+ Object.assign(process.env, {NODE_ENV:'production'});
+ t.after(() => { if(previous === undefined) Reflect.deleteProperty(process.env, 'NODE_ENV'); else Object.assign(process.env, {NODE_ENV:previous}); });
+ for(const role of ['', 'learn', 'host', 'ops']) {
+  const response = await GET(request(undefined, '', role));
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).error, '请先登录。');
+ }
 });

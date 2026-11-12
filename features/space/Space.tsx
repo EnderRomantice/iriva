@@ -67,7 +67,7 @@ export function Space({ role }: { role: Role }) {
     const signedOut = e instanceof AccountError && e.status === 401;
     if (signedOut) { forgetCachedAccounts(); setAccount(undefined); }
     else if (cached && !(e instanceof AccountError)) return; // network hiccup: keep working from the cached account
-    if (signedOut && role === "learn") location.replace("/apply"); else setAuthError(e.message);
+    if (signedOut) location.replace("/apply"); else setAuthError(e.message);
   });
     return () => { cancelled = true; };
   }, [role, organizationId]);
