@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { Command } from "@/domain/commands";
 import { enqueue, localDb, projectSnapshot, type PendingOperation } from "./database";
-import { networkMode, request, synchronize, type NetworkMode } from "./sync";
+import { networkMode, request, synchronize,commandDetails, type NetworkMode } from "./sync";
 
 export function useWorkspace(role: WorkspaceScope) {
   const cache = useLiveQuery(() => localDb.snapshots.get(role), [role]);
@@ -66,7 +66,11 @@ export function useWorkspace(role: WorkspaceScope) {
       return body as { version: number; entityId?: string };
     });
     queue.current = sent;
-    sent.then(() => refresh().finally(drop), drop);
+    sent.then(async result=>{
+      try {await refresh();const cached=await localDb.snapshots.get(role);if(cached){const updated=await commandDetails(role,cached.data,command,result.entityId||command.entityId);await localDb.snapshots.put({role,data:updated});}}
+      catch(e){setError(e instanceof Error?e.message:'读取失败');}
+      finally{drop();}
+    },drop);
     return sent;
   }, [role, refresh]);
   const data = useMemo(() => cache ? projectSnapshot(cache.data, [...operations, ...optimistic]) : undefined, [cache, operations, optimistic]);

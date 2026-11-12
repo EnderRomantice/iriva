@@ -17,7 +17,7 @@ async function main(){
     await admin.unsafe(`CREATE ROLE ${role} LOGIN`);
     const browser=process.argv.includes('--e2e');
     const load=process.argv.includes('--load');
-    for(const file of browser?['browser']:load?['load']:['account.test.ts','owned-workspaces.test.ts','postgres-contract.test.ts']){
+    for(const file of browser?['browser']:load?['load']:['account.test.ts','owned-workspaces.test.ts','postgres-contract.test.ts','bounded-reads.test.ts']){
       const name=`iriva_test_${randomUUID().replaceAll('-','')}`;
       await admin.unsafe(`CREATE DATABASE ${name}`);
       const dbUrl=new URL(url);dbUrl.pathname=`/${name}`;

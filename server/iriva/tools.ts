@@ -1,3 +1,7 @@
+import { authorize,collectionPage, type PageOptions } from '../services/workspace-queries';
+import { hydratePage } from '../services/workspace-relations';
+import { one, exists,type Table } from '../repositories/queries';
+import { accountPage } from '../services/account-pages';
 import { randomUUID } from "node:crypto";
 import type { Tool } from "wayline-agent-runtime";
 import { z } from "zod";
@@ -30,7 +34,8 @@ export function capability<S extends z.ZodObject>(
 
 export function workerTools(repo: DatabaseRepository, actor: Actor, report: Report) {
   const workspace = new WorkspaceService(repo);
-  const snapshot = () => workspace.snapshot(actor);
+  const read=async(table:Table,options:PageOptions={})=>{await authorize(repo,actor);const page=await collectionPage(repo,actor,table,options);return {...page,...await hydratePage(repo,actor,table,page.items)};};
+  const paged=z.object({after:z.string().max(1000).optional(),query:z.string().max(200).optional()});
   const org = actor.organizationId || defaultOrganizationId;
   const empty = z.object({});
   const sentMessages = new Set<string>();
@@ -40,58 +45,26 @@ export function workerTools(repo: DatabaseRepository, actor: Actor, report: Repo
   }
   group(
     "日程",
-    capability("schedule", "查询工作区可见日程", empty, async () => (await snapshot()).sessions),
+    capability("schedule", "查询工作区可见日程", paged, async args => read("sessions",args)),
   );
   group(
     "作业",
-    capability("assignments", "查询可见练习、提交和反馈", empty, async () => {
-      const { assignments, submissions, feedback } = await snapshot();
-      return { assignments, submissions, feedback };
-    }),
+    capability("assignments", "查询可见练习、提交和反馈", paged, async args => read("assignments",args)),
   );
   if (actor.role !== "learn") {
     group(
       "约谈",
-      capability("bookings", "查询工作区约谈和处理状态，Host 仅看自己收到的预约", empty, async () => {
-        const platform = actor.role === "host" ? await platformId(repo, org) : org;
-        const filter = actor.role === "host" ? " AND b.host_id=?" : "";
-        return repo.db
-          .prepare(
-            `SELECT b.id,b.status,b.created_at,u.name AS learner,h.name AS host
-        FROM bookings b JOIN users u ON u.id=b.learner_id JOIN users h ON h.id=b.host_id
-        WHERE b.organization_id=?${filter} ORDER BY b.created_at DESC`,
-          )
-          .all(...(actor.role === "host" ? [platform, actor.userId] : [platform]));
-      }),
+      capability("bookings", "分页查询工作区约谈，Host 仅看自己收到的预约", paged, async args => accountPage(repo,actor,'bookings',args)),
     );
     group(
       "小组",
-      capability("homes", "查询管理的小组和学生", empty, async () => {
-        const { households, memberships, users } = await snapshot();
-        return {
-          households,
-          students: memberships
-            .filter((m) => m.role === "learner")
-            .map((m) => ({
-              householdId: m.householdId,
-              userId: m.userId,
-              name: users.find((u) => u.id === m.userId)?.name,
-            })),
-        };
-      }),
+      capability("homes", "分页查询可见小组与关联成员", paged, async args => read('households',args)),
     );
   }
   if (actor.role === "ops") {
     group(
       "招生",
-      capability("admissions", "查询报名、联系状态和入组名单", empty, async () => {
-        const { applications, enrollments, users } = await snapshot();
-        const named = <T extends { userId: string }>(row: T) => ({
-          ...row,
-          name: users.find((u) => u.id === row.userId)?.name,
-        });
-        return { applications: applications.map(named), enrollments: enrollments.map(named) };
-      }),
+      capability("admissions", "分页查询报名，支持搜索", paged, async args => read('applications',args)),
     );
   }
   const readMemory = async () =>
@@ -126,26 +99,16 @@ export function workerTools(repo: DatabaseRepository, actor: Actor, report: Repo
       true,
     ),
   );
-  const members = async () =>
-    (await snapshot()).users.filter((u) => u.id !== actor.userId).map(({ id, name }) => ({ id, name }));
   group(
     "联系人",
-    capability("members", "查找工作区成员的姓名与 ID", empty, members),
-    capability("contacts", "查询自己的好友及备注", empty, async () => {
-      const visible = await members();
-      const contacts = await repo.db
-        .prepare("SELECT peer_id,note FROM iriva_contacts WHERE owner_id=? AND organization_id=?")
-        .all(actor.userId, org);
-      return contacts
-        .filter((c) => visible.some((u) => u.id === c.peer_id))
-        .map((c) => ({ ...c, name: visible.find((u) => u.id === c.peer_id)?.name }));
-    }),
+    capability("members", "分页搜索工作区成员", paged, async args=>read('users',args)),
+    capability("contacts", "查询自己的好友及备注，最多 50 条，使用 after 翻页", paged, async ({after}) => repo.db.prepare("SELECT c.peer_id,c.note,u.name FROM iriva_contacts c JOIN users u ON u.id=c.peer_id WHERE c.owner_id=? AND c.organization_id=? AND c.peer_id>? AND EXISTS (SELECT 1 FROM organization_memberships m WHERE m.user_id=c.peer_id AND m.organization_id=c.organization_id) ORDER BY c.peer_id LIMIT 50").all(actor.userId,org,after||'')),
     capability(
       "save_contact",
       "添加好友或更新自己对该好友的备注",
       z.object({ userId: z.string(), note: z.string().max(500) }),
       async ({ userId, note }) => {
-        if (!(await members()).some((u) => u.id === userId)) throw new Error("请选择当前工作区的其他成员。");
+        if(userId===actor.userId||!await exists(repo,'SELECT 1 FROM organization_memberships WHERE organization_id=? AND user_id=?',[org,userId])) throw new Error("请选择当前工作区的其他成员。");
         await repo.db
           .prepare(
             "INSERT INTO iriva_contacts (owner_id,organization_id,peer_id,note) VALUES (?,?,?,?) ON CONFLICT(owner_id,organization_id,peer_id) DO UPDATE SET note=excluded.note",
@@ -158,39 +121,12 @@ export function workerTools(repo: DatabaseRepository, actor: Actor, report: Repo
   );
   group(
     "消息",
-    capability("channels", "查询可见频道和私聊对象", empty, async () => {
-      const { channels, channelParticipants, users } = await snapshot();
-      return channels.map(({ id, name, kind }) => ({
-        id,
-        kind,
-        name:
-          kind === "direct"
-            ? users.find((u) =>
-                channelParticipants.some(
-                  (p) => p.channelId === id && p.userId === u.id && u.id !== actor.userId,
-                ),
-              )?.name
-            : name,
-      }));
+    capability("channels", "分页查询可见频道和私聊对象", paged, async args=>read('channels',args)),
+    capability("read_messages", "分页读取指定对话的消息，query 搜索全部可见历史，nextCursor 可读取更早消息", paged.extend({channelId:z.string()}), async args=>{
+      const channel=await collectionPage(repo,actor,'channels',{ids:[args.channelId]});
+      if(!channel.items.length)throw new Error('无法访问这个频道。');
+      return read('messages',args);
     }),
-    capability(
-      "read_messages",
-      "读取指定频道或私聊的最近消息",
-      z.object({ channelId: z.string() }),
-      async ({ channelId }) => {
-        const data = await snapshot();
-        if (!data.channels.some((c) => c.id === channelId)) throw new Error("无法访问这个频道。");
-        return data.messages
-          .filter((m) => m.channelId === channelId)
-          .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-          .slice(-50)
-          .map(({ authorId, body, createdAt }) => ({
-            name: data.users.find((u) => u.id === authorId)?.name,
-            body,
-            createdAt,
-          }));
-      },
-    ),
     capability(
       "send_message",
       "仅按用户明确要求，向指定频道或成员代发消息",
@@ -204,13 +140,8 @@ export function workerTools(repo: DatabaseRepository, actor: Actor, report: Repo
         let channelId = id;
         if (target === "person") {
           if (actor.role === "learn") {
-            const data = await snapshot();
-            const existing = data.channels.some(
-              (c) =>
-                c.kind === "direct" &&
-                data.channelParticipants.some((p) => p.channelId === c.id && p.userId === id),
-            );
-            const isGroup = data.organizations.find((o) => o.id === org)?.kind === "host";
+            const existing=await exists(repo,"SELECT 1 FROM channels c JOIN channel_participants p ON p.channel_id=c.id WHERE c.organization_id=? AND c.kind='direct' AND p.user_id=? AND EXISTS (SELECT 1 FROM channel_participants self WHERE self.channel_id=c.id AND self.user_id=?)",[org,id,actor.userId]);
+            const isGroup=(await one(repo,'organizations','t.id=?',[org]))?.kind==='host';
             if (
               !existing &&
               !isGroup &&

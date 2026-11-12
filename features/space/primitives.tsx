@@ -6,7 +6,7 @@ import type { User } from "@/domain/models";
 export const dateLabel = (value: string, timezone = "Asia/Shanghai", options?: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("zh-CN", { timeZone: timezone, month: "long", day: "numeric", ...options }).format(new Date(value));
 export const timeLabel = (value: string, timezone = "Asia/Shanghai") => new Intl.DateTimeFormat("zh-CN", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value));
 export function Avatar({ user, presence }: { user?: Pick<User, "id" | "name" | "avatar" | "plan">; presence?: "online" | "offline" }) {
-  const photo = user && (user.avatar.startsWith("data:image/") ? user.avatar : demoPortraits[user.id]);
+  const photo = user && ((user.avatar.startsWith("data:image/") || user.avatar.startsWith("/api/avatars/")) ? user.avatar : demoPortraits[user.id]);
   const content = photo ? <img className="sp-avatar sp-avatar-photo" src={photo} alt="" width={30} height={30} /> : <span className={`sp-avatar sp-avatar-${user?.avatar || "blue"}`} aria-hidden="true">{user?.name.includes(" ") ? user.name.split(" ").map(n => n[0]).join("").slice(0, 2) : user?.name.slice(-2) || "I"}</span>;
   if (!presence) return content;
   const label = presence === "online" ? "在线" : "离线";

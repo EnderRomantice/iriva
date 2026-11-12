@@ -109,3 +109,43 @@ for (const role of ['learn', 'host', 'ops']) {
   await expect(page.getByRole('textbox', {name:'邮箱', exact:true})).toBeVisible();
  });
 }
+
+test('chat pages older history, searches beyond the first page, and idle sync returns 304',async({browser})=>{
+ const f=await fixture(browser);
+ try{
+  const channel=randomUUID();
+  expect((await f.host.request.post('/api/mutations',{headers:f.headers,data:{id:randomUUID(),entityId:channel,baseVersion:0,kind:'channel.create',payload:{name:'History acceptance',description:'',kind:'public'}}})).status()).toBe(200);
+  await f.db`INSERT INTO iriva.messages (id,channel_id,author_id,body,version,created_at,updated_at) SELECT md5(${channel}||i::text),${channel},${seedId(5)},CASE WHEN i=1 THEN 'Archive needle only' ELSE 'Historical message '||i END,1,to_char('2025-01-01'::timestamp+i*interval '1 minute','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),to_char('2025-01-01'::timestamp+i*interval '1 minute','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') FROM generate_series(1,125) i`;
+  const page=await f.learn.newPage(),errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto(`/learn?org=${f.org}&view=channels&channel=${channel}`);
+  await expect(page.getByRole('button',{name:'加载更早消息',exact:true})).toBeVisible();
+  await expect(page.getByText('Archive needle only',{exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'加载更早消息',exact:true}).click();
+  await expect(page.locator('.sp-chat-message')).toHaveCount(100);
+  const search=page.getByRole('textbox',{name:'搜索消息或频道',exact:true});
+  await search.fill('Archive needle');
+  await expect(page.getByText('Archive needle only',{exact:true})).toBeVisible();
+  const first=await f.learn.request.get('/api/workspace',{headers:f.headers});
+  expect(first.status()).toBe(200);
+  const unchanged=await f.learn.request.get('/api/workspace',{headers:{...f.headers,'If-None-Match':first.headers().etag}});
+  expect(unchanged.status()).toBe(304);expect((await unchanged.body()).length).toBe(0);
+  await page.screenshot({path:'test-results/history-search.png',fullPage:true});
+  expect(errors).toEqual([]);
+ }finally{await f.close();}
+});
+
+test('profile avatars are stored separately, returned as URLs and served with authenticated caching',async({browser,request})=>{
+ const f=await fixture(browser);
+ try{
+  const image='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5R8AAAAASUVORK5CYII=';
+  const saved=await f.learn.request.post('/api/account',{headers:f.headers,data:{action:'profile',profile:{name:'Avatar acceptance',signature:'Learning together',avatar:image,mbti:'INTJ',timezone:'Asia/Shanghai',city:'上海',zodiac:'',birthChart:'',occupation:''}}});expect(saved.status()).toBe(200);
+  const account=await (await f.learn.request.get('/api/account',{headers:f.headers})).json();
+  expect(account.user.avatar).toMatch(/^\/api\/avatars\//);expect(JSON.stringify(account)).not.toContain('base64');
+  expect((await f.db`SELECT avatar FROM iriva.users WHERE id=${seedId(1)}`)[0].avatar).toBe('avatar:stored');
+  const first=await f.learn.request.get(account.user.avatar);expect(first.status()).toBe(200);expect(first.headers()['content-type']).toBe('image/png');
+  expect((await first.body()).equals(Buffer.from(image.split(',')[1],'base64'))).toBe(true);
+  expect((await f.learn.request.get(account.user.avatar,{headers:{'if-none-match':first.headers().etag}})).status()).toBe(304);
+  expect((await request.get(account.user.avatar)).status()).toBe(401);
+  const again=await f.learn.request.post('/api/account',{headers:f.headers,data:{action:'profile',profile:{name:account.user.name,signature:'Edited without upload',avatar:account.user.avatar,mbti:'INTJ',timezone:'Asia/Shanghai',city:'上海',zodiac:'',birthChart:'',occupation:''}}});expect(again.status()).toBe(200);
+ }finally{await f.close();}
+});

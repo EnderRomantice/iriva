@@ -1,4 +1,6 @@
 "use client";
+import { useAccountCollection } from "@/local/use-account-collection";
+import { PageControls } from "./PageControls";
 import { useState } from 'react';
 import { ArrowRight, Clock3, LockKeyhole, SlidersHorizontal, Sparkles, X } from 'lucide-react';
 import { isProfileComplete } from '@/domain/account';
@@ -16,6 +18,8 @@ export function HostDirectory({ account, org, query, resetSearch, openConversati
 }) {
   const [qualification, setQualification] = useState('all');
   const [kind, setKind] = useState<HostKind>('all');
+  const page=useAccountCollection('hosts',account.hosts,{query,kind,qualification});
+  account={...account,hosts:page.items};
   const [busy, setBusy] = useState(''), [error, setError] = useState('');
   async function contact(hostId: string) {
     if (busy) return;
@@ -45,7 +49,7 @@ export function HostDirectory({ account, org, query, resetSearch, openConversati
       {visible.map(host => {
         const allowed = canContactHost(account.user.plan, !!host.hostFeatured);
         const booking = account.bookings.find(b => b.host_id === host.id);
-        const photo = host.avatar.startsWith('data:') ? host.avatar : demoPortraits[host.id];
+        const photo = (host.avatar.startsWith('data:')||host.avatar.startsWith('/api/avatars/')) ? host.avatar : demoPortraits[host.id];
         return <article key={host.id} className={`sp-host-card ${host.hostFeatured ? 'is-featured' : host.hostFullTime ? 'is-full-time' : ''}`}>
           <div className="sp-host-identity"><div className="sp-host-photo">{photo ? <img src={photo} alt={host.name} width={64} height={64} loading="lazy" /> : <Avatar user={host}/>}</div><div><h2>{host.name}</h2><p>{host.occupation || '英语交流 · 口语表达'}</p><span className="sp-host-country"><span role="img" aria-label={countryName(host.countryCode)}>{countryFlag(host.countryCode)}</span>{host.city || countryName(host.countryCode)}</span></div></div>
           <div className="sp-host-details"><span><Clock3 aria-hidden="true"/>{host.timezone}</span>{host.hostFeatured ? <span className="sp-host-badge"><Sparkles aria-hidden="true"/>明星 Host</span> : host.hostFullTime ? <span className="sp-host-badge">全职 Host</span> : null}</div>
@@ -58,5 +62,5 @@ export function HostDirectory({ account, org, query, resetSearch, openConversati
       })}
       {!visible.length && <div className="sp-host-empty"><p>没有符合条件的 Host</p><button onClick={reset}>清除筛选</button></div>}
     </div>
-  </section>;
+  <PageControls page={page}/></section>;
 }

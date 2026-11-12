@@ -7,10 +7,10 @@ export interface WorkspaceManagement {
 }
 export interface Account { organizationId?:string; homeWorkspaceId?:string; /** Where to open after sign-in: a joined group when there is one, else the personal space. */ landingWorkspaceId?:string; management?:WorkspaceManagement; testPaymentsAvailable?:boolean; user:User; role:Role; authenticated:boolean; application?:{id:string};supportId?:string;hosts:User[];bookings:Booking[];orders:{id:string;plan:string;frequency:number;status:string;amount_minor:number}[] }
 export class AccountError extends Error { constructor(message: string, public status: number) { super(message); } }
-export async function accountRequest(body?:object):Promise<any> {
+export async function accountRequest(body?:object,params?:Record<string,string>,signal?:AbortSignal):Promise<any> {
   const role=location.pathname.split('/')[1];
-  const response=await fetch('/api/account',{method:body?'POST':'GET',headers:{'Content-Type':'application/json','x-workspace-id':new URLSearchParams(location.search).get('org')||'',...(process.env.NODE_ENV === 'development' && ['localhost','127.0.0.1','[::1]'].includes(location.hostname) && ['host','ops'].includes(role)?{'x-demo-role':role}:{})},body:body?JSON.stringify(body):undefined,cache:'no-store'});
-  const result=await response.json();if(!response.ok)throw new AccountError(result.error, response.status);return result;
+  const response=await fetch('/api/account'+(params?'?'+new URLSearchParams(params):''),{method:body?'POST':'GET',headers:{'Content-Type':'application/json','x-workspace-id':new URLSearchParams(location.search).get('org')||'',...(process.env.NODE_ENV === 'development' && ['localhost','127.0.0.1','[::1]'].includes(location.hostname) && ['host','ops'].includes(role)?{'x-demo-role':role}:{})},body:body?JSON.stringify(body):undefined,cache:'no-store',signal});
+  const result=await response.json();if(!response.ok)throw new AccountError(result.error, response.status);if(body&&typeof window!=='undefined')window.dispatchEvent(new Event('iriva-account-changed'));return result;
 }
 export async function logout() { await accountRequest({action:'logout'}); forgetCachedAccounts(); sessionStorage.clear(); location.href='/apply'; }
 /** Last known account per workspace, so a reload or workspace switch paints immediately and revalidates in the background. */

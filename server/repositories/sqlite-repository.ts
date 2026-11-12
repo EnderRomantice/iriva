@@ -18,7 +18,7 @@ export class SqliteRepository implements WorkspaceRepository, WorkspaceUnitOfWor
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("busy_timeout = 5000");
     this.db.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
-    for (const [index, file] of ["001_initial.sql", "002_user_city.sql", "003_organizations.sql", "004_chat.sql", "005_accounts.sql", "006_email_auth.sql", "007_host_directory.sql", "008_host_full_time.sql", "009_message_reactions.sql", "010_message_cards.sql", "011_owned_workspaces.sql", "012_iriva.sql", "013_receipt_fingerprint.sql"].entries()) {
+    for (const [index, file] of ["001_initial.sql", "002_user_city.sql", "003_organizations.sql", "004_chat.sql", "005_accounts.sql", "006_email_auth.sql", "007_host_directory.sql", "008_host_full_time.sql", "009_message_reactions.sql", "010_message_cards.sql", "011_owned_workspaces.sql", "012_iriva.sql", "013_receipt_fingerprint.sql", "014_bounded_reads.sql"].entries()) {
       const version = index + 1;
       if (this.db.prepare("SELECT version FROM schema_migrations WHERE version = ?").get(version)) continue;
       // SQLite requires FK enforcement off while adding a referenced column with
@@ -47,12 +47,18 @@ export class SqliteRepository implements WorkspaceRepository, WorkspaceUnitOfWor
     return next;
   }
   read(options?: { messageId: string }): State {
+    if(process.env.NODE_ENV==='production')throw new Error('Full database reads are forbidden in the application runtime.');
     return Object.fromEntries(tables.map(table => [table, this.db.prepare(`SELECT * FROM ${snake(table)}${table === "messages" && options ? " WHERE id=?" : ""}`).all(...(table === "messages" && options ? [options.messageId] : [])).map(row => Object.fromEntries(Object.entries(row as Record<string, unknown>).map(([key, value]) => [camel(key), (key === "host_qualifications" || key === "reactions" || key === "cards") ? JSON.parse(String(value)) : key === "completed" || key === "host_featured" || key === "host_full_time" ? Boolean(value) : value])))])) as unknown as State;
   }
   /** Table names and entity fields come only from trusted domain code, never requests. */
   put(table: string, value: object) {
     if (!(tables as readonly string[]).includes(table)) throw new Error("Unknown domain table");
-    const entries = Object.entries(value);
+    const entries = Object.entries(value).filter(([key,v])=>!(table === "users" && key === "avatar" && typeof v === "string" && v.startsWith("/api/avatars/")));
+    if(table === 'users' && !entries.some(([key])=>key==='avatar')) {
+      const fields=entries.filter(([key])=>key!=='id');
+      this.db.prepare(`UPDATE users SET ${fields.map(([key])=>`${snake(key)}=?`).join(',')} WHERE id=?`).run(...fields.map(([,v])=>Array.isArray(v)?JSON.stringify(v):typeof v==='boolean'?Number(v):v),(value as User).id);
+      return;
+    }
     const names = entries.map(([key]) => snake(key));
     this.db.prepare(`INSERT INTO ${snake(table)} (${names.join(",")}) VALUES (${names.map(() => "?").join(",")}) ON CONFLICT(id) DO UPDATE SET ${names.filter(n => n !== "id").map(n => `${n}=excluded.${n}`).join(",")}`).run(...entries.map(([, value]) => Array.isArray(value) ? JSON.stringify(value) : typeof value === "boolean" ? Number(value) : value));
   }

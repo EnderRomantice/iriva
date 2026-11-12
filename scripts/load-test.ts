@@ -26,7 +26,7 @@ async function main() {
   const origin='http://127.0.0.1:3118';
   const headers={cookie:`iriva_session=${token}`,'x-workspace-id':org.id,origin,'content-type':'application/json'};
   const timings:{read:number[];write:number[]}={read:[],write:[]},statuses:Record<string,number>={};
-  const commandIds:string[]=[];
+  const commandIds:string[]=[];let readResponseBytes=0;
   try {
     let ready=false;
     for(let i=0;i<100;i++){
@@ -48,7 +48,7 @@ async function main() {
         const op={id:randomUUID(),entityId:randomUUID(),baseVersion:0,kind:'message.send',payload:{channelId,body:`Load ${client} ${step}`}};
         try {
           const response=await fetch(`${origin}/api/${kind==='write'?'mutations':'workspace'}`,{headers,method:kind==='write'?'POST':'GET',body:kind==='write'?JSON.stringify(op):undefined,signal:AbortSignal.timeout(15000)});
-          await response.text();statuses[response.status]=(statuses[response.status]||0)+1;
+          const body=await response.text();if(kind==='read')readResponseBytes+=Buffer.byteLength(body);statuses[response.status]=(statuses[response.status]||0)+1;
           if(response.ok&&kind==='write')commandIds.push(op.entityId);
         } catch {statuses.network=(statuses.network||0)+1;}
         timings[kind].push(performance.now()-start);
@@ -59,7 +59,7 @@ async function main() {
     const total=Object.values(statuses).reduce((a,b)=>a+b,0),errors=Object.entries(statuses).filter(([code])=>Number(code)<200||Number(code)>=300||code==='network').reduce((a,[,n])=>a+n,0);
     const [saved]=await repo.sql`SELECT count(*)::int AS n FROM iriva.messages WHERE channel_id=${channelId}`;
     assert.equal(saved.n,rows+1+commandIds.length,'Every successful write must persist exactly once');
-    const report={at:new Date().toISOString(),environment:'local production Next.js + disposable PostgreSQL; single server; closed-loop mixed HTTP load',clients,seconds,historyMessages:rows,elapsedSeconds:elapsed,requestsPerSecond:Math.round(total/elapsed),statuses,errorRate:errors/total,read:summary(timings.read),write:summary(timings.write),replayRequests:20,replayEffects:1,persistedWrites:commandIds.length};
+    const report={at:new Date().toISOString(),environment:'local production Next.js + disposable PostgreSQL; single server; closed-loop mixed HTTP load',clients,seconds,historyMessages:rows,elapsedSeconds:elapsed,requestsPerSecond:Math.round(total/elapsed),statuses,errorRate:errors/total,read:summary(timings.read),write:summary(timings.write),readResponseBytes,averageReadResponseBytes:Math.round(readResponseBytes/timings.read.length),replayRequests:20,replayEffects:1,persistedWrites:commandIds.length};
     writeFileSync('test-results/load-report.json',JSON.stringify(report,null,2));writeFileSync(`test-results/load-${clients}-${rows}.json`,JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
     assert.ok(report.errorRate<0.001,'Unexpected errors exceed 0.1%');
     assert.ok(report.read.p95Ms<=800,'Read P95 exceeds 800ms');

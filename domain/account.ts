@@ -11,7 +11,7 @@ export const plans = [
 export function planTag(plan: string) { return plan === 'max' ? 'EXPERT' : plan.toUpperCase(); }
 export const profileSchema = z.object({
   name: z.string().trim().min(1).max(80), signature: z.string().trim().min(1).max(180),
-  avatar: z.string().max(700000).regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/),
+  avatar: z.string().max(700000).regex(/^(data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+|\/api\/avatars\/[a-f0-9-]+\?v=[0-9]+)$/),
   mbti: z.enum(['INTJ','INTP','ENTJ','ENTP','INFJ','INFP','ENFJ','ENFP','ISTJ','ISFJ','ESTJ','ESFJ','ISTP','ISFP','ESTP','ESFP']),
   timezone: z.string().refine(value => { try { new Intl.DateTimeFormat('en',{timeZone:value}); return true; } catch { return false; } }),
   city: z.string().trim().min(1).max(100), zodiac: z.string().max(40), birthChart: z.string().max(100), occupation: z.string().max(100),

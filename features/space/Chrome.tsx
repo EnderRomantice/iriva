@@ -1,4 +1,6 @@
 "use client";
+import { useCollection } from "@/local/use-collection";
+import { PageControls } from "./PageControls";
 import { canManageSubscription, isRailView } from "@/domain/workspace-access";
 import { billingHref } from "./billing-navigation";
 import { logout } from "./account-client";
@@ -14,15 +16,26 @@ import { RailIcon } from "./RailIcon";
 import { Popover } from "./Popover";
 const icons = { iriva: Sparkles, profile: ContactRound, hosts: ContactRound, channels: Hash, direct: MessageCircle, overview: Home, tasks: ListTodo, calendar: CalendarDays, household: UsersRound, applications: ContactRound, journey: Map, manage: UserCog };
 interface Props {
+  sidebarPagination?:ReactNode; organizationPagination?:ReactNode; serverGroupQuery?:string; changeGroupQuery?:(value:string)=>void;
   role: Role; data?: Snapshot; user?: User; household?: Household; channel?: Channel; navigation: SpaceNavigation;
   preferences: Preferences; setPreferences: Dispatch<SetStateAction<Preferences>>;
   view: View; query: string; setQuery: (query: string) => void; search: RefObject<HTMLInputElement | null>;
   navigate: (view: string) => void; navigateOrganization: (view: string) => void; selectHousehold: (id: string) => void; selectOrganization: (id: string) => void;
   selectChannel: (id: string) => void; createChat: (kind: "channel" | "direct") => void; create: (kind: CreateKind) => void; settings: () => void; offline: boolean; children: ReactNode;
 }
-export function Chrome({ role, data, user, household, channel, navigation, preferences, setPreferences, view, query, setQuery, search, navigate, navigateOrganization, selectHousehold, selectOrganization, selectChannel, createChat, create, settings, offline, children }: Props) {
+export function Chrome(props:Props){return props.data?<ReadyChrome {...props} data={props.data}/>:<ChromeLayout {...props}/>;}
+function ReadyChrome(props:Props & {data:Snapshot}){
+ const [query,setQuery]=useState('');
+ const table=props.view==='channels'||props.view==='direct'?'channels':'households';
+ const page=useCollection(props.data,table,{query,kind:props.view==='direct'?'direct':props.view==='channels'?'non-direct':undefined});
+ const organizations=useCollection(props.data,'organizations');
+ const data={...page.data,organizations:organizations.items,[table]:page.items};
+ return <ChromeLayout {...props} data={data} serverGroupQuery={query} changeGroupQuery={setQuery} sidebarPagination={<PageControls page={page}/>} organizationPagination={<PageControls page={organizations}/>}/>;
+}
+function ChromeLayout({ sidebarPagination,organizationPagination,serverGroupQuery,changeGroupQuery,role, data, user, household, channel, navigation, preferences, setPreferences, view, query, setQuery, search, navigate, navigateOrganization, selectHousehold, selectOrganization, selectChannel, createChat, create, settings, offline, children }: Props) {
   const [mobile, setMobile] = useState(false), [menu, setMenu] = useState<"organizations" | "history" | "more" | "profile" | "help" | "channel" | "create">();
-  const [groupQuery, setGroupQuery] = useState("");
+  const [localGroupQuery,setLocalGroupQuery]=useState("");
+  const groupQuery=serverGroupQuery??localGroupQuery,setGroupQuery=changeGroupQuery||setLocalGroupQuery;
   const anchor = useRef<HTMLElement | null>(null);
   const railLinks = useRef<HTMLDivElement>(null);
   const [railSlots, setRailSlots] = useState(0);
@@ -117,7 +130,7 @@ export function Chrome({ role, data, user, household, channel, navigation, prefe
           {view === "direct" && <section className="sp-sidebar-section"><div className="sp-sidebar-section-heading"><span>私聊</span><button className="sp-icon-button" aria-label="新私聊" onClick={() => { setMobile(false); createChat("direct"); }}><Plus/></button></div>{directChannels.map(c => <button key={c.id} aria-pressed={channel?.id === c.id} onClick={() => { selectChannel(c.id); setMobile(false); }}><Avatar user={data && directPeer(data,c.id)}/><span>{data && <MemberName user={directPeer(data,c.id)} fallback={channelName(data,c)}/>}</span></button>)}{!directChannels.length && <button onClick={() => { setMobile(false); createChat("direct"); }}><MessageCircle/><span>开始一段对话</span></button>}</section>}
           {!isChat && <><details className="sp-sidebar-section" open><summary><ChevronDown /><span>已加星标</span></summary>{groups.filter(h => favorite.includes(h.id)).map(h => <button key={h.id} onClick={() => { selectHousehold(h.id); setMobile(false); }}><Hash /><span>{h.name}</span></button>)}{!data?.households.some(h => favorite.includes(h.id)) && <p>给常用的小组加个星标</p>}</details>
           <details className="sp-sidebar-section sp-channel-section" open><summary><ChevronDown /><span>小组</span></summary>{groups.map(h => <button key={h.id} aria-pressed={household?.id === h.id} onClick={() => { selectHousehold(h.id); setMobile(false); }}><Hash /><span>{h.name}</span></button>)}</details></>}
-          {(view === "channels" ? !chatChannels.length : view === "direct" ? !!groupQuery && !directChannels.length : !groups.length) && <p className="sp-sidebar-empty">{groupQuery ? `没有找到匹配的${sidebarTitle}` : `暂无${sidebarTitle}`}</p>}</>}
+          {(view === "channels" ? !chatChannels.length : view === "direct" ? !!groupQuery && !directChannels.length : !groups.length) && <p className="sp-sidebar-empty">{groupQuery ? `没有找到匹配的${sidebarTitle}` : `暂无${sidebarTitle}`}</p>}{sidebarPagination}</>}
 
         </div>
         <div className="sp-sidebar-footer"><button className="sp-mobile-profile sp-icon-button" aria-label="个人资料与身份" onClick={e => open("profile", e.currentTarget)}><Avatar user={user} /></button><button onClick={settings}><Settings />工作区设置</button><button className="sp-icon-button" aria-label="收起侧栏" title="收起侧栏" onClick={() => { setMobile(false); setPreferences(p => ({ ...p, collapsed: true })); }}><PanelLeftClose /></button></div>
@@ -130,7 +143,7 @@ export function Chrome({ role, data, user, household, channel, navigation, prefe
     </div>
     {menu && <Popover key={menu} anchor={anchor} placement={menu === "create" ? "side" : "below"} label={{ organizations: "切换工作区", history: "历史记录", more: "更多功能", profile: "个人资料", help: "帮助", channel: "小组菜单", create: "建立" }[menu]} onClose={() => setMenu(undefined)} className={menu === "organizations" ? "sp-workspace-picker" : ""}>
       {menu === "create" && <><div className="sp-popover-heading"><strong>建立</strong><small>{title}</small></div><button onClick={() => menuAction(() => { setMobile(false); createChat("channel"); })}><Hash/>建立频道</button><button onClick={() => menuAction(() => { setMobile(false); createChat("direct"); })}><MessageCircle/>新私聊</button><div className="sp-popover-divider"/>{(role === "learn" ? ["practice"] : role === "host" ? ["assignment", "session"] : []).map(value => { const kind = value as CreateKind; const Icon = kind === "session" ? CalendarDays : kind === "household" ? UsersRound : ListTodo; return <button key={kind} onClick={() => menuAction(() => { setMobile(false); create(kind); })}><Icon />{createLabels[kind]}</button>; })}</>}
-      {menu === "organizations" && <><div className="sp-popover-heading"><strong>切换工作区</strong></div>{organizationSections.map(section => <Fragment key={section.label}><p className="sp-popover-section">{section.label}</p>{section.items.map(org => <button className="sp-workspace-option" key={org.id} aria-pressed={org.id === organization?.id} onClick={() => menuAction(() => selectOrganization(org.id))}><span className="sp-workspace-tile" style={{ background: org.color }}>{org.initials}</span><span><strong>{org.name}</strong><small>{organizationNote(org)}</small></span>{org.id === organization?.id && <Check aria-label="当前工作区" />}</button>)}</Fragment>)}<div className="sp-popover-divider" /><button onClick={() => menuAction(settings)}><Settings />工作区偏好设置</button></>}
+      {menu === "organizations" && <><div className="sp-popover-heading"><strong>切换工作区</strong></div>{organizationSections.map(section => <Fragment key={section.label}><p className="sp-popover-section">{section.label}</p>{section.items.map(org => <button className="sp-workspace-option" key={org.id} aria-pressed={org.id === organization?.id} onClick={() => menuAction(() => selectOrganization(org.id))}><span className="sp-workspace-tile" style={{ background: org.color }}>{org.initials}</span><span><strong>{org.name}</strong><small>{organizationNote(org)}</small></span>{org.id === organization?.id && <Check aria-label="当前工作区" />}</button>)}</Fragment>)}{organizationPagination}<div className="sp-popover-divider" /><button onClick={() => menuAction(settings)}><Settings />工作区偏好设置</button></>}
       {menu === "history" && <><div className="sp-popover-heading"><strong>历史记录</strong><small>最近访问</small></div>{navigation.recent.map(visit => <button key={visit.href} onClick={() => menuAction(() => navigation.go(readRoute(visit.href, role), visit.title))}><Clock3 /><span>{visit.title}</span></button>)}</>}
       {menu === "more" && <>{canManageSubscription(role) && <><button onClick={() => menuAction(() => location.assign(billingHref("plans", navigation.route?.organizationId)))}><Star />Plan · 套餐</button><div className="sp-popover-divider" /></>}{overflowItems.map(item => { const Icon = item === "settings" ? Settings : icons[item]; return <button key={item} aria-current={view === item && !navigation.route?.householdId ? "page" : undefined} onClick={() => item === "settings" ? menuAction(settings) : go(item, true)}><Icon />{item === "settings" ? "设置" : globalLabels[item]}</button>; })}</>}
 

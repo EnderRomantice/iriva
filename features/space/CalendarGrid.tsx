@@ -1,4 +1,6 @@
 "use client";
+import { useCollection } from "@/local/use-collection";
+import { PageControls } from "./PageControls";
 import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Assignment, Role, Session, Snapshot, Term } from "@/domain/models";
@@ -102,11 +104,14 @@ export function MonthCalendar({ data, role, onSession, onAssignment }: { data: S
   const weeks = Array.from({ length: rows }, (_, w) => Array.from({ length: 7 }, (_, d) => calendarDay(start + (w * 7 + d) * DAY + 12 * 3600000)));
   const shift = (delta: number) => { const date = new Date(Date.UTC(year, month - 1 + delta, 1)); setAnchor(`${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`); };
   const thisMonth = dayKey(Date.now()).slice(0, 7);
+  const range={from:new Date(start).toISOString(),to:new Date(start+rows*7*DAY).toISOString(),householdId:data.households.length===1?data.households[0].id:undefined};
+  const sessions=useCollection(data,'sessions',range),assignments=useCollection(data,'assignments',range);
+  data={...sessions.data,...assignments.data,sessions:sessions.items,assignments:assignments.items};
   const events = calendarEvents(data, role);
   const hasMonthlyEvents = events.some(e => e.day.startsWith(anchor));
   return <>
     <div className="sp-cal-toolbar"><strong>{year} 年 {month} 月</strong><div><button className="sp-icon-button" aria-label="上个月" onClick={() => shift(-1)}><ChevronLeft /></button>{anchor !== thisMonth && <button onClick={() => setAnchor(thisMonth)}>今天</button>}<button className="sp-icon-button" aria-label="下个月" onClick={() => shift(1)}><ChevronRight /></button></div></div>
     {!hasMonthlyEvents && <p className="sp-cal-empty" role="status">{month} 月暂无已安排的日程</p>}
-    <CalendarGrid weeks={weeks} events={events} muted={d => !d.key.startsWith(anchor)} onSession={onSession} onAssignment={onAssignment} />
+    <PageControls page={sessions}/><PageControls page={assignments}/><CalendarGrid weeks={weeks} events={events} muted={d => !d.key.startsWith(anchor)} onSession={onSession} onAssignment={onAssignment} />
   </>;
 }

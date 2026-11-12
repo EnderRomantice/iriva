@@ -9,7 +9,7 @@ import { tables } from './tables';
 
 const snake=(key:string)=>key.replace(/[A-Z]/g,c=>`_${c.toLowerCase()}`);
 const camel=(key:string)=>key.replace(/_([a-z])/g,(_,c:string)=>c.toUpperCase());
-const sqlTables=[...tables.map(snake),'mutation_receipts','mutation_fingerprints','audit_events','credentials','auth_sessions','bookings','plan_orders','email_challenges','email_identities','host_grants','group_requests','iriva_memory','iriva_contacts'];
+const sqlTables=[...tables.map(snake),'profile_avatars','workspace_revisions','mutation_receipts','mutation_fingerprints','audit_events','credentials','auth_sessions','bookings','plan_orders','email_challenges','email_identities','host_grants','group_requests','iriva_memory','iriva_contacts'];
 /** Convert the internal SQL dialect; quoted strings never contain placeholders. */
 export function postgresQuery(query:string) {
   let parameter=0;
@@ -31,8 +31,12 @@ export class PostgresRepository implements DatabaseRepository {
     }),
     close:()=>this.sql.end({timeout:5}),
   };
-  private query(query:string,values:unknown[]) {
-    return (this.context.getStore()||this.sql).unsafe(postgresQuery(query),values as postgres.ParameterOrJSON<never>[]);
+  /** Optional test/diagnostic observer; no row contents or bound values leave the adapter. */
+  onQuery?: (event:{sql:string;bytes:number;rows:number})=>void;
+  private async query(query:string,values:unknown[]) {
+    const result=await (this.context.getStore()||this.sql).unsafe(postgresQuery(query),values as postgres.ParameterOrJSON<never>[]);
+    this.onQuery?.({sql:query,bytes:Buffer.byteLength(JSON.stringify(result)),rows:result.length});
+    return result;
   }
   async transaction<T>(work:(tx:WorkspaceUnitOfWork)=>Awaitable<T>):Promise<T> {
     if(this.context.getStore()) return await work(this);
@@ -49,6 +53,7 @@ export class PostgresRepository implements DatabaseRepository {
     }
   }
   async read(options?:{messageId:string}):Promise<State> {
+    if(process.env.NODE_ENV==='production')throw new Error('Full database reads are forbidden in the application runtime.');
     // One statement provides a consistent snapshot without 15 network round trips.
     const [snapshot]=await this.query(`SELECT ${tables.map(table=>{
       // Message history dominates snapshots. Alias once in SQL so the driver can
@@ -71,8 +76,13 @@ export class PostgresRepository implements DatabaseRepository {
   snapshot(){return this.read();}
   async put(table:string,value:object) {
     if(!(tables as readonly string[]).includes(table)) throw new Error('Unknown domain table');
-    const entries=Object.entries(value),names=entries.map(([key])=>snake(key));
+    const entries=Object.entries(value).filter(([key,v])=>!(table==="users"&&key==="avatar"&&typeof v==="string"&&v.startsWith("/api/avatars/"))),names=entries.map(([key])=>snake(key));
     if(names.some(name=>!/^\w+$/.test(name))) throw new Error('Invalid column');
+    if(table==='users'&&!entries.some(([key])=>key==='avatar')) {
+      const fields=entries.filter(([key])=>key!=='id');
+      await this.db.prepare(`UPDATE users SET ${fields.map(([key])=>`${snake(key)}=?`).join(',')} WHERE id=?`).run(...fields.map(([,v])=>Array.isArray(v)?this.sql.json(v as postgres.JSONValue):typeof v==='boolean'?Number(v):v),(value as User).id);
+      return;
+    }
     await this.db.prepare(`INSERT INTO ${snake(table)} (${names.join(',')}) VALUES (${names.map(()=>'?').join(',')}) ON CONFLICT(id) DO UPDATE SET ${names.filter(n=>n!=='id').map(n=>`${n}=excluded.${n}`).join(',')}`).run(...entries.map(([,v])=>Array.isArray(v)?this.sql.json(v as postgres.JSONValue):typeof v==='boolean'?Number(v):v));
   }
   receipt(actorId:string,commandId:string){return this.db.prepare('SELECT r.version, f.fingerprint FROM mutation_receipts r LEFT JOIN mutation_fingerprints f ON f.actor_id=r.actor_id AND f.command_id=r.command_id WHERE r.actor_id=? AND r.command_id=?').get(actorId,commandId);}

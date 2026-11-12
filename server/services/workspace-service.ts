@@ -1,3 +1,6 @@
+import { commandState } from './command-state';
+import { exists } from '../repositories/queries';
+import { workspacePage } from './workspace-queries';
 import { cardCatalog } from "./message-cards";
 import { cardKey, messageCardsSchema } from "../../domain/message-cards";
 import { reactionEmojis } from "../../domain/reactions";
@@ -43,30 +46,9 @@ export class WorkspaceService {
     return actor.role === "ops" || (actor.role === "host" ? state.households.some(h => h.id === householdId && h.hostId === actor.userId) : state.memberships.some(m => m.householdId === householdId && m.userId === actor.userId && m.role === "learner"));
   }
   async snapshot(actor: Actor): Promise<Snapshot> {
-    const raw = await this.repo.snapshot();
-    const state = this.organizationState(raw, actor);
-    requireRule(state.users.some(u => u.id === actor.userId), "身份不存在。", 401);
-    const cards = cardCatalog(state, actor);
-    if (actor.role === "ops") return { ...state, cardCatalog:cards, actor, serverTime: new Date().toISOString() };
-    const households = state.households.filter(h => this.householdAccess(state, actor, h.id));
-    const allowed = new Set(households.map(h => h.id));
-    const memberships = state.memberships.filter(m => allowed.has(m.householdId));
-    const assignments = state.assignments.filter(a => allowed.has(a.householdId));
-    const assignmentIds = new Set(assignments.map(a => a.id));
-    const submissions = state.submissions.filter(s => assignmentIds.has(s.assignmentId) && (actor.role === "learn" ? s.learnerId === actor.userId : s.status === "submitted"));
-    const submissionIds = new Set(submissions.map(s => s.id));
-    const userIds = new Set(state.organizationMemberships.map(m => m.userId));
-    return {
-      organizations: state.organizations, organizationMemberships: raw.organizationMemberships.filter(m => m.userId === actor.userId),
-      channels: state.channels, channelParticipants: state.channelParticipants, messages: state.messages,
-      cardCatalog:cards, actor, serverTime: new Date().toISOString(), households, memberships, assignments, submissions,
-      users: state.users.filter(u => userIds.has(u.id)).map(u => u.id === actor.userId ? u : { ...u, email: "", birthChart: "" }),
-      terms: state.terms.filter(t => households.some(h => h.termId === t.id)),
-      sessions: state.sessions.filter(s => allowed.has(s.householdId)),
-      feedback: state.feedback.filter(f => submissionIds.has(f.submissionId) && (actor.role === "host" ? f.authorId === actor.userId : f.status === "published")),
-      applications: [], enrollments: state.enrollments.filter(e => e.userId === actor.userId),
-    };
+    return workspacePage(this.repo,actor);
   }
+
   execute(actor: Actor, command: Command): Promise<{ version: number; entityId?: string }> {
     if (command.kind === "conversation.open") {
       const pair = [actor.userId, command.payload.userId].sort().join(":");
@@ -77,9 +59,7 @@ export class WorkspaceService {
       actor: { ...actor, organizationId: actor.organizationId || defaultOrganizationId }, command,
     }))).digest('hex');
     return this.repo.transaction(async tx => {
-      // Message writes only need the target message; scanning all history creates
-      // serializable predicate conflicts between unrelated sends.
-      const raw = await tx.read(command.kind === "message.send" || command.kind === "message.react" ? { messageId: command.entityId } : undefined);
+      const raw = await commandState(tx,actor,command);
       const state = this.organizationState(raw, actor);
       const table = (command.kind === "message.send" || command.kind === "message.react") ? "messages" : (command.kind === "channel.create" || command.kind === "conversation.open") ? "channels" : command.kind === "submission.save" ? "submissions" : command.kind === "feedback.save" ? "feedback" : (command.kind === "session.reschedule" || command.kind === "session.create") ? "sessions" : command.kind === "assignment.create" ? "assignments" : command.kind === "household.create" ? "households" : "applications";
       requireRule(!raw[table].some(e => e.id === command.entityId) || state[table].some(e => e.id === command.entityId));
@@ -206,7 +186,7 @@ export class WorkspaceService {
           if (command.kind === "application.enroll") {
             const household = state.households.find(h => h.id === command.payload.householdId);
             requireRule(household, "Household 不存在。", 404);
-            requireRule(state.memberships.filter(m => m.householdId === household.id && m.role === "learner").length < household.capacity, "这个 Household 已满员，请选择其他小组。", 409);
+            requireRule((Number((await tx.db.prepare("SELECT COUNT(*) AS n FROM memberships WHERE household_id=? AND role='learner'").get(household.id))?.n) < household.capacity), "这个 Household 已满员，请选择其他小组。", 409);
             requireRule(!state.enrollments.some(e => e.userId === application.userId && e.termId === household.termId), "该学员已加入本学期。", 409);
             const admission = await tx.admission(application.userId, actor.organizationId || defaultOrganizationId, household.hostId);
             if (admission.registered) {
@@ -245,9 +225,9 @@ export class WorkspaceService {
   apply(input: unknown, organizationId = defaultOrganizationId) {
     const data = applicationSchema.parse(input);
     return this.repo.transaction(async tx => {
-      requireRule((await tx.read()).organizations.some(o => o.id === organizationId), "工作区不存在。", 404);
+      requireRule(await exists(tx,'SELECT 1 FROM organizations WHERE id=?',[organizationId]), "工作区不存在。", 404);
       const email = data.email.toLowerCase();
-      requireRule(!(await tx.read()).users.some(u => u.email === email), "这个邮箱已有报名记录，请联系运营确认。", 409);
+      requireRule(!await exists(tx,'SELECT 1 FROM users WHERE lower(email)=?',[email]), "这个邮箱已有报名记录，请联系运营确认。", 409);
       const user = { ...meta(randomUUID()), name: data.name, email, city: "", timezone: "Asia/Shanghai", avatar: "blue" };
       await tx.saveUser(user);
       await tx.saveOrganizationMembership({ ...meta(randomUUID()), organizationId, userId: user.id, role: "learn" });

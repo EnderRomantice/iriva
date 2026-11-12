@@ -1,4 +1,6 @@
 "use client";
+import { useCollection } from "@/local/use-collection";
+import { PageControls } from "./PageControls";
 import { useState } from "react";
 import { Hash, LockKeyhole } from "lucide-react";
 import type { Snapshot } from "@/domain/models";
@@ -21,9 +23,10 @@ export function ChatDialog({ kind, data, save, openDirect, openChannel, onClose 
     openChannel(entityId, visibility, payload.name);
     onClose();
   }
-  const people = data.users.filter(u => u.id !== data.actor.userId && u.name.toLowerCase().includes(query.toLowerCase()));
+  const page=useCollection(data,"users",{query},kind==="direct");
+  const people = page.items.filter(u => u.id !== data.actor.userId && u.name.toLowerCase().includes(query.toLowerCase()));
   return <Sheet title={kind === "channel" ? "建立频道" : "新私聊"} onClose={onClose}>
     {kind === "channel" ? <form className="sp-form" onSubmit={e => { e.preventDefault(); void create(); }}><label>频道名称<input required maxLength={80} value={name} onChange={e => setName(e.target.value)} placeholder="例如：咖啡与日常" /></label><label>频道介绍<textarea maxLength={1000} value={description} onChange={e => setDescription(e.target.value)} placeholder="这里想聊些什么？" /></label>{data.actor.role === "host" && data.organizations.find(o=>o.id===data.actor.organizationId)?.kind !== "platform" ? <label>谁可以看到<select value={visibility} onChange={e => setVisibility(e.target.value as "public" | "private")}><option value="public">公开 — 当前工作区所有成员</option><option value="private">仅自己可见</option></select></label> : <p className="sp-caption"><LockKeyhole size={15} /> 这个频道仅你自己可见，可以用来记想法、收集灵感。</p>}<button className="sp-primary" disabled={!name.trim()}>{visibility === "public" ? <Hash size={16} /> : <LockKeyhole size={16} />} 建立频道</button></form> : <><label className="sp-field">发给<input placeholder="搜索成员" value={query} onChange={e => setQuery(e.target.value)} /></label><div className="sp-dm-people">{people.map(u => { const clock = memberTime(u.timezone, new Date()); return <button key={u.id} onClick={() => void create(u.id)}><Avatar user={u} /><span><strong><MemberName user={u}/></strong><small>{u.city} {clock?.time} {clock?.offset}</small></span></button>; })}{!people.length && <Empty>没有找到这位成员。</Empty>}</div></>}
-    {error && <p className="sp-error" role="alert">{error}</p>}
+    <PageControls page={page}/>{error && <p className="sp-error" role="alert">{error}</p>}
   </Sheet>;
 }

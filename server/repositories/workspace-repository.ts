@@ -4,6 +4,7 @@ export type Awaitable<T> = T | Promise<T>;
 
 /** Domain-facing port. Only the adapter knows SQLite, SQL names, and driver types. */
 export interface WorkspaceUnitOfWork {
+  db: import("./queries").QueryDatabase["db"];
   read(options?: { messageId: string }): Awaitable<State>;
   admission(userId: string, organizationId: string, hostId: string): Awaitable<{ registered: boolean; accepted: boolean; order?: { plan: string; amountMinor: number } }>;
   saveChannel(value: Channel): Awaitable<void>;
@@ -27,6 +28,7 @@ export interface WorkspaceUnitOfWork {
 /** Async boundary supports remote database adapters without changing HTTP handlers.
  * Each adapter supplies a transaction-scoped unit of work and commits atomically. */
 export interface WorkspaceRepository {
+  db: import("./queries").QueryDatabase["db"];
   snapshot(): Promise<State>;
   transaction<T>(work: (tx: WorkspaceUnitOfWork) => Awaitable<T>): Promise<T>;
 }

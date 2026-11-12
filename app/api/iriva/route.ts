@@ -1,7 +1,7 @@
 import { OpenRouterModelClient } from "wayline-agent-runtime/provider";
 import { actorFromRequest, errorResponse } from "@/server/http";
 import { workspaceRepository } from "@/server/container";
-import { WorkspaceService } from "@/server/services/workspace-service";
+import { authorize } from "@/server/services/workspace-queries";
 import { runIriva, turnSchema } from "@/server/iriva/agent";
 
 export const runtime = "nodejs";
@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     const actor = await actorFromRequest(request);
     const turn = turnSchema.parse(await request.json());
     const repo = await workspaceRepository();
-    await new WorkspaceService(repo).snapshot(actor);
+    await authorize(repo,actor);
     if (!process.env.OPENROUTER_API_KEY)
       return Response.json(
         { error: "Iriva 尚未连接模型，请联系管理员配置 OPENROUTER_API_KEY。" },

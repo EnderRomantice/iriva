@@ -16,7 +16,7 @@ export function OrganizationHome({ data, role, openSession, openPractice, naviga
   return <section className="sp-dashboard" aria-label="学习概览">
     <header className="sp-dashboard-heading"><div><h2>欢迎回来，{user?.name || '朋友'}。</h2><p>{role === 'learn' ? '你的学习进度和接下来的安排，都在这里。' : '查看各小组的进度与待办安排。'}</p></div><span>{new Intl.DateTimeFormat('zh-CN', { timeZone: tz, month: 'long', day: 'numeric', weekday: 'long' }).format(now)}</span></header>
     <div className="sp-dashboard-metrics">
-      <div><span><UsersRound/>参与小组</span><strong>{stats.groups.length}<small>个</small></strong><p>{role === 'learn' ? '当前工作区内的小组' : '当前可管理的小组'}</p></div>
+      <div><span><UsersRound/>参与小组</span><strong>{stats.groupCount}<small>个</small></strong><p>{role === 'learn' ? '当前工作区内的小组' : '当前可管理的小组'}</p></div>
       <div><span><CheckCircle2/>任务完成率</span><strong>{stats.completion === null ? '—' : `${stats.completion}%`}</strong><p>{stats.completed} / {stats.total} 项已完成</p></div>
       <div><span><TrendingUp/>综合分数</span><strong>{stats.score ?? '—'}<small>/ 100</small></strong><p>{stats.total ? '按实际任务进度计算' : '发布任务后开始计算'}</p></div>
       <div><span><Video/>iriva meeting</span><strong>{stats.meetingsThisWeek}<small>场</small></strong><p>未来 7 天的安排</p></div>

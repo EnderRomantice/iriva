@@ -7,7 +7,7 @@ import { Avatar, MemberName } from './primitives';
 
 export function ProfileForm({ account, onSave, onLogout }: { account: Account; onSave: (profile: z.infer<typeof profileSchema>) => Promise<unknown>; onLogout: () => void }) {
   const user = account.user;
-  const [avatar, setAvatar] = useState(user.avatar.startsWith('data:image/') ? user.avatar : '');
+  const [avatar, setAvatar] = useState((user.avatar.startsWith('data:image/')||user.avatar.startsWith('/api/avatars/')) ? user.avatar : '');
   const [reading, setReading] = useState(false), [message, setMessage] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
   const missing = missingProfileFields(user);

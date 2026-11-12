@@ -54,3 +54,22 @@ test('PostgreSQL rolls back failed writes and persists a retried concurrent comm
 
   }finally{await second.db.close();}
 });
+
+test('revision cursor cannot skip an uncommitted update or expose a rolled-back write',{skip:!enabled},async()=>{
+ const {syncWorkspace}=await import('../server/services/workspace-sync');
+ const actor={userId:seedId(6),role:'ops' as const,organizationId:seedId(1001)};
+ const before=await syncWorkspace(repo!,actor,null);
+ let release!:()=>void,updated!:()=>void;
+ const gate=new Promise<void>(r=>release=r),ready=new Promise<void>(r=>updated=r);
+ const other=new PostgresRepository(process.env.DATABASE_URL!);
+ try{
+  const write=other.transaction(async()=>{await other.db.prepare('UPDATE users SET signature=? WHERE id=?').run('Late commit fixture',actor.userId);updated();await gate;});
+  await ready;
+  assert.equal((await syncWorkspace(repo!,actor,before.etag)).snapshot,null);
+  release();await write;
+  const after=await syncWorkspace(repo!,actor,before.etag);
+  assert.notEqual(after.etag,before.etag);assert.equal(after.snapshot?.users.find(u=>u.id===actor.userId)?.signature,'Late commit fixture');
+  await assert.rejects(other.transaction(async()=>{await other.db.prepare('UPDATE users SET signature=? WHERE id=?').run('Never committed',actor.userId);throw new Error('rollback');}));
+  assert.equal((await syncWorkspace(repo!,actor,after.etag)).snapshot,null);
+ }finally{release();await other.db.close();}
+});

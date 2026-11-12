@@ -85,8 +85,8 @@ test("worker writes stay scoped to the user, contact list and accessible channel
     id: ops.userId,
     body: "请问报名进度？",
   })) as { channelId: string };
-  const messages = (await call(ops, "read_messages", { channelId: dm.channelId })) as { body: string }[];
-  assert.equal(messages.at(-1)?.body, "请问报名进度？");
+  const messages = (await call(ops, "read_messages", { channelId: dm.channelId })) as { items:{ body: string }[] };
+  assert.equal(messages.items.at(-1)?.body, "请问报名进度？");
   await assert.rejects(call(host, "read_messages", { channelId: dm.channelId }));
   await assert.rejects(call(host, "send_message", { target: "channel", id: dm.channelId, body: "不能发送" }));
 });

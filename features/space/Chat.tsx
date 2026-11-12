@@ -1,4 +1,5 @@
 "use client";
+import { useCollection } from "@/local/use-collection";
 import { cardKey, findCard, type MessageCard } from "@/domain/message-cards";
 import { MessageCards, ShareCardPicker, DraftCards, CardDetails } from "./MessageCards";
 import { useEffect, useRef, useState } from "react";
@@ -29,7 +30,9 @@ export function Chat({ channel, data, operations, mutate, onlineMutation, query,
   const textarea = useRef<HTMLTextAreaElement>(null), stream = useRef<HTMLDivElement>(null);
   const sendLock = useRef(false);
   const writes = useRef(Promise.resolve()), stickToBottom = useRef(true);
-  const messages = data.messages.filter(m => m.channelId === channel.id).sort((a,b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  const history=useCollection(data,"messages",{channelId:channel.id,query:query||undefined});
+  data=history.data;
+  const messages = Array.from(new Map([...history.items,...data.messages.filter(m=>operations.some(o=>o.entityId===m.id))].map(m=>[m.id,m])).values()).filter(m => m.channelId === channel.id).sort((a,b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
   const visible = messages.filter(m => !query || [m.body,...(m.cards || []).map(c => findCard(data.cardCatalog,c)?.title || "")].join(" ").toLowerCase().includes(query.toLowerCase()));
   useEffect(() => {
     let active = true;
@@ -67,6 +70,8 @@ export function Chat({ channel, data, operations, mutate, onlineMutation, query,
   const pending = new Map(operations.filter(o => o.command.kind === "message.send").map(o => [o.entityId,o]));
   return <section className="sp-chat" aria-label={`${title} 对话`}>
     <div className="sp-chat-stream" ref={stream} onScroll={() => { const el=stream.current; if(el) stickToBottom.current=el.scrollHeight-el.scrollTop-el.clientHeight<80; }}>
+      {history.error && <p role="alert">{history.error}<button onClick={()=>void history.retry()}>重试</button></p>}
+      {history.hasMore && <button disabled={history.busy} onClick={()=>{stickToBottom.current=false;void history.loadMore();}}>{history.busy?'读取中…':query?'更多搜索结果':'加载更早消息'}</button>}
       {!messages.length && !query && <div className="sp-chat-welcome">{channel.kind === "direct" ? <Avatar user={peer}/> : channel.kind === "private" ? <LockKeyhole size={46}/> : <Hash size={46}/>}<h2>{channel.kind === "direct" ? `和 ${title} 聊聊` : channel.kind === "private" ? `这是你的 ${title}` : `欢迎来到 # ${title}`}</h2><p>{channel.kind === "direct" ? "从一句问候开始。这段对话只有你们能看到。" : channel.kind === "private" ? "记下想法，收集灵感。这里的内容只属于你。" : "这里可以分享日常、聊聊近况，也可以什么主题都没有。"}</p></div>}
       <div role="log" aria-label="消息记录" aria-live="polite" aria-relevant="additions text">{visible.map((m,index) => {
         const previous = visible[index-1], date = day(m.createdAt), newDay = !previous || day(previous.createdAt)!==date;

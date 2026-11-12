@@ -4,7 +4,8 @@ import { useLiveQuery } from "dexie-react-hooks";
 import type { Channel, Assignment, Role, Session } from "@/domain/models";
 import { useWorkspace } from "@/local/use-workspace";
 import { localDb } from "@/local/database";
-import { resolveConflict } from "@/local/sync";
+import { mergeData } from "@/domain/pagination";
+import { resolveConflict,request } from "@/local/sync";
 import { accentInk, onColor, usePreferences, viewLabels, type View } from "./preferences";
 import { WorkspaceManagement } from "./WorkspaceManagement";
 import "./workspace-management.css";
@@ -78,9 +79,26 @@ type Profile = z.infer<typeof profileSchema>;
 function SpaceContent({ role, navigation, account, accountPending, accountError, refreshAccount, patchAccount }: { accountPending: boolean; accountError: string; role: Role; navigation: SpaceNavigation; account: Account; refreshAccount: () => Promise<void>; patchAccount: (update: (account: Account) => Account) => void }) {
   const route = navigation.route!;
   const scope: WorkspaceScope = account.authenticated ? `${role}:${route.organizationId}:${account.user.id}` : workspaceScope(role, route.organizationId);
-  useEffect(() => { const interval=setInterval(() => { void refreshAccount().catch(() => {}); }, 10000); return () => clearInterval(interval); }, []);
+  useEffect(() => {
+    const update=()=>{if(document.visibilityState==='visible')void refreshAccount().catch(()=>{});};
+    window.addEventListener('focus',update);window.addEventListener('iriva-account-changed',update);document.addEventListener('visibilitychange',update);
+    return ()=>{window.removeEventListener('focus',update);window.removeEventListener('iriva-account-changed',update);document.removeEventListener('visibilitychange',update);};
+  },[refreshAccount]);
   const { data, operations, offline, mode, error, busy, shellStatus, mutate, onlineMutation, refresh } = useWorkspace(scope);
   const { preferences, setPreferences, preferenceError } = usePreferences(route.organizationId);
+  useEffect(()=>{
+    if(!data)return;
+    const table=route.channelId?'channels':'households',id=route.channelId||route.householdId;
+    if(!id||data[table].some(row=>row.id===id))return;
+    const controller=new AbortController(),revision=data.revision;
+    void request(scope,`/api/workspace/items?table=${table}&ids=${encodeURIComponent(id)}`,undefined,{signal:controller.signal}).then(async response=>{
+      if(!response.ok)return;
+      const page=await response.json();
+      await localDb.transaction('rw',localDb.snapshots,async()=>{const cached=await localDb.snapshots.get(scope);if(cached&&cached.data.revision===revision&&!controller.signal.aborted)await localDb.snapshots.put({role:scope,data:mergeData(cached.data,page.related,page.cardCatalog)});});
+    }).catch(()=>{});
+    return()=>controller.abort();
+  },[scope,route.channelId,route.householdId,data?.revision]);
+
   const view = route.view;
   const profileIncomplete = role === "learn" && !isProfileComplete(account.user);
   const profileCheckedRoute = useRef<string | undefined>(undefined);

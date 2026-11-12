@@ -28,6 +28,7 @@ test('auth expiry and transient failures preserve pending edits; retry keeps the
     const sent:string[]=[];
     let failed=true;
     t.mock.method(globalThis,'fetch',async (_url:unknown,init:RequestInit)=>{
+      if(String(_url).includes('/items?'))return Response.json({items:[],related:{},cardCatalog:[]});
       if(init.method==='POST') {sent.push(JSON.parse(String(init.body)).id);return failed?Response.json({error:'Try again'},{status}):Response.json({version:1});}
       return Response.json(snapshot);
     });
@@ -48,6 +49,7 @@ test('lost response retries the same operation; real conflicts block only their 
   let first=true;
   const sent:string[]=[];
   t.mock.method(globalThis,'fetch',async (_url:unknown,init:RequestInit)=>{
+    if(String(_url).includes('/items?'))return Response.json({items:[],related:{},cardCatalog:[]});
     if(init.method!=='POST')return Response.json(snapshot);
     const id=JSON.parse(String(init.body)).id;sent.push(id);
     if(first){first=false;throw new Error('Response lost');}

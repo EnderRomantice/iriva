@@ -1,3 +1,5 @@
+import { accountPage } from '@/server/services/account-pages';
+import { one, rows, userById, exists } from '@/server/repositories/queries';
 import { manageWorkspace, managementSnapshot, platformId } from '@/server/services/owned-workspaces';
 import { canManageSubscription } from '@/domain/workspace-access';
 import { beginEmailSignIn, verifyEmailSignIn } from '@/server/email-auth';
@@ -15,16 +17,18 @@ const meta=()=>({id:randomUUID(),version:1,createdAt:new Date().toISOString(),up
 
 export async function GET(request:Request) {
   try {
-    const actor=await actorFromRequest(request), repo=await workspaceRepository(), state=await repo.read();
-    const org=await platformId(repo,actor.organizationId);
-    const testPaymentsAvailable=canManageSubscription(actor.role);
-    const hosts=state.organizationMemberships.filter(m=>m.organizationId===org&&m.role==='host').map(m=>state.users.find(u=>u.id===m.userId)!).map(({email,birthChart,...user})=>user);
-    const bookings=await repo.db.prepare(`SELECT b.*,u.name learner_name,h.name host_name FROM bookings b JOIN users u ON u.id=b.learner_id JOIN users h ON h.id=b.host_id WHERE organization_id=? AND ${actor.role==='ops'?'1=1':actor.role==='host'?'host_id=?':'learner_id=?'} ORDER BY b.created_at DESC`).all(...(actor.role==='ops'?[org]:[org,actor.userId]));
-    const support=state.channels.find(c=>c.organizationId===org&&c.kind==='direct'&&c.description==='support'&&state.channelParticipants.some(p=>p.channelId===c.id&&p.userId===actor.userId));
-    const home=state.organizations.find(o=>o.ownerId===actor.userId&&o.isPrimary);
-    const joinedGroup=state.organizations.find(o=>o.kind==='host'&&o.id!==home?.id&&state.organizationMemberships.some(m=>m.organizationId===o.id&&m.userId===actor.userId));
+    const actor=await actorFromRequest(request), repo=await workspaceRepository();
+    const org=await platformId(repo,actor.organizationId), params=new URL(request.url).searchParams;
+    const collection=params.get('collection');
+    if(collection){const type=z.enum(['hosts','bookings','orders','requests','grants']).parse(collection);return Response.json(await accountPage(repo,actor,type,{after:params.get('after')||undefined,query:z.string().max(200).parse(params.get('query')||''),status:params.get('status')||undefined,kind:params.get('kind')||undefined,qualification:params.get('qualification')||undefined}),{headers:{'Cache-Control':'private, no-store'}});}
+    const user=await userById(repo,actor.userId);
+    const [hosts,bookings,orders]=await Promise.all(['hosts','bookings','orders'].map(type=>accountPage(repo,actor,type as 'hosts'|'bookings'|'orders')));
+    const support=await one(repo,'channels',"t.organization_id=? AND t.kind='direct' AND t.description='support' AND EXISTS (SELECT 1 FROM channel_participants p WHERE p.channel_id=t.id AND p.user_id=?)",[org,actor.userId]);
+    const home=await one(repo,'organizations','t.owner_id=? AND t.is_primary=1',[actor.userId]);
+    const joinedGroup=await one(repo,'organizations',"t.kind='host' AND t.id<>? AND EXISTS (SELECT 1 FROM organization_memberships m WHERE m.organization_id=t.id AND m.user_id=?)",[home?.id||'',actor.userId]);
     const landing=home?.kind==='host'?home:joinedGroup||home;
-    return Response.json({management:(await managementSnapshot(repo,actor)),homeWorkspaceId:home?.id,landingWorkspaceId:landing?.id,organizationId:actor.organizationId||defaultOrganizationId,testPaymentsAvailable,user:state.users.find(u=>u.id===actor.userId),role:actor.role,authenticated:!!sessionToken(request),application:state.applications.find(a=>a.userId===actor.userId&&a.organizationId===org),supportId:support?.id,hosts,bookings,orders:(await repo.db.prepare('SELECT * FROM plan_orders WHERE user_id=? ORDER BY created_at DESC').all(actor.userId))}, {headers:{'Cache-Control':'no-store',...(await renewSession(request))}});
+    const application=await one(repo,'applications','t.user_id=? AND t.organization_id=?',[actor.userId,org]);
+    return Response.json({management:await managementSnapshot(repo,actor),homeWorkspaceId:home?.id,landingWorkspaceId:landing?.id,organizationId:actor.organizationId||defaultOrganizationId,testPaymentsAvailable:canManageSubscription(actor.role),user,role:actor.role,authenticated:!!sessionToken(request),application,supportId:support?.id,hosts:hosts.items,bookings:bookings.items,orders:orders.items,pages:{hosts:hosts.nextCursor,bookings:bookings.nextCursor,orders:orders.nextCursor}}, {headers:{'Cache-Control':'no-store',...(await renewSession(request))}});
   } catch(e){return errorResponse(e);}
 }
 export async function POST(request:Request) {
@@ -36,19 +40,18 @@ export async function POST(request:Request) {
     if(body.action==='wechat') throw new DomainError(503,'微信登录暂未开通，请先使用邮箱登录。');
     if(body.action==='email.begin') return await beginEmailSignIn(body, (await platformId(repo,org)), request);
     if(body.action==='email.verify') return await verifyEmailSignIn(body, (await platformId(repo,org)), request);
-    const actor=await actorFromRequest(request), state=await repo.read(), user=state.users.find(u=>u.id===actor.userId)!;
+    const actor=await actorFromRequest(request), user=(await userById(repo,actor.userId))!;
     if(['host.add','group.request','group.review','group.member.add'].includes(body.action)) return Response.json((await manageWorkspace(repo,actor,body)));
     const organizationId=await platformId(repo,actor.organizationId);
     if(body.action==='apply') {
       if(!(await sessionActor(request))) throw new DomainError(401,'请先登录。');
       const input=z.object({goal:z.string().trim().min(4).max(2000),availability:z.string().trim().min(2).max(1000)}).parse(body);
       const result=await repo.transaction(async ()=>{
-        const state=await repo.read();
-        if(!state.applications.some(a=>a.userId===user.id&&a.organizationId===organizationId)) await repo.saveApplication({...meta(),...input,userId:user.id,organizationId,status:'new'});
-        const operator=state.organizationMemberships.find(m=>m.organizationId===organizationId&&m.role==='ops');
+        if(!await one(repo,'applications','t.user_id=? AND t.organization_id=?',[user.id,organizationId])) await repo.saveApplication({...meta(),...input,userId:user.id,organizationId,status:'new'});
+        const operator=await one(repo,'organizationMemberships',"t.organization_id=? AND t.role='ops'",[organizationId]);
         if(!operator) throw new DomainError(503,'客服暂未就绪，请稍后再试。');
         const directKey=[user.id,operator.userId].sort().join(':');
-        const existing=state.channels.find(c=>c.organizationId===organizationId&&c.directKey===directKey);
+        const existing=await one(repo,'channels','t.organization_id=? AND t.direct_key=?',[organizationId,directKey]);
         if(existing) return existing.id;
         const channel={...meta(),organizationId,ownerId:operator.userId,name:'客服支持',description:'support',kind:'direct' as const,directKey};await repo.saveChannel(channel);
         for(const userId of [user.id,operator.userId]) await repo.saveChannelParticipant({...meta(),channelId:channel.id,userId});
@@ -59,8 +62,14 @@ export async function POST(request:Request) {
     }
     if(body.action==='profile') {
       const input=profileSchema.parse(body.profile);
+      if(input.avatar.startsWith('/api/avatars/')&&!input.avatar.startsWith(`/api/avatars/${user.id}?`)) throw new DomainError(403,'只能保存自己的头像。');
       await repo.transaction(async()=>{
-        const current=(await repo.read()).users.find(u=>u.id===user.id)!;
+        const current=(await userById(repo,user.id))!;
+        if(input.avatar.startsWith('/api/avatars/')&&!await exists(repo,"SELECT 1 FROM profile_avatars WHERE user_id=? UNION ALL SELECT 1 FROM users WHERE id=? AND avatar LIKE 'data:image/%' LIMIT 1",[user.id,user.id]))throw new DomainError(422,'请先上传头像。');
+        if(input.avatar.startsWith('data:image/')) {
+          await repo.db.prepare('INSERT INTO profile_avatars (user_id,data_url) VALUES (?,?) ON CONFLICT(user_id) DO UPDATE SET data_url=excluded.data_url').run(user.id,input.avatar);
+          input.avatar='avatar:stored';
+        }
         await repo.saveUser({...current,...input,version:current.version+1,updatedAt:new Date().toISOString()});
       });
       return Response.json({ok:true});
@@ -69,7 +78,7 @@ export async function POST(request:Request) {
       if(!canManageSubscription(actor.role)) throw new DomainError(403,'只有学员可以购买套餐。');
       const input=z.object({plan:z.enum(['lite','pro','max']),frequency:z.union([z.literal(1),z.literal(2)])}).parse(body);
       const id=await repo.transaction(async()=>{
-      if(!(await repo.read()).applications.some(a=>a.userId===user.id)) throw new DomainError(422,'请先填写报名表单。');
+      if(!await exists(repo,'SELECT 1 FROM applications WHERE user_id=?',[user.id])) throw new DomainError(422,'请先填写报名表单。');
       const plan=plans.find(p=>p.id===input.plan)!;
       const existing=(await repo.db.prepare("SELECT id FROM plan_orders WHERE user_id=? AND plan=? AND frequency=? AND status='pending'").get(user.id,input.plan,input.frequency)) as {id:string}|undefined;
       const id=existing?.id||randomUUID();
@@ -87,7 +96,7 @@ export async function POST(request:Request) {
         if(!order) throw new DomainError(404,'订单不存在。');
         if(order.status==='paid') return;
         if(order.status!=='pending') throw new DomainError(409,'当前订单无法支付。');
-        const current=(await repo.read()).users.find(u=>u.id===user.id)!;
+        const current=(await userById(repo,user.id))!;
         await repo.db.prepare("UPDATE plan_orders SET status='paid' WHERE id=?").run(orderId);
         await repo.saveUser({...current,plan:order.plan,version:current.version+1,updatedAt:new Date().toISOString()});
         await repo.audit(user.id,'checkout.test_paid',orderId);
@@ -97,8 +106,8 @@ export async function POST(request:Request) {
     if(body.action==='contact') {
       if(actor.role!=='learn'||!user.plan||user.plan==='free') throw new DomainError(403,'请先完成套餐付款，再联系 Host。');
       const hostId=z.uuid().parse(body.hostId);
-      if(!state.organizationMemberships.some(m=>m.organizationId===organizationId&&m.userId===hostId&&m.role==='host')) throw new DomainError(404,'Host 不存在。');
-      const host=state.users.find(u=>u.id===hostId);
+      if(!await exists(repo,"SELECT 1 FROM organization_memberships WHERE organization_id=? AND user_id=? AND role='host'",[organizationId,hostId])) throw new DomainError(404,'Host 不存在。');
+      const host=await userById(repo,hostId);
       if(!canContactHost(user.plan, !!host?.hostFeatured)) throw new DomainError(403,'明星 Host 需要 Pro 或专家档套餐。');
       const missing = missingProfileFields(user);
       if(missing.length) throw new DomainError(422, `请先完善个人资料：${missing.join('、')}。`);

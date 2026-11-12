@@ -1,4 +1,6 @@
 "use client";
+import { useAccountCollection } from "@/local/use-account-collection";
+import { PageControls } from "./PageControls";
 import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { accountRequest, type Account, type WorkspaceManagement as Management } from './account-client';
 
@@ -11,7 +13,8 @@ type Notice = { scope: string; kind: 'status' | 'error'; text: string };
 export function WorkspaceManagement({ account, onRefresh }: { account: Account; onRefresh: () => Promise<void> }) {
   const [busy, setBusy] = useState(false), [notice, setNotice] = useState<Notice>();
   const lock = useRef(false);
-  const data = account.management;
+  const requests=useAccountCollection('requests',account.management?.requests||[]),grants=useAccountCollection('grants',account.management?.grants||[]);
+  const data = account.management?{...account.management,requests:requests.items,grants:grants.items}:undefined;
   if (!data) return null;
 
   async function perform(scope: string, body: object, success: (result: { pending?: boolean }) => string, form?: HTMLFormElement) {
@@ -72,7 +75,7 @@ export function WorkspaceManagement({ account, onRefresh }: { account: Account; 
     </Section>
 
     {handled.length > 0 && <Section title="已处理的申请" count={handled.length}><RequestList requests={handled} /></Section>}
-  </div>;
+  <PageControls page={requests}/><PageControls page={grants}/></div>;
 
   // Host inside their own group.
   return <div className="sp-manage">
@@ -96,7 +99,7 @@ export function WorkspaceManagement({ account, onRefresh }: { account: Account; 
       {feedback('group.request')}
       {data.requests.length > 0 && <RequestList requests={data.requests} />}
     </Section>}
-  </div>;
+  <PageControls page={requests}/><PageControls page={grants}/></div>;
 }
 
 function Section({ title, count, children }: { title: string; count?: number; children: ReactNode }) {
