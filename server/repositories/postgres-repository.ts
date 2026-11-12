@@ -9,7 +9,7 @@ import { tables } from './tables';
 
 const snake=(key:string)=>key.replace(/[A-Z]/g,c=>`_${c.toLowerCase()}`);
 const camel=(key:string)=>key.replace(/_([a-z])/g,(_,c:string)=>c.toUpperCase());
-const sqlTables=[...tables.map(snake),'mutation_receipts','audit_events','credentials','auth_sessions','bookings','plan_orders','email_challenges','email_identities','host_grants','group_requests','iriva_memory','iriva_contacts'];
+const sqlTables=[...tables.map(snake),'mutation_receipts','mutation_fingerprints','audit_events','credentials','auth_sessions','bookings','plan_orders','email_challenges','email_identities','host_grants','group_requests','iriva_memory','iriva_contacts'];
 /** Convert the internal SQL dialect; quoted strings never contain placeholders. */
 export function postgresQuery(query:string) {
   let parameter=0;
@@ -48,10 +48,25 @@ export class PostgresRepository implements DatabaseRepository {
       }
     }
   }
-  async read():Promise<State> {
+  async read(options?:{messageId:string}):Promise<State> {
     // One statement provides a consistent snapshot without 15 network round trips.
-    const [snapshot]=await this.query(`SELECT ${tables.map(table=>`(SELECT coalesce(jsonb_agg(row),'[]'::jsonb) FROM ${snake(table)} AS row) AS "${table}"`).join(',')}`,[]);
-    return Object.fromEntries(tables.map(table=>[table,snapshot[table].map((row:Record<string,unknown>)=>Object.fromEntries(Object.entries(row).map(([key,value])=>[camel(key),['host_qualifications','reactions','cards'].includes(key)&&typeof value==='string'?JSON.parse(value):['completed','host_featured','host_full_time'].includes(key)?Boolean(value):value])))])) as unknown as State;
+    const [snapshot]=await this.query(`SELECT ${tables.map(table=>{
+      // Message history dominates snapshots. Alias once in SQL so the driver can
+      // return it directly, avoiding a second object graph for every poll.
+      const source=table==='messages'?`(SELECT id, channel_id AS "channelId", author_id AS "authorId", body, version, created_at AS "createdAt", updated_at AS "updatedAt", reactions, cards FROM messages${options?' WHERE id=?':''})`:snake(table);
+      return `(SELECT coalesce(json_agg(row),'[]'::json) FROM ${source} AS row) AS "${table}"`;
+    }).join(',')}`,options?[options.messageId]:[]);
+    return Object.fromEntries(tables.map(table=>{
+      const rows=snapshot[table] as Record<string,unknown>[];
+      if(table==='messages') return [table,rows];
+      // Resolve the column mapping once per table, not for every field of every message.
+      const columns=rows.length?Object.keys(rows[0]).map(key=>({key,name:camel(key),json:['host_qualifications','reactions','cards'].includes(key),boolean:['completed','host_featured','host_full_time'].includes(key)})):[];
+      return [table,rows.map(row=>{
+        const result:Record<string,unknown>={};
+        for(const column of columns){const value=row[column.key];result[column.name]=column.json&&typeof value==='string'?JSON.parse(value):column.boolean?Boolean(value):value;}
+        return result;
+      })];
+    })) as unknown as State;
   }
   snapshot(){return this.read();}
   async put(table:string,value:object) {
@@ -60,8 +75,8 @@ export class PostgresRepository implements DatabaseRepository {
     if(names.some(name=>!/^\w+$/.test(name))) throw new Error('Invalid column');
     await this.db.prepare(`INSERT INTO ${snake(table)} (${names.join(',')}) VALUES (${names.map(()=>'?').join(',')}) ON CONFLICT(id) DO UPDATE SET ${names.filter(n=>n!=='id').map(n=>`${n}=excluded.${n}`).join(',')}`).run(...entries.map(([,v])=>Array.isArray(v)?this.sql.json(v as postgres.JSONValue):typeof v==='boolean'?Number(v):v));
   }
-  receipt(actorId:string,commandId:string){return this.db.prepare('SELECT version FROM mutation_receipts WHERE actor_id=? AND command_id=?').get(actorId,commandId);}
-  async acknowledge(actorId:string,commandId:string,version:number){await this.db.prepare('INSERT INTO mutation_receipts VALUES (?,?,?,?)').run(actorId,commandId,version,new Date().toISOString());}
+  receipt(actorId:string,commandId:string){return this.db.prepare('SELECT r.version, f.fingerprint FROM mutation_receipts r LEFT JOIN mutation_fingerprints f ON f.actor_id=r.actor_id AND f.command_id=r.command_id WHERE r.actor_id=? AND r.command_id=?').get(actorId,commandId);}
+  async acknowledge(actorId:string,commandId:string,version:number,fingerprint:string){await this.db.prepare('INSERT INTO mutation_receipts VALUES (?,?,?,?)').run(actorId,commandId,version,new Date().toISOString());await this.db.prepare('INSERT INTO mutation_fingerprints VALUES (?,?,?)').run(actorId,commandId,fingerprint);}
   async audit(actorId:string,kind:string,entityId:string){await this.db.prepare('INSERT INTO audit_events VALUES (?,?,?,?,?)').run(randomUUID(),actorId,kind,entityId,new Date().toISOString());}
   async admission(userId:string,organizationId:string,hostId:string){
     return {registered:!!await this.db.prepare('SELECT user_id FROM credentials WHERE user_id=? UNION SELECT user_id FROM email_identities WHERE user_id=?').get(userId,userId),accepted:!!await this.db.prepare("SELECT id FROM bookings WHERE learner_id=? AND organization_id=? AND host_id=? AND status='accepted'").get(userId,organizationId,hostId),order:await this.db.prepare('SELECT plan,amount_minor AS "amountMinor" FROM plan_orders WHERE user_id=? AND status=? ORDER BY created_at DESC LIMIT 1').get(userId,'paid')};

@@ -28,7 +28,7 @@ test("schema and seed are repeatable; foreign keys are valid", t => {
   const second = new SqliteRepository(file);
   assert.equal(second.read().users.length, 12);
   assert.deepEqual(second.db.prepare("PRAGMA foreign_key_check").all(), []);
-  assert.equal((second.db.prepare("SELECT COUNT(*) AS n FROM schema_migrations").get() as { n: number }).n, 12);
+  assert.equal((second.db.prepare("SELECT COUNT(*) AS n FROM schema_migrations").get() as { n: number }).n, 13);
   second.db.close();
 });
 
@@ -508,4 +508,21 @@ test('message card migration retains old text and reaction data', t => {
   const migrated = new SqliteRepository(file);
   try { const row=migrated.read().messages.find(m => m.id === messageId)!; assert.equal(row.body,'Keep this message'); assert.equal(row.reactions![0].emoji,'❤️'); assert.deepEqual(row.cards,[]); assert.deepEqual(migrated.db.prepare('PRAGMA foreign_key_check').all(),[]); }
   finally { migrated.db.close(); }
+});
+
+
+test('idempotency keys bind payload and workspace; field order does not matter', async t => {
+  const { service, repo } = fixture(t);
+  const command = submissionCommand();
+  await service.execute(demoActors.learn, command);
+  if (command.kind !== 'submission.save') throw new Error('Unexpected command');
+  await assert.rejects(service.execute(demoActors.learn, {...command,payload:{...command.payload,body:'Changed payload'}}),{status:409});
+  const reordered = {...command,payload:{status:command.payload.status,completed:command.payload.completed,body:command.payload.body,assignmentId:command.payload.assignmentId}};
+  assert.deepEqual(await service.execute(demoActors.learn,reordered),{version:2});
+  assert.equal(repo.read().submissions.find(s=>s.id===command.entityId)?.body,command.payload.body);
+  const otherOrg='10000000-0000-4000-8000-000000001002';
+  if(!repo.read().organizationMemberships.some(m=>m.organizationId===otherOrg&&m.userId===demoActors.learn.userId))
+    repo.saveOrganizationMembership({id:randomUUID(),version:1,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),organizationId:otherOrg,userId:demoActors.learn.userId,role:'learn'});
+  await assert.rejects(service.execute({...demoActors.learn,organizationId:otherOrg},{id:command.id,entityId:randomUUID(),baseVersion:0,kind:'channel.create',payload:{name:'Wrong scope replay',description:'',kind:'private'}}),{status:409});
+
 });

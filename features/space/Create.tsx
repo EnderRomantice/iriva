@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Assignment, Snapshot } from "@/domain/models";
 import { commandSchema, type Command } from "@/domain/commands";
-import { workspaceScope } from "@/domain/workspace";
+import { draftScope } from "@/domain/workspace";
 import { localDb, saveDraft } from "@/local/database";
 import { Sheet, Empty } from "./primitives";
 
@@ -29,11 +29,12 @@ function PracticePicker({ data, householdId, openPractice, onClose }: Props) {
 }
 type Fields = { householdId: string; title: string; description: string; category: string; week: string; dueAt: string; startsAt: string; endsAt: string; name: string; theme: string; hostId: string; termId: string; capacity: string };
 function CreateForm({ kind, data, householdId, onClose, save, onCreated }: Props) {
-  const scope = workspaceScope(data.actor.role, data.actor.organizationId);
+  const scope = draftScope(data.actor);
   const draftKey = `create-${kind}`;
   const [form, setForm] = useState<Fields>(() => ({ householdId: householdId || data.households[0]?.id || "", title: "", description: "", category: "prepare", week: "1", dueAt: "", startsAt: "", endsAt: "", name: "", theme: "", hostId: data.organizationMemberships.find(m => m.role === "host")?.userId || "", termId: data.terms[0]?.id || "", capacity: "4" }));
   const [identity, setIdentity] = useState(() => ({ id: crypto.randomUUID() as string, entityId: crypto.randomUUID() as string }));
   const [ready, setReady] = useState(false), [busy, setBusy] = useState(false), [saved, setSaved] = useState(false), [error, setError] = useState("");
+  const lock = useRef(false);
   const writes = useRef(Promise.resolve());
   const sequence = useRef(0);
   useEffect(() => {
@@ -59,7 +60,7 @@ function CreateForm({ kind, data, householdId, onClose, save, onCreated }: Props
     void writes.current.then(() => { if (revision === sequence.current) { setSaved(true); setError(""); } }).catch(() => setError("本机草稿保存失败，请保留输入后重试。"));
   }
   async function submit(event: React.FormEvent) {
-    event.preventDefault(); if (busy) return; setBusy(true); setError("");
+    event.preventDefault(); if (!ready || lock.current) return; lock.current = true; setBusy(true); setError("");
     try {
       await writes.current;
       const utc = (value: string) => new Date(`${value}:00+08:00`).toISOString();
@@ -78,7 +79,7 @@ function CreateForm({ kind, data, householdId, onClose, save, onCreated }: Props
       void save(command).then(() => localDb.drafts.delete(`${scope}:${draftKey}`)).catch(() => {});
       onCreated(kind, kind === "household" ? identity.entityId : form.householdId);
     } catch (e) { setError(e instanceof Error ? e.message : "未能建立，输入已保留。"); }
-    finally { setBusy(false); }
+    finally { lock.current = false; setBusy(false); }
   }
   return <Sheet title={createLabels[kind]} onClose={() => { if (!busy) onClose(); }}>
     <form className="sp-form" onSubmit={event => void submit(event)}><fieldset className="sp-create-fields" disabled={!ready || busy}>

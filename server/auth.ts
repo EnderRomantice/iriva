@@ -17,7 +17,7 @@ export async function sessionActor(request: Request): Promise<Actor | undefined>
   const session=(await repo.db.prepare('SELECT user_id FROM auth_sessions WHERE token_hash=? AND expires_at>?').get(digest(token),Date.now())) as {user_id:string}|undefined;
   if(!session) throw new DomainError(401,'登录已过期，请重新登录。');
   const organizationId=request.headers.get('x-workspace-id') || defaultOrganizationId;
-  const membership=(await repo.read()).organizationMemberships.find(m=>m.userId===session.user_id && m.organizationId===organizationId);
+  const membership=await repo.db.prepare('SELECT role FROM organization_memberships WHERE user_id=? AND organization_id=?').get(session.user_id,organizationId) as {role:Actor['role']}|undefined;
   if(!membership) throw new DomainError(403,'你没有访问这个工作区的权限。');
   return {userId:session.user_id,role:membership.role,organizationId};
 }

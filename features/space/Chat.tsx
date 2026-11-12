@@ -7,7 +7,7 @@ import type { Channel, Snapshot } from "@/domain/models";
 import type { Command } from "@/domain/commands";
 import type { PendingOperation } from "@/local/database";
 import { localDb, saveDraft } from "@/local/database";
-import { workspaceScope } from "@/domain/workspace";
+import { draftScope } from "@/domain/workspace";
 import { MemberName, Avatar, Empty } from "./primitives";
 import { MessageReactions } from "./MessageReactions";
 import { channelName, directPeer } from "./chat-utils";
@@ -20,13 +20,14 @@ export function ConversationPlaceholder({ direct }: { direct: boolean }) {
 }
 
 export function Chat({ channel, data, operations, mutate, onlineMutation, query, openDirect, showSync, onOpenCard }: { channel: Channel; data: Snapshot; operations: PendingOperation[]; mutate: (command: Command) => Promise<void>; onlineMutation: (command: Command) => Promise<unknown>; query: string; openDirect: (id: string) => void; showSync: () => void; onOpenCard: (card: MessageCard) => Promise<void> }) {
-  const scope = workspaceScope(data.actor.role, data.actor.organizationId), draftId = `message-${channel.id}`;
+  const scope = draftScope(data.actor), draftId = `message-${channel.id}`;
   const title = channelName(data,channel), peer = directPeer(data,channel.id);
   const [body,setBody] = useState(""), [ready,setReady] = useState(false), [error,setError] = useState(""), [sending,setSending] = useState(false), [emoji,setEmoji] = useState(false);
   const [cards,setCards] = useState<MessageCard[]>([]), [sharing,setSharing] = useState(false), [detail,setDetail] = useState<MessageCard>();
   const shareAnchor = useRef<HTMLButtonElement>(null);
   const [selectedMessage, setSelectedMessage] = useState<string>();
   const textarea = useRef<HTMLTextAreaElement>(null), stream = useRef<HTMLDivElement>(null);
+  const sendLock = useRef(false);
   const writes = useRef(Promise.resolve()), stickToBottom = useRef(true);
   const messages = data.messages.filter(m => m.channelId === channel.id).sort((a,b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
   const visible = messages.filter(m => !query || [m.body,...(m.cards || []).map(c => findCard(data.cardCatalog,c)?.title || "")].join(" ").toLowerCase().includes(query.toLowerCase()));
@@ -42,8 +43,8 @@ export function Chat({ channel, data, operations, mutate, onlineMutation, query,
     void writes.current.catch(() => setError("本机草稿保存失败，请复制内容后重试。"));
   }
   async function send() {
-    if (!ready || sending || (!body.trim() && !cards.length)) return;
-    setSending(true); setError("");
+    if (!ready || sendLock.current || (!body.trim() && !cards.length)) return;
+    sendLock.current = true; setSending(true); setError("");
     try {
       await writes.current;
       await mutate({ id:crypto.randomUUID(),entityId:crypto.randomUUID(),baseVersion:0,kind:"message.send",payload:{channelId:channel.id,body:body.trim(),cards} });
@@ -51,7 +52,7 @@ export function Chat({ channel, data, operations, mutate, onlineMutation, query,
       await localDb.drafts.delete(`${scope}:${draftId}`);
       textarea.current?.focus();
     } catch(e) { setError(e instanceof Error ? e.message : "未能发送，内容已保留。"); }
-    finally { setSending(false); }
+    finally { sendLock.current = false; setSending(false); }
   }
   function addEmoji(value: string) {
     const el = textarea.current, start = el?.selectionStart ?? body.length, end = el?.selectionEnd ?? start;

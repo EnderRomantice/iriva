@@ -55,6 +55,8 @@ export function synchronize(role: WorkspaceScope, { fresh = false } = {}): Promi
         const response = await request(role, "/api/mutations", operation.command);
         if (!response.ok) {
           const error = (await response.json().catch(() => ({}))).error || "同步失败";
+          // Expired sessions and transient throttling must not poison durable edits.
+          if ([401, 408, 425, 429].includes(response.status)) throw new Error(error);
           if (response.status >= 400 && response.status < 500) {
             await localDb.outbox.update(operation.seq!, { status: "conflict", error });
             blocked.add(operation.entityId);

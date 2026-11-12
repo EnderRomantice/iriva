@@ -8,6 +8,11 @@ import type { Actor, Entity, Snapshot, State } from "../../domain/models";
 import { DomainError, type Command, applicationSchema } from "../../domain/commands";
 import type { WorkspaceRepository } from "../repositories/workspace-repository";
 
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonical(item)]));
+  return value;
+}
 function requireRule(condition: unknown, message = "你没有执行此操作的权限。", status = 403): asserts condition { if (!condition) throw new DomainError(status, message); }
 const meta = (id: string, current?: Entity): Entity => ({ id, version: (current?.version ?? 0) + 1, createdAt: current?.createdAt ?? new Date().toISOString(), updatedAt: new Date().toISOString() });
 
@@ -68,13 +73,21 @@ export class WorkspaceService {
       const hash = createHash("sha256").update(`${actor.organizationId || defaultOrganizationId}:${pair}`).digest("hex");
       command = { ...command, entityId: `${hash.slice(0,8)}-${hash.slice(8,12)}-5${hash.slice(13,16)}-8${hash.slice(17,20)}-${hash.slice(20,32)}` };
     }
+    const fingerprint = createHash('sha256').update(JSON.stringify(canonical({
+      actor: { ...actor, organizationId: actor.organizationId || defaultOrganizationId }, command,
+    }))).digest('hex');
     return this.repo.transaction(async tx => {
-      const raw = await tx.read();
+      // Message writes only need the target message; scanning all history creates
+      // serializable predicate conflicts between unrelated sends.
+      const raw = await tx.read(command.kind === "message.send" || command.kind === "message.react" ? { messageId: command.entityId } : undefined);
       const state = this.organizationState(raw, actor);
       const table = (command.kind === "message.send" || command.kind === "message.react") ? "messages" : (command.kind === "channel.create" || command.kind === "conversation.open") ? "channels" : command.kind === "submission.save" ? "submissions" : command.kind === "feedback.save" ? "feedback" : (command.kind === "session.reschedule" || command.kind === "session.create") ? "sessions" : command.kind === "assignment.create" ? "assignments" : command.kind === "household.create" ? "households" : "applications";
       requireRule(!raw[table].some(e => e.id === command.entityId) || state[table].some(e => e.id === command.entityId));
       const receipt = await tx.receipt(actor.userId, command.id);
-      if (receipt) return command.kind === "conversation.open" ? { ...receipt, entityId: command.entityId } : receipt;
+      if (receipt) {
+        requireRule(receipt.fingerprint === fingerprint, "操作编号已使用或来自旧版本，请刷新核对结果后重试。", 409);
+        return command.kind === "conversation.open" ? { version: receipt.version, entityId: command.entityId } : { version: receipt.version };
+      }
       requireRule(state.users.some(u => u.id === actor.userId), "身份不存在。", 401);
       let version = 0;
       const checkVersion = (value?: Entity) => { requireRule((value?.version ?? 0) === command.baseVersion, "这条记录已在其他设备更新。你的输入已保留，请查看最新版本。", 409); version = (value?.version ?? 0) + 1; };
@@ -224,7 +237,7 @@ export class WorkspaceService {
           break;
         }
       }
-      await tx.acknowledge(actor.userId, command.id, version);
+      await tx.acknowledge(actor.userId, command.id, version, fingerprint);
       await tx.audit(actor.userId, command.kind, command.entityId);
       return command.kind === "conversation.open" ? { version, entityId: command.entityId } : { version };
     });

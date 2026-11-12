@@ -1,4 +1,4 @@
-import type { Role } from "./models";
+import type { Actor, Role } from "./models";
 export const defaultOrganizationId = "10000000-0000-4000-8000-000000001001";
 export const demoOrganizationId = "10000000-0000-4000-8000-000000001002";
 export type WorkspaceScope = Role | `${Role}:${string}`;
@@ -9,4 +9,9 @@ export function workspaceScope(role: Role, organizationId = defaultOrganizationI
 export function scopeIdentity(scope: WorkspaceScope) {
   const [role, organizationId = defaultOrganizationId] = scope.split(":");
   return { role: role as Role, organizationId };
+}
+
+/** Drafts always belong to one person, including on shared browsers. */
+export function draftScope(actor: Actor): WorkspaceScope {
+  return `${actor.role}:${actor.organizationId || defaultOrganizationId}:${actor.userId}`;
 }

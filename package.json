@@ -11,7 +11,10 @@
     "typecheck": "tsc --noEmit",
     "db:import": "tsx scripts/import-data.ts",
     "db:migrate:supabase": "tsx scripts/migrate-supabase.ts",
-    "test:postgres": "tsx scripts/test-postgres.ts"
+    "test:postgres": "tsx scripts/test-postgres.ts",
+    "test:e2e": "tsx scripts/test-postgres.ts --e2e",
+    "test:load": "tsx scripts/test-postgres.ts --load",
+    "test:release": "npm run typecheck && npm test && npm run build && npm run test:postgres && npm run test:e2e && npm run test:load"
   },
   "dependencies": {
     "@fontsource/noto-sans-sc": "^5.3.1",
@@ -29,6 +32,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22",

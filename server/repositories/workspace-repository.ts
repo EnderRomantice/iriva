@@ -4,13 +4,13 @@ export type Awaitable<T> = T | Promise<T>;
 
 /** Domain-facing port. Only the adapter knows SQLite, SQL names, and driver types. */
 export interface WorkspaceUnitOfWork {
-  read(): Awaitable<State>;
+  read(options?: { messageId: string }): Awaitable<State>;
   admission(userId: string, organizationId: string, hostId: string): Awaitable<{ registered: boolean; accepted: boolean; order?: { plan: string; amountMinor: number } }>;
   saveChannel(value: Channel): Awaitable<void>;
   saveChannelParticipant(value: ChannelParticipant): Awaitable<void>;
   saveMessage(value: Message): Awaitable<void>;
-  receipt(actorId: string, commandId: string): Awaitable<{ version: number } | undefined>;
-  acknowledge(actorId: string, commandId: string, version: number): Awaitable<void>;
+  receipt(actorId: string, commandId: string): Awaitable<{ version: number; fingerprint: string | null } | undefined>;
+  acknowledge(actorId: string, commandId: string, version: number, fingerprint: string): Awaitable<void>;
   saveSubmission(value: Submission): Awaitable<void>;
   saveFeedback(value: Feedback): Awaitable<void>;
   saveApplication(value: Application): Awaitable<void>;

@@ -117,3 +117,14 @@ test("online-only commands project optimistically before the server answers", as
   const undo = projectSnapshot(view, [op({ id: randomUUID(), entityId: messageId, baseVersion: 2, kind: "message.react", payload: { emoji: "👍", active: false } })]);
   assert.deepEqual(undo.messages[0].reactions, []);
 });
+
+
+test('draft keys isolate accounts in the same group and role', async () => {
+  const { draftScope } = await import('../domain/workspace');
+  const first = draftScope({role:'learn',userId:randomUUID()});
+  const second = draftScope({role:'learn',userId:randomUUID()});
+  await saveDraft(first,'assignment-shared','Private first draft');
+  assert.equal(await localDb.drafts.get(`${second}:assignment-shared`),undefined);
+  await saveDraft(second,'assignment-shared','Private second draft');
+  assert.equal((await localDb.drafts.get(`${first}:assignment-shared`))?.body,'Private first draft');
+});

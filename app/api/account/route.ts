@@ -107,10 +107,16 @@ export async function POST(request:Request) {
       return Response.json({channelId:conversation.entityId,organizationId});
     }
     if(body.action==='booking') {
-      const input=z.object({id:z.uuid(),status:z.enum(['accepted','rejected'])}).parse(body);
-      const result=await repo.db.prepare('UPDATE bookings SET status=? WHERE id=? AND host_id=? AND organization_id=?').run(input.status,input.id,actor.role==='host'?user.id:'',organizationId);
-      if(!result.changes) throw new DomainError(403,'只能处理自己收到的约谈。');
-      await repo.audit(user.id,`booking.${input.status}`,input.id);return Response.json({ok:true});
+      const input=z.object({id:z.uuid(),status:z.enum(['accepted','rejected']),expectedStatus:z.enum(['pending','accepted','rejected']).optional()}).parse(body);
+      await repo.transaction(async()=>{
+        const booking=await repo.db.prepare('SELECT status FROM bookings WHERE id=? AND host_id=? AND organization_id=?').get(input.id,actor.role==='host'?user.id:'',organizationId) as {status:string}|undefined;
+        if(!booking) throw new DomainError(403,'只能处理自己收到的约谈。');
+        if(booking.status===input.status) return;
+        if(booking.status!==(input.expectedStatus||'pending')) throw new DomainError(409,'约谈已在其他设备更新，请刷新后重试。');
+        await repo.db.prepare('UPDATE bookings SET status=? WHERE id=?').run(input.status,input.id);
+        await repo.audit(user.id,`booking.${input.status}`,input.id);
+      });
+      return Response.json({ok:true});
     }
     throw new DomainError(400,'未知操作。');
   } catch(e){return errorResponse(e);}

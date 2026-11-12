@@ -3,13 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import type { Assignment, Role, Snapshot } from "@/domain/models";
 import type { Command } from "@/domain/commands";
 import { localDb, saveDraft } from "@/local/database";
-import { workspaceScope } from "@/domain/workspace";
+import { draftScope } from "@/domain/workspace";
 import { Avatar } from "./primitives";
 
 interface Props { data: Snapshot; role: Role; assignment: Assignment; submissionId?: string; mutate: (command: Command) => Promise<void>; onSaved: () => void; notify: (message: string) => void }
 export function Practice({ data, role, assignment, submissionId, mutate, onSaved, notify }: Props) {
   const host = role === "host";
-  const scope = workspaceScope(role, data.actor.organizationId);
+  const scope = draftScope(data.actor);
   const submission = submissionId ? data.submissions.find(s => s.id === submissionId) : data.submissions.find(s => s.assignmentId === assignment.id && s.learnerId === data.actor.userId);
   const feedback = data.feedback.find(f => f.submissionId === submission?.id);
   const existing = host ? feedback : submission;
@@ -21,6 +21,7 @@ export function Practice({ data, role, assignment, submissionId, mutate, onSaved
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const submitLock = useRef(false);
   const writes = useRef(Promise.resolve());
   const editSequence = useRef(0);
   useEffect(() => {
@@ -40,7 +41,8 @@ export function Practice({ data, role, assignment, submissionId, mutate, onSaved
     void writes.current.then(() => { if (editSequence.current === sequence) { setSaved(true); setError(""); } }).catch(() => setError("本机保存失败，请复制你的内容后重试。"));
   };
   const submit = async (publish: boolean) => {
-    setBusy(true); setError("");
+    if (!ready || submitLock.current) return;
+    submitLock.current = true; setBusy(true); setError("");
     try {
       await writes.current;
       if (!publish && (existing?.status === "submitted" || existing?.status === "published")) {
@@ -56,7 +58,7 @@ export function Practice({ data, role, assignment, submissionId, mutate, onSaved
       notify(publish ? "已存本机，同步后送达。" : "草稿已加入同步队列。");
       onSaved();
     } catch (e) { setError(e instanceof Error ? e.message : "无法保存，请重试。"); }
-    finally { setBusy(false); }
+    finally { submitLock.current = false; setBusy(false); }
   };
   const author = data.users.find(u => u.id === (host ? submission?.learnerId : data.households.find(h => h.id === assignment.householdId)?.hostId));
   return <section className="sp-practice">

@@ -8,7 +8,7 @@ const destination = process.argv[3];
 if (!source || !destination) throw new Error("Usage: npm run db:import -- export.json new.sqlite");
 if (existsSync(destination)) throw new Error("Restore only into a new database file; existing databases are never overwritten.");
 const backup = JSON.parse(readFileSync(source, "utf8"));
-if (backup.format !== "iriva-portable-v1" || ![1, 2, 3, 4, 11, 12].includes(backup.schemaVersion)) throw new Error("Unsupported export format");
+if (backup.format !== "iriva-portable-v1" || ![1, 2, 3, 4, 11, 12, 13].includes(backup.schemaVersion)) throw new Error("Unsupported export format");
 mkdirSync(path.dirname(destination), { recursive: true });
 const repo = new SqliteRepository(destination);
 try {
@@ -27,9 +27,12 @@ try {
     }
     for (const row of backup.hostGrants || []) repo.db.prepare('INSERT INTO host_grants VALUES (?,?,?,?,?,?)').run(row.id,row.platform_id,row.email,row.user_id,row.created_by,row.created_at);
     for (const row of backup.groupRequests || []) repo.db.prepare('INSERT INTO group_requests VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(row.id,row.platform_id,row.host_id,row.name,row.reason,row.status,row.workspace_id,row.reviewed_by,row.review_note,row.created_at,row.reviewed_at);
-    for (const row of backup.mutationReceipts || []) repo.db.prepare("INSERT INTO mutation_receipts VALUES (?,?,?,?)").run(row.actor_id, row.command_id, row.version, row.created_at);
+    for (const row of backup.mutationReceipts || []) {
+      repo.db.prepare("INSERT INTO mutation_receipts VALUES (?,?,?,?)").run(row.actor_id, row.command_id, row.version, row.created_at);
+      if(row.fingerprint) repo.db.prepare("INSERT INTO mutation_fingerprints VALUES (?,?,?)").run(row.actor_id,row.command_id,row.fingerprint);
+    }
     for (const row of backup.auditEvents || []) repo.db.prepare("INSERT INTO audit_events VALUES (?,?,?,?,?)").run(row.id, row.actor_id, row.kind, row.entity_id, row.created_at);
     if (repo.db.prepare("PRAGMA foreign_key_check").all().length) throw new Error("Foreign key validation failed");
   });
-  console.log(`Restored schema v12 to ${destination}`);
+  console.log(`Restored schema v13 to ${destination}`);
 } finally { repo.db.close(); }

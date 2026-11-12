@@ -78,7 +78,11 @@ test('registration → support → pending order → instant payment → booking
  account=await (await GET(request(undefined,cookie))).json();assert.equal(account.bookings.length,1);assert.equal(account.bookings[0].channel_id,channelId);
  const hostAccount=await (await GET(request(undefined,'','host'))).json();assert.equal(hostAccount.bookings[0].learner_id,actor.userId);
  assert.equal((await POST(request({action:'booking',id:account.bookings[0].id,status:'accepted'},cookie))).status,403);
- assert.equal((await POST(request({action:'booking',id:account.bookings[0].id,status:'accepted'},'','host'))).status,200);
+ const bookingId=account.bookings[0].id;
+ const decisions=await Promise.all(Array.from({length:8},()=>POST(request({action:'booking',id:bookingId,status:'accepted',expectedStatus:'pending'},'','host'))));
+ for(const decision of decisions) assert.equal(decision.status,200);
+ assert.equal((await (await workspaceRepository()).db.prepare("SELECT id FROM audit_events WHERE kind='booking.accepted' AND entity_id=?").all(bookingId)).length,1);
+ assert.equal((await POST(request({action:'booking',id:bookingId,status:'rejected',expectedStatus:'pending'},'','host'))).status,409);
  await assert.rejects((await workspaceService()).execute(demoActors.host,enroll),{status:403});
  await (await workspaceRepository()).db.prepare("UPDATE users SET signature='' WHERE id=?").run(actor.userId);
  await assert.rejects((await workspaceService()).execute(demoActors.ops,enroll),{status:422});

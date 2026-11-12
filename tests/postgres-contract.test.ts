@@ -16,6 +16,9 @@ test('PostgreSQL runtime role cannot alter schema or read migration metadata',{s
   await assert.rejects(repo!.sql`CREATE TABLE iriva.forbidden (id text)`,{code:'42501'});
   const [role]=await repo!.sql`SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user`;
   assert.equal(role.rolsuper,false);assert.equal(role.rolbypassrls,false);
+  const [table]=await repo!.sql`SELECT relrowsecurity FROM pg_class WHERE oid='iriva.mutation_fingerprints'::regclass`;
+  assert.equal(table.relrowsecurity,true);
+  await assert.rejects(repo!.sql`ALTER TABLE iriva.mutation_fingerprints DISABLE ROW LEVEL SECURITY`,{code:'42501'});
 });
 test('PostgreSQL rolls back failed writes and persists a retried concurrent command once',{skip:!enabled},async()=>{
   const state=await repo!.read(),host=state.organizations.find(o=>o.kind==='host'&&o.ownerId===seedId(5))!;
@@ -41,5 +44,13 @@ test('PostgreSQL rolls back failed writes and persists a retried concurrent comm
     const message=(await second.read()).messages.find(m=>m.id===messageId)!;
     assert.ok(Array.isArray(message.reactions));assert.equal(message.reactions?.length,1);
     assert.equal(message.body,'Persistent conversation');
+    // Independent sends use separate connections without scanning message history.
+    const sends=Array.from({length:24},()=>({id:randomUUID(),entityId:randomUUID(),baseVersion:0,kind:'message.send' as const,payload:{channelId:id,body:'Concurrent independent message'}}));
+    await Promise.all(sends.map((send,index)=>services[index%services.length].execute(actor,send)));
+    assert.equal((await repo!.db.prepare('SELECT id FROM messages WHERE channel_id=?').all(id)).length,25);
+    await assert.rejects(services[1].execute(actor,{...sends[0],payload:{...sends[0].payload,body:'Changed retry'}}),{status:409});
+    const scoped=await repo!.read({messageId});
+    assert.deepEqual(scoped.messages.map(m=>m.id),[messageId]);
+
   }finally{await second.db.close();}
 });
