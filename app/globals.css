@@ -67,9 +67,10 @@ input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px soli
 @media(prefers-reduced-motion:reduce){.lang-page,.lang-trigger svg{transition:none}}
 
 /* Hero painting: Savrasov, Landscape with a Rainbow (1881), public domain. */
-.hero-painting{grid-column:1/-1;margin:0}
-.hero-painting img{display:block;width:100%;height:auto;aspect-ratio:1000/773;object-fit:cover;mix-blend-mode:normal;border-radius:2px;box-shadow:0 18px 40px #294e591f}
-.hero-painting figcaption{margin-top:10px;font-size:12px;color:var(--muted);text-align:right}
+.four-people{grid-column:1/-1;margin:0;color:var(--ink)}
+.four-people-title{font-family:var(--serif);font-size:clamp(24px,2.6vw,32px);line-height:1.6;letter-spacing:1px;text-align:center;text-wrap:balance}.four-people-title span{color:var(--blue)}html[lang=en] .four-people-title{letter-spacing:0}
+.four-people-stage{position:relative;aspect-ratio:1/0.56;margin-top:18px}
+@media(max-width:700px){.four-people-stage{margin-top:10px}}
 
 
 /* One container and gutter for header, sections and app pages so every edge lines up. */
