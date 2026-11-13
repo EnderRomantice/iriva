@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+<rect width="200" height="200" fill="#fbf2dc"/>
+<rect y="178" width="200" height="22" fill="#c98a0c" opacity=".14"/>
+<g transform="translate(200 0) scale(-1 1)">
+<polygon points="54,120 32,80 48,128" fill="#c98a0c"/>
+<line x1="80" y1="166" x2="80" y2="180" stroke="#1d3b31" stroke-width="5" stroke-linecap="round"/><line x1="98" y1="166" x2="98" y2="180" stroke="#1d3b31" stroke-width="5" stroke-linecap="round"/>
+<circle cx="90" cy="130" r="44" fill="#f1b52e"/>
+<path d="M46 130A44 44 0 0 0 134 130Z" fill="#f8d77f"/>
+<path d="M64 116A34 34 0 0 0 98 150L98 116Z" fill="#c98a0c"/>
+<circle cx="130" cy="142" r="22" fill="#f1b52e"/>
+<polygon points="140,156 156,174 148,152" fill="#ef7a50"/>
+<circle cx="136" cy="136" r="5.5" fill="#1d3b31"/><circle cx="138" cy="134" r="1.8" fill="#fff"/>
+<circle cx="124" cy="150" r="4.5" fill="#ef7a50" opacity=".4"/>
+<circle cx="166" cy="180" r="3" fill="#c98a0c"/><circle cx="176" cy="177" r="2.5" fill="#c98a0c"/>
+</g>
+<path d="M28 16H76A14 14 0 0 1 90 30V56A14 14 0 0 1 76 70H56L56 94L42 70H28A14 14 0 0 1 14 56V30A14 14 0 0 1 28 16Z" fill="#fffdf8" stroke="#1d3b31" stroke-opacity=".16" stroke-width="2" stroke-linejoin="round"/>
+<text x="52" y="55" font-size="34" text-anchor="middle" font-family="Apple Color Emoji,Segoe UI Emoji,Noto Color Emoji,sans-serif">🍜</text>
+</svg>

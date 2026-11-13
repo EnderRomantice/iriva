@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+<rect width="200" height="200" fill="#dcf3f1"/>
+<rect y="178" width="200" height="22" fill="#0d7f7b" opacity=".14"/>
+<polygon points="60,132 14,112 22,128" fill="#0d7f7b"/>
+<polygon points="58,140 10,140 20,154" fill="#1fb2ad"/>
+<polygon points="62,148 22,176 38,178" fill="#0d7f7b"/>
+<line x1="84" y1="162" x2="84" y2="180" stroke="#1d3b31" stroke-width="5" stroke-linecap="round"/><line x1="102" y1="162" x2="102" y2="180" stroke="#1d3b31" stroke-width="5" stroke-linecap="round"/>
+<circle cx="92" cy="132" r="38" fill="#1fb2ad"/>
+<path d="M54 132A38 38 0 0 0 130 132Z" fill="#7fd6d1"/>
+<polygon points="110,82 106,52 122,78" fill="#0d7f7b"/>
+<polygon points="120,76 126,46 132,76" fill="#1fb2ad"/>
+<polygon points="130,78 146,54 140,82" fill="#0d7f7b"/>
+<circle cx="124" cy="98" r="24" fill="#1fb2ad"/>
+<polygon points="82,128 58,84 104,114" fill="#0d7f7b"/>
+<polygon points="146,90 168,94 146,98" fill="#f2b632"/>
+<polygon points="146,102 162,108 146,106" fill="#f2b632"/>
+<circle cx="132" cy="92" r="5.5" fill="#1d3b31"/><circle cx="134" cy="90" r="1.8" fill="#fff"/>
+<circle cx="124" cy="108" r="4.5" fill="#f2b632" opacity=".4"/>
+<path d="M26 8H74A14 14 0 0 1 88 22V48A14 14 0 0 1 74 62H74L94 68L60 62H26A14 14 0 0 1 12 48V22A14 14 0 0 1 26 8Z" fill="#fffdf8" stroke="#1d3b31" stroke-opacity=".16" stroke-width="2" stroke-linejoin="round"/>
+<text x="50" y="47" font-size="34" text-anchor="middle" font-family="Apple Color Emoji,Segoe UI Emoji,Noto Color Emoji,sans-serif">🌏</text>
+</svg>

@@ -67,7 +67,7 @@ input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px soli
 @media(prefers-reduced-motion:reduce){.lang-page,.lang-trigger svg{transition:none}}
 
 /* Hero painting: Savrasov, Landscape with a Rainbow (1881), public domain. */
-.four-people{grid-column:1/-1;margin:0;color:var(--ink)}
+.four-people{grid-column:1/-1;margin:0;color:var(--ink)}main.theme-paper{overflow-x:clip}.hero{position:relative;padding-top:clamp(110px,13vw,170px)}.hero>:not(.hero-rainbow){position:relative;z-index:1}.hero-rainbow{position:absolute;top:clamp(14px,2vw,28px);left:50%;width:100vw;transform:translateX(-50%);overflow:visible;pointer-events:none;opacity:.78}.hero-rainbow path{stroke-dasharray:1;stroke-dashoffset:1;animation:rainbow-draw 1.8s cubic-bezier(.45,0,.2,1) .15s forwards}@keyframes rainbow-draw{to{stroke-dashoffset:0}}@media(prefers-reduced-motion:reduce){.hero-rainbow path{animation:none;stroke-dashoffset:0}}
 .four-people-title{font-family:var(--serif);font-size:clamp(24px,2.6vw,32px);line-height:1.6;letter-spacing:1px;text-align:center;text-wrap:balance}.four-people-title span{color:var(--blue)}html[lang=en] .four-people-title{letter-spacing:0}
 .four-people-stage{position:relative;aspect-ratio:1/0.56;margin-top:18px}
 @media(max-width:700px){.four-people-stage{margin-top:10px}}

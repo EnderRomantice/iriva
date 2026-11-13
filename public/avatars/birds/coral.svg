@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+<rect width="200" height="200" fill="#fbece4"/>
+<rect y="178" width="200" height="22" fill="#b9431f" opacity=".14"/>
+<ellipse cx="100" cy="184" rx="30" ry="4" fill="#b9431f" opacity=".18"/>
+<g transform="translate(200 0) scale(-1 1) rotate(-12 100 120)">
+<polygon points="80,112 58,58 108,104" fill="#f4a383"/>
+<polygon points="50,128 16,112 24,146" fill="#b9431f"/>
+<ellipse cx="92" cy="124" rx="46" ry="34" fill="#ec6a3c"/>
+<path d="M46 124A46 34 0 0 0 138 124Z" fill="#f4a383"/>
+<polygon points="88,116 96,50 124,110" fill="#b9431f"/>
+<circle cx="136" cy="102" r="22" fill="#ec6a3c"/>
+<polygon points="155,96 176,102 155,108" fill="#f2b632"/>
+<circle cx="143" cy="96" r="5.5" fill="#1d3b31"/><circle cx="145" cy="94" r="1.8" fill="#fff"/>
+<circle cx="136" cy="110" r="4.5" fill="#f2b632" opacity=".4"/>
+</g>
+<path d="M28 12H76A14 14 0 0 1 90 26V52A14 14 0 0 1 76 66H58L60 80L44 66H28A14 14 0 0 1 14 52V26A14 14 0 0 1 28 12Z" fill="#fffdf8" stroke="#1d3b31" stroke-opacity=".16" stroke-width="2" stroke-linejoin="round"/>
+<text x="52" y="51" font-size="34" text-anchor="middle" font-family="Apple Color Emoji,Segoe UI Emoji,Noto Color Emoji,sans-serif">✈️</text>
+</svg>
