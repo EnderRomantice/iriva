@@ -135,3 +135,31 @@ body{overflow-x:clip}
 
 /* Plan labels are Chinese tier names on the zh page; tracking is for the English caps only. */
 html[lang=zh-CN] .planen{letter-spacing:0}
+
+/* 全球社区地图 */
+.community{padding:96px 0 100px}.community-head{text-align:center;max-width:640px;margin:0 auto 44px}.community-head h2{text-wrap:balance}.community-head p{margin-top:16px;font-size:15px;color:var(--muted);line-height:2}
+.community-map{position:relative;aspect-ratio:1000/436;max-width:1040px;margin:0 auto}.community-map>img{display:block;width:100%;height:100%;filter:drop-shadow(0 10px 30px #1d3b3110)}
+.community-pin{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;padding:0;border:0;background:none;display:grid;place-items:center;z-index:1}.community-pin.is-open{z-index:3}
+.community-dot{position:relative;width:var(--pin);height:var(--pin);border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px #fffdf8,0 2px 8px #1d3b3140;transition:transform .25s ease}.community-pin:nth-of-type(2n) .community-pin:nth-of-type(3n) 
+.community-pin.is-open .community-dot{transform:scale(1.25)}.community-pin:focus-visible{outline:none}.community-pin:focus-visible .community-dot{outline:2px solid var(--orange);outline-offset:4px}
+.community-card{position:absolute;left:50%;bottom:calc(50% + var(--pin) / 2 + 12px);transform:translate(-50%,6px);display:flex;flex-direction:column;gap:2px;min-width:168px;padding:12px 16px;text-align:left;background:#fffdf8;border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 32px -8px #1d3b3133;color:var(--ink);font-size:13px;line-height:1.6;white-space:nowrap;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s,transform .2s,visibility .2s}
+.community-card b{font-family:var(--serif);font-weight:500;font-size:16px}.community-card small{color:var(--muted);font-size:12px}
+.community-pin.is-open .community-card{opacity:1;visibility:visible;transform:translate(-50%,0)}
+.community-stats{display:flex;justify-content:center;gap:72px;margin:44px auto 0;max-width:1040px;padding-top:32px;border-top:1px solid var(--line)}.community-stats p{display:flex;align-items:baseline;gap:8px}.community-stats b{font-weight:400;font-family:var(--serif);font-size:40px;line-height:1;color:var(--accent);font-variant-numeric:tabular-nums}.community-stats span{font-size:14px;color:var(--muted)}
+.community-list{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media(prefers-reduced-motion:reduce){}
+@media(max-width:700px){.community{padding:60px 0}.community-head{margin-bottom:24px}.community-head p{font-size:14px}.community-map{margin:0 -12px}.community-pin{--pin:8px!important}.community-dot{box-shadow:0 0 0 2px #fffdf8,0 1px 4px #1d3b3140}.community-card{display:none}
+.community-stats{gap:0;justify-content:space-between;margin-top:28px;padding-top:24px}.community-stats p{flex-direction:column;align-items:flex-start;gap:4px}.community-stats b{font-size:30px}.community-stats span{font-size:12px}
+.community-list{position:static;width:auto;height:auto;overflow:visible;clip:auto;white-space:normal;list-style:none;margin:24px 0 0;padding:0}.community-list li{display:grid;grid-template-columns:5.5em 4.5em 1fr;gap:10px;padding:11px 0;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}.community-list li b{color:var(--ink);font-weight:500}html[lang=en] .community-list li{grid-template-columns:8.5em 4.5em 1fr}}
+
+/* 地图标记依次弹出，并标出 Host 人数 */
+.community-dot>i{display:none}
+.community-dot,.community-label{opacity:0;transform:scale(.3);transition:opacity .35s ease,transform .55s cubic-bezier(.34,1.56,.64,1);transition-delay:calc(var(--i) * 180ms + 150ms)}
+.community-label{transform:translateX(-6px);transition-delay:calc(var(--i) * 180ms + 330ms)}
+.community-map.is-shown .community-dot{opacity:1;transform:scale(1)}.community-map.is-shown .community-label{opacity:1;transform:none}
+.community-map.is-shown .community-pin.is-open .community-dot{transform:scale(1.25);transition-delay:0s}
+.community-label{position:absolute;left:calc(50% + var(--pin) / 2 + 6px);top:50%;margin-top:-12px;height:24px;padding:0 9px;display:flex;align-items:center;white-space:nowrap;font-size:12px;line-height:1;color:var(--ink);background:#fffdf8;border:1px solid var(--line);border-radius:999px;box-shadow:0 4px 12px -4px #1d3b3126;pointer-events:none}
+.community-pin.label-left .community-label{left:auto;right:calc(50% + var(--pin) / 2 + 6px);transform:translateX(6px)}.community-map.is-shown .community-pin.label-left .community-label{transform:none}
+.community-pin.is-open .community-label{opacity:0!important;transition-delay:0s}
+@media(prefers-reduced-motion:reduce){.community-dot,.community-label{transition:none}}
+@media(max-width:700px){.community-label{display:none}.community-pin{--pin:18px!important}.community-dot{display:grid;place-items:center}.community-pin.label-left{margin-left:-34px}.community-dot>i{display:block;font-style:normal;font-size:11px;font-weight:600;line-height:1;color:#fffdf8;font-variant-numeric:tabular-nums}}
