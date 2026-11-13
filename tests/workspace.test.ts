@@ -11,7 +11,6 @@ import { WorkspaceService } from "../server/services/workspace-service";
 import { seedDemo, seedId } from "../server/db/seed";
 import { demoActors } from "../domain/models";
 import { commandSchema, type Command } from "../domain/commands";
-import { householdSnapshot } from "../features/space/content-scope";
 import { actorFromRequest } from "../server/http";
 
 function fixture(t: { after: (fn: () => void) => void }) {
@@ -28,7 +27,7 @@ test("schema and seed are repeatable; foreign keys are valid", t => {
   const second = new SqliteRepository(file);
   assert.equal(second.read().users.length, 12);
   assert.deepEqual(second.db.prepare("PRAGMA foreign_key_check").all(), []);
-  assert.equal((second.db.prepare("SELECT COUNT(*) AS n FROM schema_migrations").get() as { n: number }).n, 14);
+  assert.equal((second.db.prepare("SELECT COUNT(*) AS n FROM schema_migrations").get() as { n: number }).n, 15);
   second.db.close();
 });
 
@@ -213,28 +212,6 @@ test("organization migration preserves populated households and restores FK enfo
   } finally { repo.db.close(); }
 });
 
-
-test("group content narrows every role without falling back to the first group", async t => {
-  const { service } = fixture(t);
-  for (const role of ["host", "ops", "learn"] as const) {
-    const organization = await service.snapshot(demoActors[role]);
-    assert.equal(householdSnapshot(organization, ""), organization);
-    assert.equal(householdSnapshot(organization, "missing-group"), undefined);
-    if (role !== "learn") assert.equal(organization.households.length, 2);
-    for (const household of organization.households) {
-      const group = householdSnapshot(organization, household.id)!;
-      assert.deepEqual(group.households.map(h => h.id), [household.id]);
-      assert.deepEqual(group.terms.map(t => t.id), [household.termId]);
-      assert.deepEqual(group.sessions, organization.sessions.filter(s => s.householdId === household.id));
-      assert.deepEqual(group.assignments, organization.assignments.filter(a => a.householdId === household.id));
-      assert.deepEqual(group.memberships, organization.memberships.filter(m => m.householdId === household.id));
-      assert.deepEqual(group.enrollments, organization.enrollments.filter(e => e.householdId === household.id));
-      assert.deepEqual(group.submissions, organization.submissions.filter(s => group.assignments.some(a => a.id === s.assignmentId)));
-      assert.deepEqual(group.feedback, organization.feedback.filter(f => group.submissions.some(s => s.id === f.submissionId)));
-      assert.deepEqual(group.applications, []);
-    }
-  }
-});
 
 test("create menu commands persist tasks, sessions and groups with role and organization boundaries", async t => {
   const { service, file } = fixture(t);

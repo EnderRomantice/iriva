@@ -9,7 +9,7 @@ import { tables } from './tables';
 
 const snake=(key:string)=>key.replace(/[A-Z]/g,c=>`_${c.toLowerCase()}`);
 const camel=(key:string)=>key.replace(/_([a-z])/g,(_,c:string)=>c.toUpperCase());
-const sqlTables=[...tables.map(snake),'profile_avatars','workspace_revisions','mutation_receipts','mutation_fingerprints','audit_events','credentials','auth_sessions','bookings','plan_orders','email_challenges','email_identities','host_grants','group_requests','iriva_memory','iriva_contacts'];
+const sqlTables=[...tables.map(snake),'profile_avatars','workspace_revisions','mutation_receipts','mutation_fingerprints','audit_events','credentials','auth_sessions','bookings','plan_orders','email_challenges','email_identities','host_grants','group_requests','iriva_memory','iriva_contacts','household_messages','member_applications','placements','team_members','team_tasks','practice_pairs','notifications','practice_invites','coach_drafts','coach_usage','suggestions'];
 /** Convert the internal SQL dialect; quoted strings never contain placeholders. */
 export function postgresQuery(query:string) {
   let parameter=0;

@@ -1,0 +1,3 @@
+/* 暖纸配色：只用于落地页（中英文首页的 <main className="theme-paper">）。
+ * 学习空间、加入资料等应用页面保持 app/globals.css 里的默认 Jade。对比度已按 WCAG AA 检查。 */
+:root:has(main.theme-paper){--paper:#f6f2ea;--surface:#fffdf8;--tint:#edf1e8;--tint-strong:#e1e8db;--warm-tint:#f5ebdf;--line:#d9dacf;--line-strong:#b5c1b8;--line-control:#7c9184;--decor:#6f8a7a;--ink:#1d3640;--muted:#4a5d5c;--accent:#2c6079;--warm:#8a4728;--green:#3b6745;--primary:#2a5559;--primary-hover:#1f4447;--deep:#1f3d47;--on-deep:#f6f2ea;--on-deep-muted:#c4d4d6}

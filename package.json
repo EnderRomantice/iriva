@@ -17,8 +17,9 @@
     "test:release": "npm run typecheck && npm test && npm run build && npm run test:postgres && npm run test:e2e && npm run test:load"
   },
   "dependencies": {
-    "@fontsource/noto-sans-sc": "^5.3.1",
-    "@fontsource/noto-serif-sc": "^5.3.1",
+    "@chinese-fonts/yozai": "^3.0.0",
+    "@fontsource-variable/source-sans-3": "^5.3.1",
+    "@fontsource-variable/source-serif-4": "^5.3.1",
     "better-sqlite3": "^13.0.3",
     "dexie": "^4.4.7",
     "dexie-react-hooks": "^4.4.0",
