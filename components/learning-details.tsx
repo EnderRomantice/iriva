@@ -13,11 +13,11 @@ const hosts:{name:string;photo:string;education:{school:Text;detail:Text;years:s
 
 export function HostStandards({english=false}:{english?:boolean}){
  const criteria=english?[
- ['Clear communication','A US native English-speaking Host with clear, natural expression.'],
+ ['Clear communication','A native English-speaking Host with clear, natural expression.'],
  ['Respect and listening','Respect for different backgrounds and ways of expressing yourself.'],
  ['Consistent presence','Time and attention for the same group throughout four weeks.']
  ]:[
- ['专业沟通','美国母语背景，表达清晰、自然。'],
+ ['专业沟通','英语母语背景，表达清晰、自然。'],
  ['尊重与倾听','尊重不同文化、表达节奏与个人边界。'],
  ['稳定同行','为四周交流持续投入时间与关注。']
  ];
