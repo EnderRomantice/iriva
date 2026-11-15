@@ -32,23 +32,14 @@ export async function POST(req: Request) {
   try {
     const b = await req.json() as Row, action = text(b, 'action', 20), d = await pilotDb();
     const m = await member(u.userId);
-    if (action === 'create' || action === 'join') {
+    // 邀请码只能在加入资料（/apply）里填写，不能绕过资料直接进组。
+    if (action === 'join') return reply({ error: '请在加入资料中填写邀请码。' }, 400);
+    if (action === 'create') {
       if (m) return reply({ error: '你已经在一个 Household 里了。' }, 409);
       const name = text(b, 'name', 50); if (!name) return reply({ error: '请填写你的显示名称。' }, 400);
-      if (action === 'create') {
-        if (!await teamRole(u)) return reply({ error: 'Household 由青鸟团队安排，请先提交加入资料。' }, 403);
-        const title = text(b, 'title', 70); if (!title) return reply({ error: '请为 Household 命名。' }, 400);
-        await createHousehold(title, u.userId, 'A meal that tastes like home', [{ userId: u.userId, role: 'host', name }]);
-      } else {
-        const h = await d.prepare('SELECT id FROM households WHERE code=?').get(text(b, 'code', 100)) as Row | undefined;
-        if (!h) return reply({ error: '没有找到这个邀请码。' }, 400);
-        const joined = await pilotTransaction(async () => {
-          if (count(await d.prepare("SELECT COUNT(*) AS n FROM memberships WHERE household_id=? AND role='learner'").get(h.id)) >= 4) return false;
-          await d.prepare(insertMembership).run(...membershipRow(String(h.id), u.userId, 'learner', name));
-          return true;
-        });
-        if (!joined) return reply({ error: '这个 Household 已经有四位学员了。' }, 409);
-      }
+      if (!await teamRole(u)) return reply({ error: 'Household 由青鸟团队安排，请先提交加入资料。' }, 403);
+      const title = text(b, 'title', 70); if (!title) return reply({ error: '请为 Household 命名。' }, 400);
+      await createHousehold(title, u.userId, 'A meal that tastes like home', [{ userId: u.userId, role: 'host', name }]);
       return reply({ ok: true });
     }
     if (!m) return reply({ error: '请先加入 Household。' }, 403);

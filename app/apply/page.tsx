@@ -1,5 +1,6 @@
 import {ownApplication,requireUser} from '../../server/pilot';
 import ApplyForm from './form';
+import '../app/portal.css';
 import './style.css';
 export const dynamic='force-dynamic';
 export const metadata={title:'青鸟 IRIVA · 填写加入资料'};
