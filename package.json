@@ -14,7 +14,8 @@
     "test:postgres": "tsx scripts/test-postgres.ts",
     "test:e2e": "tsx scripts/test-postgres.ts --e2e",
     "test:load": "tsx scripts/test-postgres.ts --load",
-    "test:release": "npm run typecheck && npm test && npm run build && npm run test:postgres && npm run test:e2e && npm run test:load"
+    "test:release": "npm run typecheck && npm test && npm run build && npm run test:postgres && npm run test:e2e && npm run test:load",
+    "test:reviews": "tsx scripts/test-postgres.ts --reviews"
   },
   "dependencies": {
     "@chinese-fonts/yozai": "^3.0.0",
@@ -24,11 +25,14 @@
     "d3-geo": "^3.1.2",
     "dexie": "^4.4.7",
     "dexie-react-hooks": "^4.4.0",
+    "emojibase-data": "^16.0.3",
     "lucide-react": "^1.65.0",
     "next": "^16.4.3",
     "postgres": "4.0.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "use-stick-to-bottom": "^1.1.6",
     "wayline-agent-runtime": "file:vendor/wayline-agent-runtime-0.1.0.tgz",
     "zod": "^4.6.7"

@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { Sql } from 'postgres';
 import type { SqliteRepository } from '../repositories/sqlite-repository';
 
-export const migrationTables = ['users','organizations','terms','households','organization_memberships','memberships','sessions','assignments','submissions','feedback','applications','enrollments','channels','channel_participants','messages','mutation_receipts','mutation_fingerprints','audit_events','credentials','auth_sessions','bookings','plan_orders','email_challenges','email_identities','host_grants','group_requests','iriva_memory','iriva_contacts','profile_avatars','household_messages','member_applications','placements','team_members','team_tasks','practice_pairs','notifications','practice_invites','coach_drafts','coach_usage','suggestions'] as const;
+export const migrationTables = ['users','organizations','terms','households','organization_memberships','memberships','sessions','assignments','submissions','feedback','applications','enrollments','channels','channel_participants','messages','mutation_receipts','mutation_fingerprints','audit_events','credentials','auth_sessions','bookings','plan_orders','email_challenges','email_identities','host_grants','group_requests','iriva_memory','iriva_contacts','profile_avatars','household_messages','member_applications','placements','team_members','team_tasks','practice_pairs','notifications','practice_invites','coach_drafts','coach_usage','suggestions','activity_reflections','activity_observations','activity_cards','household_message_reactions','household_avatars'] as const;
 export type DataSnapshot = Record<string, Record<string, unknown>[]>;
 const jsonColumns = new Set(['host_qualifications','reactions','cards']);
 const epochColumns = new Set(['expires_at','verified_at']);
@@ -25,7 +25,7 @@ export function sqliteSnapshot(repo:SqliteRepository):DataSnapshot {
   return repo.atomic(()=>Object.fromEntries(migrationTables.map(table=>[table,repo.db.prepare(`SELECT * FROM ${table}`).all() as Record<string,unknown>[]])));
 }
 export async function applyPostgresMigrations(sql:Sql) {
-  for (const filename of ['20261101224532_iriva_postgres.sql','20261106000000_iriva_assistant.sql','20261110074222_mutation_receipt_fingerprint.sql','20261112021222_bounded_workspace_reads.sql','20261113000000_pilot.sql']) {
+  for (const filename of ['20261101224532_iriva_postgres.sql','20261106000000_iriva_assistant.sql','20261110074222_mutation_receipt_fingerprint.sql','20261112021222_bounded_workspace_reads.sql','20261113000000_pilot.sql','20261116011519_activity_reviews.sql','20261116120000_household_reactions.sql','20261116130000_household_avatars.sql']) {
     await applyMigration(sql,filename);
   }
 }

@@ -5,6 +5,7 @@ import '@fontsource-variable/source-sans-3/index.css';
 import '@fontsource-variable/source-serif-4/index.css';
 import './globals.css';
 import './theme-paper.css';
+import './workspace-theme.css';
 
 
 export const metadata: Metadata = {

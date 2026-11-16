@@ -4,13 +4,14 @@ import {useRouter} from 'next/navigation';
 import {FormEvent,useState} from 'react';
 import {ArrowLeft,ArrowUpRight,Check,Leaf,UserRound} from 'lucide-react';
 import AccountMenu from '../app/account-menu';
+import WorkspaceSidebar from '../../components/workspace/sidebar';
 import {standardTimezones,timezoneLabel} from '../../lib/timezones';
 
 type Profile={name:string;location:string;age_band:string;life_stage:string;mbti:string;contact_preference:string;contact:string};
 const mbtis=['INTJ','INTP','ENTJ','ENTP','INFJ','INFP','ENFJ','ENFP','ISTJ','ISFJ','ESTJ','ESFJ','ISTP','ISFP','ESTP','ESFP'];
 const statusText:Record<string,string>={new:'资料已收到，团队会跟进',interest:'意向已登记',contacted:'正在了解你的学习需要',shortlist:'正在为你安排伙伴',hold:'正在协调后续安排',declined:'本期暂无合适安排',assigned:'已加入小组'};
 
-export default function AboutProfile({email,teamAccess,role,household,profile,hasApplication,status}:{email:string;teamAccess:boolean;role:string|null;household:{name:string;timezone:string}|null;profile:Profile;hasApplication:boolean;status:string|null}){
+export default function AboutProfile({email,teamAccess,role,household,profile,hasApplication,status}:{email:string;teamAccess:boolean;role:string|null;household:{name:string;timezone:string;avatar?:string|null}|null;profile:Profile;hasApplication:boolean;status:string|null}){
   const router=useRouter();
   const [f,setF]=useState(profile),[timezone,setTimezone]=useState(()=>standardTimezones.find(z=>`UTC${z.value}`===timezoneLabel(household?.timezone||''))?.value||''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[saved,setSaved]=useState(false);
   const edit=(k:keyof Profile,v:string)=>{setF(p=>({...p,[k]:v}));setSaved(false)};
@@ -18,12 +19,9 @@ export default function AboutProfile({email,teamAccess,role,household,profile,ha
     try{const r=await fetch('/api/profile',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({...f,timezone})});const d=await r.json() as {error?:string};if(!r.ok)throw new Error(d.error);setSaved(true);router.refresh()}
     catch(e){setError((e as Error).message)}finally{setBusy(false)}}
   const subtitle=role==='host'?'Host':household?'Learner':'New here';
-  return <div className="portal">
-    <aside className="p-sidebar"><Link className="p-brand" href="/learn">iriva<span>青鸟</span></Link>
-      <div className="p-space"><Leaf size={19}/><div><b>{household?.name||'Your Household'}</b><small>{household?'我的小组':'A place to belong'}</small></div></div>
-      <nav className="p-nav"><Link href="/learn" className="p-nav-link"><ArrowLeft size={18}/>返回学习空间</Link><span className="p-nav-link chosen"><UserRound size={18}/>关于我</span></nav>
-      <div className="p-sidebar-bottom"><p>You don’t have to be fluent<br/>to belong here.</p><a href="/feedback">给青鸟的建议</a></div>
-    </aside>
+  return <div className="portal workspace-ui">
+    <WorkspaceSidebar kind="learn" avatar={household?.avatar} title={household?.name||'我的 Household'} subtitle={household?'我的小组':'从认识彼此开始'} active="about" onSelect={id=>{if(id==='learn')router.push('/learn');}} teamAccess={teamAccess} sections={[{label:'我的空间',items:[{id:'learn',label:'返回学习空间',icon:ArrowLeft},{id:'about',label:'关于我',icon:UserRound}]}]}/>
+
     <div className="p-work"><div className="p-top"><span>YOUR HOUSEHOLD / <b>关于我</b></span><div><AccountMenu name={f.name} subtitle={subtitle} teamAccess={teamAccess} current="about"/></div></div>
       <div className="p-panel"><main className="p-main p-about">
         <div className="p-welcome"><div><h1>关于我</h1><p>伙伴看到的称呼、你的时区和联系方式，都可以在这里更新。</p></div></div>

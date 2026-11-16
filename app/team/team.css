@@ -3,3 +3,8 @@
 .team-pair-links{border-top:1px solid var(--line);margin-top:20px;padding-top:15px}.team-pair-links summary{cursor:pointer;font-size:14px;color:var(--muted)}.team-pair-links form{padding-top:18px}.team-pair-links p{font-size:14px!important;display:block!important;color:var(--muted);line-height:1.9}.team-pair-links .team-primary{padding:8px 12px;font-size:14px!important}
 
 .team-page>main{padding-left:var(--gutter);padding-right:var(--gutter)}
+
+.team-pick-empty{display:flex;align-items:center;gap:18px;padding:20px 24px;border:1px dashed var(--line-control);border-radius:12px;background:var(--surface)}.team-pick-empty>svg{flex-shrink:0;color:var(--muted)}.team-pick-empty>div{flex:1;min-width:0}.team-pick-empty h2{font-size:16px;font-weight:600;margin:0 0 2px}.team-pick-empty p{font-size:13px;color:var(--muted);margin:0}.team-pick-empty button{flex-shrink:0;display:inline-flex;align-items:center;gap:6px;background:var(--surface);color:var(--green);border:1px solid var(--line-control);border-radius:8px;padding:8px 14px;font-size:14px}
+.team-guide{margin:16px 0 22px;font-size:13px;color:var(--muted)}.team-guide summary{cursor:pointer;width:max-content;color:var(--green);font-size:14px}.team-guide p{max-width:72ch;line-height:1.9;margin:10px 0 0}
+.team-page .team-primary:disabled{opacity:1;background:#e9ede5;color:#6b7a6f}.team-match .team-blocked{font-size:12px;margin:10px 0 0}
+@media(max-width:850px){.team-pick-empty{flex-wrap:wrap}}

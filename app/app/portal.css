@@ -31,31 +31,6 @@ html:has(.portal){overscroll-behavior-y:none}
 .portal .p-invites input[readonly]{background:var(--tint)}
 .portal .p-nav button.chosen{font-weight:600}
 
-/* Slack-Jade shell: sidebar and top bar share one jade chrome with light text; the content sits in an inset, rounded light panel. */
-.portal{--p-chrome:color-mix(in oklab,var(--accent),var(--decor) 14%);--p-on:#fff;--p-on-muted:color-mix(in oklab,#fff,transparent 10%);--p-on-line:color-mix(in oklab,var(--on-deep),transparent 82%);background:var(--p-chrome)}
-.portal .p-sidebar{background:var(--p-chrome);border-right:0;color:var(--p-on)}
-.portal .p-brand{color:var(--p-on)}
-.portal .p-brand span{border-left-color:var(--p-on-line)}
-.portal .p-space{border-color:var(--p-on-line)}
-.portal .p-space svg{color:var(--p-on-muted)}
-.portal .p-space small,.portal .p-sidebar-bottom p,.portal .p-sidebar-bottom a{color:var(--p-on-muted)}
-.portal .p-sidebar-bottom a:hover{color:var(--p-on)}
-.portal .p-nav button{color:var(--p-on-muted)}
-.portal .p-nav button:not(.chosen):hover{background:color-mix(in oklab,var(--deep),transparent 78%);color:var(--p-on)}
-.portal .p-nav button.chosen{background:color-mix(in oklab,var(--deep),transparent 55%);color:var(--p-on)}
-.portal .p-nav .iriva-ai-bird{filter:brightness(0) invert(1);opacity:.85}
-.portal .p-nav button.chosen .iriva-ai-bird{opacity:1}
-.portal .p-top{position:sticky;top:0;z-index:30;background:var(--p-chrome);border-bottom:0;color:var(--p-on)}
-.portal .p-top>span,.portal .p-top>span b,.portal .p-top button,.portal .p-top small{color:var(--p-on-muted)}
-.portal .p-top button:hover{color:var(--p-on)}
-.portal .p-you{background:color-mix(in oklab,var(--deep),transparent 50%);color:var(--p-on);box-shadow:inset 0 0 0 1px var(--p-on-line)}
-.portal .p-panel{background:color-mix(in oklab,var(--paper),var(--line) 22%);margin:0 10px 10px 0;border-radius:14px;min-height:calc(100vh - 99px);box-shadow:0 0 0 1px color-mix(in oklab,var(--deep),transparent 80%)}
-@media(max-width:760px){
-.portal .p-sidebar{background:var(--p-chrome);border-bottom:0}
-.portal .p-nav button{color:var(--p-on-muted)}
-.portal .p-nav button.chosen{background:color-mix(in oklab,var(--deep),transparent 55%);color:var(--p-on)}
-.portal .p-panel{margin:0;border-radius:14px 14px 0 0;min-height:auto}}
-
 /* Account menu: avatar in the top bar opens a small panel (关于我 / 返回学习空间 / 退出登录). */
 .p-account{position:relative}
 .portal .p-top .p-account-trigger{display:flex;align-items:center;gap:10px;padding:4px 8px 4px 4px;border-radius:999px;text-align:left;color:var(--p-on);transition:background .15s}
@@ -111,3 +86,27 @@ html:has(.portal){overscroll-behavior-y:none}
 .portal .p-nav .p-nav-link:hover{background:color-mix(in oklab,var(--deep),transparent 78%);color:var(--p-on)}
 .portal .p-nav .p-nav-link.chosen{background:color-mix(in oklab,var(--deep),transparent 55%);color:var(--p-on);font-weight:600}
 @media(max-width:760px){.portal .p-nav .p-nav-link{flex:0 0 auto;padding:8px 12px;border-radius:999px;white-space:nowrap}}
+
+/* Home: one merged seat tile, aligned settings rows */
+.portal .p-members .p-seat{grid-column:span var(--seats,1);border:1px dashed var(--line-strong);border-radius:10px;margin:0 8px;padding:14px 8px;justify-content:center}
+.portal .p-members .p-seat small{letter-spacing:0}
+.portal .p-members>div:has(+.p-seat){border-right:0}
+.portal .p-settings{margin-top:20px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.portal .p-setting{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,440px);align-items:center;gap:12px 32px;padding:16px 20px;margin:0}
+.portal .p-setting+.p-setting{border-top:1px solid var(--line)}
+.portal .p-setting-label{min-width:0}
+.portal .p-setting-label :is(label,span){display:block;font-size:14px;font-weight:600;color:var(--ink)}
+.portal .p-setting-label small{display:block;font-size:12px;line-height:1.7;color:var(--muted);margin-top:2px}
+.portal .p-setting-control{display:flex;align-items:center;gap:10px;min-width:0}
+.portal .p-setting-control select{flex:1;width:auto;min-width:0;height:40px;padding:0 12px}
+.portal .p-setting-control code{flex:1;min-width:0;height:40px;display:flex;align-items:center;padding:0 12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--tint);font-size:13px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;user-select:all}
+.portal .p-setting-control .p-outline{margin:0;height:40px;padding:0 14px;flex-shrink:0;gap:6px}
+.portal .p-bottomgrid .p-card>h2{margin-bottom:14px}
+@media(max-width:760px){.portal .p-members .p-seat{grid-column:1/-1;margin:0}.portal .p-setting{grid-template-columns:1fr;padding:14px 16px}}
+.portal .p-bottomgrid{grid-template-columns:1.6fr 1fr;margin-top:22px}
+@media(max-width:1100px){.portal .p-bottomgrid{grid-template-columns:1.3fr 1fr}}
+@media(max-width:760px){.portal .p-bottomgrid{grid-template-columns:1fr}}
+.portal .p-setting-label label{margin:0;padding:0;gap:0}
+.portal .p-avatar-setting{justify-content:flex-start}
+.portal .p-avatar-setting .p-avatar-preview{display:grid;place-items:center;width:40px;height:40px;border-radius:10px;flex-shrink:0;background:var(--ws-selected);color:var(--green);font:600 17px/1 var(--sans);margin-right:auto}
+.portal .p-setting-label .p-setting-error{color:var(--warm)}

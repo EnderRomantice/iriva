@@ -10,13 +10,13 @@ import { seedDemo, seedId } from '../server/db/seed';
 test('portable backups preserve receipt fingerprints and can restore legacy v12 receipts',t=>{
   const dir=mkdtempSync(join(tmpdir(),'iriva-backup-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
   const source=join(dir,'source.sqlite'),file=join(dir,'export.json');
-  const repo=new SqliteRepository(source);seedDemo(repo);repo.acknowledge(seedId(1),'receipt-test',2,'payload-fingerprint');repo.db.close();
+  const repo=new SqliteRepository(source);seedDemo(repo);repo.acknowledge(seedId(1),'receipt-test',2,'payload-fingerprint');repo.db.prepare('INSERT INTO activity_reflections VALUES (?,?,?,?,?,?,?,?)').run(seedId(301),seedId(1),'A moment','Host 的提问',3,'主动追问一次','','2026-11-16T00:00:00.000Z');repo.db.close();
   const run=(args:string[])=>{const result=spawnSync(process.execPath,['--import','tsx',...args],{encoding:'utf8',env:{...process.env,SQLITE_PATH:source}});assert.equal(result.status,0,result.stderr);};
   run(['scripts/export-data.ts',file]);
-  const backup=JSON.parse(readFileSync(file,'utf8'));assert.equal(backup.schemaVersion,13);
+  const backup=JSON.parse(readFileSync(file,'utf8'));assert.equal(backup.schemaVersion,16);
   const destination=join(dir,'restored.sqlite');run(['scripts/import-data.ts',file,destination]);
   const restored=new SqliteRepository(destination);
-  assert.deepEqual(restored.receipt(seedId(1),'receipt-test'),{version:2,fingerprint:'payload-fingerprint'});restored.db.close();
+  assert.deepEqual(restored.receipt(seedId(1),'receipt-test'),{version:2,fingerprint:'payload-fingerprint'});assert.equal((restored.db.prepare('SELECT goal FROM activity_reflections').get() as {goal:string}).goal,'主动追问一次');restored.db.close();
   backup.schemaVersion=12;for(const receipt of backup.mutationReceipts)delete receipt.fingerprint;
   writeFileSync(file,JSON.stringify(backup));
   const legacy=join(dir,'legacy.sqlite');run(['scripts/import-data.ts',file,legacy]);

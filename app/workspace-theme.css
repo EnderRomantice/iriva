@@ -1,0 +1,153 @@
+/* Shared visual language for every signed-in workspace. Public pages keep their own theme. */
+.workspace-ui:is(.portal,.team-page){
+ --paper:#f5f8f1;--tint:#f3f7ee;--tint-strong:#e8f0df;--surface:#fffefa;
+ --ink:#293d30;--muted:#657762;--green:#3d6847;--accent:#3d6847;--decor:#86a477;
+ --primary:#3b6345;--primary-hover:#2e5137;--on-deep:#fffefa;--deep:#293d30;
+ --line:#dce5d3;--line-strong:#cfdcc5;--line-control:#a5b69b;--warm-tint:#fff0e7;--warm:#914e30;
+ --ws-sidebar:#eaf1e2;--ws-selected:#d7e5ca;--ws-hover:#e0ead6;--ws-sidebar-width:236px;
+ --radius:8px;--sans:'Source Sans 3 Variable','PingFang SC','Microsoft YaHei',sans-serif;
+ --serif:'Source Serif 4 Variable','PingFang SC','Microsoft YaHei',serif;
+ --p-chrome:var(--paper);--p-on:var(--ink);--p-on-muted:var(--muted);--p-on-line:var(--line);
+ --p-ink:var(--ink);--p-muted:var(--muted);--p-line:var(--line);
+ color:var(--ink);background:var(--paper);font:14px/1.75 var(--sans);
+}
+.workspace-ui:is(.portal,.team-page) :is(button,input,select,textarea){font-family:var(--sans)}
+.workspace-ui:is(.portal,.team-page) :is(h1,h2,h3,h4){font-family:var(--sans);letter-spacing:0}
+.workspace-ui:is(.portal,.team-page) :is(button,a,input,select,textarea):focus-visible{outline:2px solid var(--green);outline-offset:3px}
+.workspace-ui:is(.portal,.team-page) input[type=checkbox]{accent-color:var(--green)}
+.workspace-ui:is(.portal,.team-page) .workspace-sidebar{width:var(--ws-sidebar-width);background:var(--ws-sidebar);border-right:1px solid var(--line);color:var(--ink);padding:28px 20px;display:flex;flex-direction:column;height:100dvh;overflow:auto;flex-shrink:0;scrollbar-width:thin}
+.workspace-ui.portal .workspace-sidebar{position:fixed;inset:0 auto 0 0}
+.workspace-ui.team-page .workspace-sidebar{position:sticky;top:0}
+.workspace-ui .workspace-brand{display:flex;align-items:baseline;gap:12px;font-size:32px;font-weight:650;letter-spacing:-1px;line-height:1.3;padding:0 8px;color:var(--ink)}
+.workspace-ui .workspace-brand span{font-size:12px;font-weight:500;letter-spacing:3px}
+.workspace-ui .workspace-label{display:flex;align-items:center;gap:7px;padding:0 9px;margin:10px 0 24px;font-size:9px;letter-spacing:1.6px;color:var(--muted)}
+.workspace-label>span{width:5px;height:5px;border-radius:50%;background:var(--decor)}
+.workspace-ui .workspace-identity{display:flex;gap:10px;align-items:center;margin:0 4px 25px;padding-bottom:22px;border-bottom:1px solid var(--line);min-width:0}
+.workspace-ui .workspace-brand+.workspace-identity{margin-top:24px}
+.workspace-ui .workspace-mark{display:grid;place-items:center;background:var(--ws-selected);color:var(--green);width:35px;height:35px;border-radius:10px;flex-shrink:0}
+.workspace-ui .workspace-identity b{display:block;font-size:13px;overflow-wrap:anywhere;font-weight:600}
+.workspace-ui .workspace-identity small{display:block;color:var(--muted);font-size:10px}
+.workspace-ui:is(.portal,.team-page) .workspace-sidebar nav{display:flex;flex-direction:column;gap:24px;padding:0;margin:0;font-size:13px}
+.workspace-ui .workspace-nav-group>small{display:block;font-size:10px;color:var(--muted);letter-spacing:.7px;padding:0 10px;margin-bottom:7px}
+.workspace-ui:is(.portal,.team-page) .workspace-nav-group button{display:flex;align-items:center;gap:10px;width:100%;background:transparent;border:0;border-radius:7px;padding:10px 11px;font-size:13px;text-align:left;color:var(--muted);margin:3px 0;cursor:pointer}
+.workspace-ui:is(.portal,.team-page) .workspace-nav-group button:hover{background:var(--ws-hover);color:var(--ink)}
+.workspace-ui:is(.portal,.team-page) .workspace-nav-group button.active{background:var(--ws-selected);color:var(--green);box-shadow:inset 3px 0 #638359;font-weight:600}
+.workspace-ui .workspace-nav-group svg,.workspace-ui .workspace-nav-group img{flex-shrink:0}
+.workspace-ui .workspace-sidebar-bottom{margin-top:auto;padding:32px 10px 0;color:var(--muted)}
+.workspace-ui .workspace-sidebar-bottom>svg{color:var(--decor)}
+.workspace-ui .workspace-sidebar-bottom p{font:15px/1.9 var(--sans);margin:10px 0 22px;color:var(--muted)}
+.workspace-ui .workspace-sidebar-bottom a{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;padding:9px 0;color:var(--muted)}
+.workspace-ui .workspace-sidebar-bottom a:first-of-type{border-top:1px solid var(--line);padding-top:17px}
+.workspace-ui.portal .p-work{margin-left:var(--ws-sidebar-width)}
+.workspace-ui.portal .p-top{height:76px;position:sticky;top:0;z-index:30;padding:0 40px;background:var(--paper);border-bottom:1px solid var(--line);color:var(--ink)}
+.workspace-ui.portal .p-top>span{font-size:11px;letter-spacing:1px;color:var(--muted)}
+.workspace-ui.portal .p-top>span b{color:var(--ink);font-weight:600}
+.workspace-ui.portal .p-top button,.workspace-ui.portal .p-top small{color:var(--muted)}
+.workspace-ui.portal .p-top .p-account-trigger{color:var(--ink)}
+.workspace-ui.portal .p-top .p-account-trigger:hover,.workspace-ui.portal .p-top .p-account-trigger[aria-expanded=true]{background:var(--ws-hover)}
+.workspace-ui.portal .p-you{background:var(--ws-selected);color:var(--green);box-shadow:none}
+.workspace-ui.portal .p-panel{margin:0;background:var(--paper);border-radius:0;box-shadow:none;min-height:calc(100dvh - 76px)}
+.workspace-ui.portal .p-main{padding:28px 40px 50px;max-width:1600px}
+.workspace-ui.portal .p-welcome h1,.workspace-ui.team-page .team-heading h1{font:600 28px/1.5 var(--sans);margin:0 0 8px}
+.workspace-ui.portal .p-welcome p,.workspace-ui.team-page .team-heading p{font-size:13px;color:var(--muted)}
+.workspace-ui.portal :is(.p-card,.p-topic,.p-next,.p-members,.p-onboarding),.workspace-ui.team-page :is(.team-list article,.team-houses article,.team-match,.team-empty){border-radius:12px;border-color:var(--line);background:var(--surface)}
+.workspace-ui.portal .p-topic{box-shadow:none;background:#edf4e5}
+.workspace-ui.portal .p-topic h2{font:600 26px/1.5 var(--sans)}
+.workspace-ui.portal :is(.p-card,.p-next) h2{font:600 20px/1.5 var(--sans)}
+.workspace-ui.portal .p-next h3{font:600 20px/1.5 var(--sans)}
+.workspace-ui.portal :is(.p-button,.p-outline),.workspace-ui.team-page .team-primary{border-radius:8px;font-size:13px!important}
+.workspace-ui.portal .p-bell b{background:var(--green);color:var(--on-deep)}
+.workspace-ui.team-page>main{padding:0 40px 60px;max-width:1600px}
+.workspace-ui.team-page .team-top{height:76px;padding:0;border-bottom:1px solid var(--line);font-size:11px}
+.workspace-ui.team-page .team-heading{margin:28px 0 30px}
+.workspace-ui .reviews{--review-ink:var(--ink);--review-muted:var(--muted);--review-line:var(--line);--review-green:var(--green)}
+.workspace-ui .review-intro h2{font:600 24px/1.5 var(--sans)}
+.workspace-ui .review-published h4{font:600 22px/1.5 var(--sans)}
+.workspace-ui.portal .p-sidebar:not(.workspace-sidebar){width:var(--ws-sidebar-width);background:var(--ws-sidebar);border-right:1px solid var(--line);color:var(--ink);padding:28px 20px}
+.workspace-ui.portal :is(.p-brand,.p-nav .p-nav-link,.p-sidebar-bottom a,.p-sidebar-bottom p){color:var(--ink)}
+.workspace-ui.portal .p-nav .p-nav-link.chosen{background:var(--ws-selected);color:var(--green)}
+.workspace-ui.portal .p-brand{font-size:32px}.workspace-ui.portal .p-space{margin-top:28px}
+@media(max-width:1100px){.workspace-ui:is(.portal,.team-page){--ws-sidebar-width:210px}.workspace-ui.portal .p-main{padding:26px}.workspace-ui.portal .p-top{padding:0 26px}.workspace-ui.team-page>main{padding:0 26px 50px}.workspace-ui:is(.portal,.team-page) .workspace-sidebar{padding:24px 16px}}
+@media(max-width:760px){
+ .workspace-ui:is(.portal,.team-page){display:block}
+ .workspace-ui:is(.portal,.team-page) .workspace-sidebar{position:static;width:100%;height:auto;padding:14px 16px 10px;border-right:0;border-bottom:1px solid var(--line);overflow:hidden}
+ .workspace-ui .workspace-brand{font-size:26px;padding:0;line-height:1.2}.workspace-ui .workspace-brand span{font-size:10px}
+ .workspace-ui .workspace-label,.workspace-ui .workspace-identity,.workspace-ui .workspace-sidebar-bottom{display:none}
+ .workspace-ui:is(.portal,.team-page) .workspace-sidebar nav{display:flex;flex-direction:row;gap:6px;overflow:auto;flex-wrap:nowrap;margin-top:12px;scrollbar-width:none}
+ .workspace-ui .workspace-nav-group{display:contents}.workspace-ui .workspace-nav-group>small{display:none}
+ .workspace-ui:is(.portal,.team-page) .workspace-nav-group button{width:auto;flex-shrink:0;white-space:nowrap;padding:8px 11px;font-size:12px;margin:0;border-radius:7px;gap:6px}
+ .workspace-ui:is(.portal,.team-page) .workspace-nav-group button.active{box-shadow:none}
+ .workspace-ui.portal .p-work{margin:0}.workspace-ui.portal .p-top{height:62px;padding:0 16px;position:static}.workspace-ui.portal .p-top>span{font-size:10px;letter-spacing:.5px}.workspace-ui.portal .p-top>div{max-width:50%}
+ .workspace-ui.portal .p-panel{min-height:calc(100dvh - 170px)}.workspace-ui.portal .p-main{padding:22px 16px 40px}
+ .workspace-ui.portal .p-welcome h1,.workspace-ui.team-page .team-heading h1{font-size:24px}
+ .workspace-ui.team-page>main{padding:0 16px 40px}.workspace-ui.team-page .team-top{height:62px;font-size:10px;flex-wrap:nowrap}.workspace-ui.team-page .team-heading{margin:22px 0}
+ .workspace-ui .review-intro h2{font-size:21px}.workspace-ui.portal .p-sidebar:not(.workspace-sidebar){width:auto;padding:18px}
+}
+@media(min-width:761px){.workspace-ui:is(.portal,.team-page){display:flex}}
+.workspace-ui.portal :is(.p-sidebar,.p-top) .sk{background:linear-gradient(90deg,var(--line) 0,var(--tint) 50%,var(--line) 100%);background-size:200% 100%}
+
+/* ---------- Interaction layer: instant hover, solid selection, no switch animation, calm loading ---------- */
+.workspace-ui:is(.portal,.team-page){--ws-row-hover:rgba(41,61,48,.07);--ws-row-press:rgba(41,61,48,.13);--ws-nav-ink:#3e5444;--ws-sk:#e2e9da;--ws-quick:70ms linear}
+
+/* Sidebar rows: compact, instant hover, filled selection */
+.workspace-ui:is(.portal,.team-page) .workspace-sidebar nav{gap:18px}
+.workspace-ui .workspace-nav-group>small{font-size:11px;font-weight:600;letter-spacing:.2px;margin-bottom:4px}
+.workspace-ui:is(.portal,.team-page) .workspace-nav-group button{height:32px;padding:0 10px;margin:1px 0;border-radius:6px;gap:9px;font-size:14px;line-height:1;color:var(--ws-nav-ink);box-shadow:none;transition:none;user-select:none;-webkit-tap-highlight-color:transparent}
+.workspace-ui:is(.portal,.team-page) .workspace-nav-group button:hover{background:var(--ws-row-hover);color:var(--ink)}
+.workspace-ui:is(.portal,.team-page) .workspace-nav-group button:active{background:var(--ws-row-press)}
+.workspace-ui:is(.portal,.team-page) .workspace-nav-group button.active,.workspace-ui:is(.portal,.team-page) .workspace-nav-group button.active:hover{background:var(--primary);color:var(--on-deep);font-weight:600;box-shadow:none}
+.workspace-ui:is(.portal,.team-page) .workspace-nav-group button.active:active{background:var(--primary-hover)}
+.workspace-ui:is(.portal,.team-page) .workspace-nav-group button:focus-visible{outline:2px solid var(--green);outline-offset:-2px}
+.workspace-ui:is(.portal,.team-page) .workspace-nav-group button.active:focus-visible{outline:2px solid var(--on-deep);outline-offset:-4px}
+.workspace-ui .workspace-sidebar-bottom a:hover{color:var(--ink)}
+
+/* Controls: quick colour changes only, clear hover and pressed states */
+.workspace-ui:is(.portal,.team-page) :is(a,button,.p-outline,.p-button){transition:background-color var(--ws-quick),border-color var(--ws-quick),color var(--ws-quick)}
+.workspace-ui:is(.portal,.team-page) :is(.p-outline,.review-secondary,.team-list button,.team-selection button,.team-pick-empty button,.chat-members-toggle,.p-top button):not(:disabled):hover{background:var(--ws-row-hover);border-color:var(--line-control)}
+.workspace-ui:is(.portal,.team-page) :is(.p-outline,.review-secondary,.team-list button,.team-selection button,.team-pick-empty button,.chat-members-toggle,.p-top button):not(:disabled):active{background:var(--ws-row-press)}
+.workspace-ui:is(.portal,.team-page) :is(.p-button,.team-primary,.review-primary,.chat-send):not(:disabled):hover{background:var(--primary-hover);border-color:var(--primary-hover)}
+.workspace-ui:is(.portal,.team-page) :is(.p-button,.team-primary,.review-primary,.chat-send):not(:disabled):active{background:var(--deep);border-color:var(--deep)}
+.workspace-ui:is(.portal,.team-page) :is(.p-textlink,.review-text,.p-section-title button,.p-topic-foot button,.team-guide summary):hover{text-decoration:underline;text-underline-offset:3px}
+
+/* List rows inside content: instant hover like message rows */
+.workspace-ui .review-queue.grouped .review-group button,.workspace-ui .chat-message{transition:none}
+.workspace-ui .chat-message:hover{background:rgba(41,61,48,.04)}
+
+/* Switching views is instant: no fade or slide when the main area changes */
+.workspace-ui.portal main.p-main{animation:none}
+
+/* Loading: layout-matched placeholders, appear only if loading takes >200ms, gentle pulse */
+.workspace-ui :is(.ws-skeleton,.p-skeleton){animation:ws-sk-in .16s ease-out .2s both}
+@keyframes ws-sk-in{from{opacity:0}to{opacity:1}}
+.workspace-ui:is(.portal,.team-page) .sk,.workspace-ui.portal :is(.p-sidebar,.p-top) .sk{display:block;background:var(--ws-sk);background-image:none;border-radius:6px;animation:ws-sk-pulse 1.6s ease-in-out infinite}
+@keyframes ws-sk-pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.ws-sk-toolbar{display:flex;gap:12px;margin:18px 0 20px}
+.ws-sk-split{display:grid;grid-template-columns:minmax(190px,260px) minmax(0,1fr);gap:24px;align-items:start}
+.ws-sk-queue{display:flex;flex-direction:column;gap:10px}
+.ws-sk-group{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:12px 14px 4px}
+.ws-sk-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--line);margin-top:10px}
+.ws-sk-row+.ws-sk-row{margin-top:0}
+.ws-sk-detail{border:1px solid var(--line);border-radius:16px;background:var(--surface);padding:24px 28px;min-height:420px}
+.ws-sk-card{display:flex;justify-content:space-between;align-items:center;gap:20px;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:20px 23px;margin-bottom:14px}
+.ws-sk-card>div:first-child{flex:1;min-width:0}
+.ws-sk-chat{display:flex;flex-direction:column;height:calc(100dvh - 76px);min-height:420px;background:var(--surface)}
+.ws-sk-chat-head{display:flex;justify-content:space-between;align-items:center;height:68px;padding:0 24px;border-bottom:1px solid var(--line);flex-shrink:0}
+.ws-sk-chat-stream{flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:18px;padding:24px;overflow:hidden}
+.ws-sk-msg{display:flex;gap:12px}.ws-sk-msg>div:last-child{flex:1}
+.ws-sk-avatar{width:35px;height:35px;border-radius:8px!important;flex-shrink:0}
+.ws-sk-chat-compose{padding:10px 24px 34px}
+.reviews[aria-busy=true] .review-layout{opacity:.6;transition:opacity .12s linear .15s}
+@media(max-width:760px){.ws-sk-split{grid-template-columns:1fr}.ws-sk-detail{min-height:260px}.ws-sk-chat{height:calc(100dvh - 167px)}.ws-sk-chat-head{padding:0 16px}.ws-sk-chat-head>.sk{display:none}}
+@media(prefers-reduced-motion:reduce){.workspace-ui :is(.ws-skeleton,.p-skeleton),.workspace-ui .sk{animation:none!important}}
+.workspace-ui.portal .chat-members-toggle[aria-expanded=true]{background:var(--ws-row-press);border-color:var(--line-control);color:var(--ink)}
+/* Space avatar: Host image, otherwise the first letter */
+.workspace-ui .workspace-mark{font:600 16px/1 var(--sans);overflow:hidden;user-select:none}
+.workspace-ui .workspace-mark.has-image{background:var(--surface)}
+.workspace-ui .workspace-mark img{width:100%;height:100%;object-fit:cover;display:block}
+/* Top bar breadcrumb: the space's own name, then the current page */
+.workspace-ui.portal .p-top .p-crumb{display:flex;align-items:center;gap:6px;min-width:0;font-size:13px;letter-spacing:0;text-transform:none;color:var(--muted);white-space:nowrap}
+.workspace-ui.portal .p-top .p-crumb b{font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis}
+.workspace-ui.portal .p-top .p-crumb button{border:0;background:none;padding:2px 4px;margin:0 -4px;border-radius:4px;font:inherit;color:inherit;overflow:hidden;text-overflow:ellipsis}
+.workspace-ui.portal .p-top .p-crumb button:hover{color:var(--ink);background:var(--ws-row-hover)}
+.workspace-ui.portal .p-top .p-crumb>span{color:var(--line-control)}
+.workspace-ui.portal .p-top .p-crumb{margin-right:auto;flex:1 1 auto}

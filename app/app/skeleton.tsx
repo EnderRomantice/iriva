@@ -3,13 +3,13 @@ export function MainSkeleton(){
   return <div className="p-skeleton" aria-busy="true" aria-label="正在加载">
     <div className="sk sk-title"/><div className="sk sk-line w60"/>
     <div className="sk-grid"><div className="sk sk-card tall"/><div className="sk sk-card tall"/></div>
-    <div className="sk sk-card"/>
     <div className="sk-grid"><div className="sk sk-card"/><div className="sk sk-card"/></div>
+    <div className="sk sk-card"/>
   </div>;
 }
 
 export default function PortalSkeleton(){
-  return <div className="portal">
+  return <div className="portal workspace-ui">
     <aside className="p-sidebar"><span className="p-brand">iriva<span>青鸟</span></span>
       <div className="p-skeleton-side">{Array.from({length:7},(_,i)=><div key={i} className={`sk sk-line${i===0?' tall':''}`}/>)}</div>
     </aside>

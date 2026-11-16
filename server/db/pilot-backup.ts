@@ -1,0 +1,2 @@
+/** Supplemental tables omitted by the legacy workspace snapshot. Keep parent tables first. */
+export const pilotBackupTables = ['household_messages','member_applications','placements','team_members','team_tasks','practice_pairs','notifications','practice_invites','coach_drafts','coach_usage','suggestions','activity_reflections','activity_observations','activity_cards','household_message_reactions','household_avatars'] as const;

@@ -15,9 +15,10 @@ async function main(){
   const snapshot=sqliteSnapshot(sqlite);sqlite.db.close();
   try{
     await admin.unsafe(`CREATE ROLE ${role} LOGIN`);
-    const browser=process.argv.includes('--e2e');
+    const reviews=process.argv.includes('--reviews');
+    const browser=process.argv.includes('--e2e')||reviews;
     const load=process.argv.includes('--load');
-    for(const file of browser?['browser']:load?['load']:['postgres-contract.test.ts','bounded-reads.test.ts']){
+    for(const file of browser?['browser']:load?['load']:['postgres-contract.test.ts','bounded-reads.test.ts','activity-reviews.test.ts']){
       const name=`iriva_test_${randomUUID().replaceAll('-','')}`;
       await admin.unsafe(`CREATE DATABASE ${name}`);
       const dbUrl=new URL(url);dbUrl.pathname=`/${name}`;
@@ -29,7 +30,7 @@ async function main(){
         await admin.unsafe(`GRANT iriva_runtime TO ${role}`);
         dbUrl.username=role;dbUrl.password='';
         const exit=await new Promise<number|null>((resolve,reject)=>{
-          const args=browser?['node_modules/playwright/cli.js','test']:load?['--import','tsx','scripts/load-test.ts']:['--import','tsx','--test',`tests/${file}`];
+          const args=browser?['node_modules/playwright/cli.js','test',...(reviews?['tests/e2e/activity-reviews.spec.ts']:[])]:load?['--import','tsx','scripts/load-test.ts']:['--import','tsx','--test',`tests/${file}`];
           const child=spawn(process.execPath,args,{stdio:'inherit',env:{...process.env,DATABASE_URL:dbUrl.toString(),PG_LOCAL_TEST:'1',NODE_ENV:browser?'production':'test'}});
           child.once('error',reject);child.once('exit',resolve);
         });
@@ -47,5 +48,5 @@ async function main(){
 // Some drivers unref reconnect timers. An unresolved connection must never look like success.
 let completed=false;
 process.on('beforeExit',()=>{if(!completed){console.error('PostgreSQL tests did not complete. Check TEST_POSTGRES_ADMIN_URL.');process.exitCode=1;}});
-const deadline=setTimeout(()=>{console.error('PostgreSQL tests exceeded 120 seconds.');process.exit(1);},process.argv.includes('--e2e')||process.argv.includes('--load')?600_000:120_000);
+const deadline=setTimeout(()=>{console.error('PostgreSQL tests exceeded 120 seconds.');process.exit(1);},process.argv.includes('--e2e')||process.argv.includes('--reviews')||process.argv.includes('--load')?600_000:120_000);
 main().then(()=>{console.log('PostgreSQL contract suites completed.');},error=>{console.error(error instanceof Error?error.message:'PostgreSQL tests failed');process.exitCode=1;}).finally(()=>{completed=true;clearTimeout(deadline);});
