@@ -22,8 +22,8 @@ async function save(req: Request, editing: boolean) {
     let b: Row; try { b = JSON.parse(raw); } catch { return out({ error: '资料格式不正确。' }, 400); }
     if (!b || typeof b !== 'object') return out({ error: '资料格式不正确。' }, 400);
     const val = (k: string, n: number) => text(b, k, n);
-    const plan = val('plan', 20) || 'native', name = val('name', 60), role = val('role', 20), language = val('language', 20), level = val('level', 20), timezone = val('timezone', 80), goal = val('goal', 1500), ageBand = val('age_band', 20), lifeStage = val('life_stage', 40), location = val('location', 80), mbti = val('mbti', 20).toUpperCase(), contactPreference = val('contact_preference', 20) || 'email';
-    if (!['native', 'everyday', 'professional'].includes(plan) || !['learner', 'host'].includes(role) || !['English', 'Chinese'].includes(language) || !['beginner', 'intermediate', 'advanced'].includes(level) || !name || !goal || b.consent !== true) return out({ error: '请完整填写必填项并同意资料用途。' }, 400);
+    const plan = val('plan', 20) || 'native', name = val('name', 60), role = 'learner', language = val('language', 20), level = val('level', 20), timezone = val('timezone', 80), goal = val('goal', 1500), ageBand = val('age_band', 20), lifeStage = val('life_stage', 40), location = val('location', 80), mbti = val('mbti', 20).toUpperCase(), contactPreference = val('contact_preference', 20) || 'email';
+    if (!['native', 'everyday', 'professional'].includes(plan) || !['English', 'Chinese'].includes(language) || !['beginner', 'intermediate', 'advanced'].includes(level) || !name || !goal || b.consent !== true) return out({ error: '请完整填写必填项并同意资料用途。' }, 400);
     if (!isStandardTimezone(timezone)) return out({ error: '请选择有效的 UTC 时区。' }, 400);
     if (!validSlots(b.availability_slots)) return out({ error: '请至少选择一个可稳定参加的时段，每段不少于两小时，最多八个。' }, 400);
     if (!['under18', '18-24', '25-34', '35-44', '45-54', '55plus', 'private'].includes(ageBand) || !['school', 'university', 'working', 'entrepreneur', 'other', 'private'].includes(lifeStage) || !location || !val('interests', 1000)) return out({ error: '请填写年龄段、学习或工作阶段、所在地区和感兴趣的话题。' }, 400);
@@ -31,7 +31,6 @@ async function save(req: Request, editing: boolean) {
     if (ageBand === 'under18' && b.guardian_consent !== true) return out({ error: '未成年资料需由监护人填写并确认。' }, 400);
     if (!['email', 'wechat', 'other'].includes(contactPreference) || (contactPreference !== 'email' && !val('contact', 200))) return out({ error: '请填写首选联系方式。' }, 400);
     const inviteCode = val('invite_code', 100);
-    if (inviteCode && role !== 'learner') return out({ error: '邀请码仅用于学员加入小组。' }, 400);
     const slots = JSON.stringify(b.availability_slots), availability = availabilityText(b.availability_slots, val('availability_note', 600)), now = new Date().toISOString(), status = plan === 'native' && language === 'English' ? 'new' : 'interest', db = await pilotDb();
     const existing = await db.prepare('SELECT id,household,revision,plan,role,language FROM member_applications WHERE user_id=?').get(u.userId) as Row | undefined;
     if (editing) {

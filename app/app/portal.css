@@ -110,3 +110,4 @@ html:has(.portal){overscroll-behavior-y:none}
 .portal .p-avatar-setting{justify-content:flex-start}
 .portal .p-avatar-setting .p-avatar-preview{display:grid;place-items:center;width:40px;height:40px;border-radius:10px;flex-shrink:0;background:var(--ws-selected);color:var(--green);font:600 17px/1 var(--sans);margin-right:auto}
 .portal .p-setting-label .p-setting-error{color:var(--warm)}
+.portal .p-host-note{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}

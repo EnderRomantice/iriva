@@ -67,27 +67,38 @@ export async function POST(req: Request) {
       if (role !== 'admin') return out({ error: '只有管理员可以移除授权。' }, 403);
       await db.prepare('DELETE FROM team_members WHERE email=?').run(val('email', 254).toLowerCase());
     } else if (action === 'match') {
-      const name = val('name', 70), hostId = val('hostId', 100);
+      // Hosts do not apply: the team names the Host by login email. An existing account joins now;
+      // otherwise a placement makes them join automatically on first sign-in (see claimPlacement).
+      const name = val('name', 70), hostEmail = val('hostEmail', 200).toLowerCase(), hostName = val('hostName', 60);
       const ids = Array.isArray(b.ids) ? [...new Set((b.ids as unknown[]).filter((x): x is string => typeof x === 'string'))] : [];
-      if (ids.length !== 4 || !hostId || !name) return out({ error: '选择四位学员、一位 Host，并为 Household 命名。' }, 400);
+      if (ids.length !== 4 || !name || !hostEmail || !hostName) return out({ error: '选择四位学员，填写 Host 的邮箱和名字，并为 Household 命名。' }, 400);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(hostEmail)) return out({ error: 'Host 邮箱格式不正确。' }, 400);
       const candidates = await db.prepare(`SELECT * FROM member_applications WHERE id IN (${ids.map(() => '?').join(',')}) AND role='learner' AND plan='native' AND language='English' AND status='shortlist' AND household IS NULL`).all(...ids) as Row[];
-      const host = await db.prepare("SELECT * FROM member_applications WHERE id=? AND role='host' AND plan='native' AND language='English' AND status='shortlist' AND household IS NULL").get(hostId) as Row | undefined;
-      if (candidates.length !== 4 || !host) return out({ error: '所有成员必须在候选名单中，且尚未分组。' }, 409);
-      const all = [...candidates, host];
-      if (await db.prepare(`SELECT user_id FROM memberships WHERE user_id IN (${all.map(() => '?').join(',')}) LIMIT 1`).get(...all.map(x => x.user_id))) return out({ error: '有成员已在其他 Household，需先人工协调。' }, 409);
+      if (candidates.length !== 4) return out({ error: '所有学员必须在候选名单中，且尚未分组。' }, 409);
+      if (candidates.some(x => String(x.email).toLowerCase() === hostEmail)) return out({ error: 'Host 不能同时是这组的学员。' }, 409);
+      const repo = await workspaceRepository(), hostUser = await userByEmail(repo, hostEmail);
+      const accounts = [...candidates.map(x => String(x.user_id)), ...(hostUser ? [hostUser.id] : [])];
+      if (await db.prepare(`SELECT user_id FROM memberships WHERE user_id IN (${accounts.map(() => '?').join(',')}) LIMIT 1`).get(...accounts)) return out({ error: '有成员或 Host 已在其他 Household，需先人工协调。' }, 409);
+      if (await db.prepare("SELECT 1 FROM placements WHERE email=? AND household IS NOT NULL").get(hostEmail)) return out({ error: '这位 Host 已被安排到其他 Household，需先人工协调。' }, 409);
       const revisions = Array.isArray(b.revisions) ? b.revisions as { id: string; revision: number }[] : [];
-      if (revisions.length !== 5 || new Set(revisions.map(x => x.id)).size !== 5 || all.some(x => !revisions.some(r => r.id === x.id && r.revision === Number(x.revision)))) return out({ error: '资料已有更新，请重新查看最新资料和口语确认结果，再安排分组。' }, 409);
-      const repo = await workspaceRepository();
+      if (revisions.length !== 4 || new Set(revisions.map(x => x.id)).size !== 4 || candidates.some(x => !revisions.some(r => r.id === x.id && r.revision === Number(x.revision)))) return out({ error: '资料已有更新，请重新查看最新资料和口语确认后再分组。' }, 409);
       // 账号都来自邮箱登录，user_id 一定存在；仍以邮箱再核对一次，防止资料被改绑。
-      for (const x of all) { const user = await userByEmail(repo, String(x.email)); if (!user || user.id !== x.user_id) return out({ error: `${x.name} 的账号与资料邮箱不一致，请人工核对。` }, 409); }
-      const house = await createHousehold(name, String(host.user_id), 'A story behind my name', all.map(x => ({ userId: String(x.user_id), role: x.role === 'host' ? 'host' as const : 'learner' as const, name: String(x.name) })));
+      for (const x of candidates) { const user = await userByEmail(repo, String(x.email)); if (!user || user.id !== x.user_id) return out({ error: `${x.name} 的账号与资料邮箱不一致，请人工核对。` }, 409); }
+      // Until a Host without an account signs in, the household is owned by the team member who formed it.
+      const house = await createHousehold(name, hostUser?.id ?? u.userId, 'A story behind my name', [
+        ...candidates.map(x => ({ userId: String(x.user_id), role: 'learner' as const, name: String(x.name) })),
+        ...(hostUser ? [{ userId: hostUser.id, role: 'host' as const, name: hostName }] : []),
+      ]);
       await pilotTransaction(async () => {
-        for (const x of all) {
-          await db.prepare('INSERT INTO placements (email,household,role,name) VALUES (?,?,?,?) ON CONFLICT(email) DO UPDATE SET household=excluded.household,role=excluded.role,name=excluded.name').run(x.email, house, x.role, x.name);
+        const place = 'INSERT INTO placements (email,household,role,name) VALUES (?,?,?,?) ON CONFLICT(email) DO UPDATE SET household=excluded.household,role=excluded.role,name=excluded.name';
+        for (const x of candidates) {
+          await db.prepare(place).run(x.email, house, 'learner', x.name);
           await db.prepare("UPDATE member_applications SET household=?,status='assigned' WHERE id=?").run(house, x.id);
         }
+        await db.prepare(place).run(hostEmail, house, 'host', hostName);
+        await db.prepare("UPDATE member_applications SET household=?,status='assigned' WHERE lower(email)=? AND role='host' AND household IS NULL").run(house, hostEmail);
       });
-      return out({ ok: true, household: house });
+      return out({ ok: true, household: house, hostJoined: !!hostUser });
     } else return out({ error: '无效操作。' }, 400);
     return out({ ok: true });
   } catch (e) { console.error(e); return out({ error: '未能保存。若成员刚被其他工作人员分组，请刷新后重试。' }, 409); }
