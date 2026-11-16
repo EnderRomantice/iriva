@@ -6,10 +6,11 @@ import { canonicalEmoji, toggleReaction, type MessageReaction } from '../../doma
 import EmojiPicker from '../../components/chat/emoji-picker';
 import MessageMarkdown from '../../components/chat/markdown';
 import { emojiInfo, frequentEmoji, preloadEmoji, rememberEmoji } from '../../components/chat/emoji-data';
+import Avatar from '../../components/workspace/avatar';
 import './conversations.css';
 
 export type GroupMessage={id:string;author:string;name:string;body:string;created:string;reactions?:MessageReaction[]};
-type Person={user:string;name:string;role:string;timezone:string};
+type Person={user:string;name:string;role:string;timezone:string;avatar?:string|null};
 type Props={household:{id:string;name:string;topic:string;week:number};user:{id?:string;name:string};people:Person[];messages:GroupMessage[];onSent:()=>void};
 type Picker={kind:'compose'}|{kind:'react';message:string;anchor:HTMLElement};
 const LIMIT=2000;
@@ -24,17 +25,17 @@ function whoReacted(users:string[],me:string|undefined,names:Map<string,string>)
 }
 const label=(emoji:string)=>{const info=emojiInfo(emoji);return info?.codes[0]?`:${info.codes[0]}:`:info?.zh||emoji;};
 
-type RowProps={m:GroupMessage;compact:boolean;newDay:boolean;mine:boolean;host:boolean;tone:number;search:string;me?:string;names:Map<string,string>;reactions:MessageReaction[];quick:string[];picking:boolean;touched:boolean;onToggle:(m:string,emoji:string)=>void;onPick:(m:string,anchor:HTMLElement)=>void;onTouch:(m:string)=>void};
+type RowProps={m:GroupMessage;compact:boolean;newDay:boolean;host:boolean;tone:number;avatar?:string|null;search:string;me?:string;names:Map<string,string>;reactions:MessageReaction[];quick:string[];picking:boolean;touched:boolean;onToggle:(m:string,emoji:string)=>void;onPick:(m:string,anchor:HTMLElement)=>void;onTouch:(m:string)=>void};
 
 /** One message: Markdown body, hover action bar, reaction pills. */
-const MessageRow=memo(function MessageRow({m,compact,newDay,mine,host,tone,search,me,names,reactions,quick,picking,touched,onToggle,onPick,onTouch}:RowProps){
+const MessageRow=memo(function MessageRow({m,compact,newDay,host,tone,avatar,search,me,names,reactions,quick,picking,touched,onToggle,onPick,onTouch}:RowProps){
  const touch=(e:MouseEvent)=>{if(window.matchMedia('(hover: none)').matches&&!(e.target as HTMLElement).closest('a,button'))onTouch(m.id);};
  return <div>
   {newDay&&<div className="chat-date"><span>{day(m.created)}</span></div>}
   <article className={`chat-message${compact?' continued':''}${picking?' is-picking':''}${touched?' is-touched':''}`} onClick={touch}>
-   <div className={`chat-message-avatar chat-tone-${tone}`} aria-hidden="true">{compact?<small>{clock(m.created)}</small>:m.name.slice(0,1)}</div>
+   {compact?<div className="chat-message-avatar" aria-hidden="true"><small>{clock(m.created)}</small></div>:<Avatar name={m.name} src={avatar} className={`chat-message-avatar chat-tone-${tone}`} size={35}/>}
    <div className="chat-message-content">
-    {!compact&&<div className="chat-message-meta"><b>{m.name}</b>{mine&&<span>你</span>}{host&&<em>HOST</em>}<time dateTime={m.created} title={`${day(m.created)} · 北京时间`}>{clock(m.created)}</time></div>}
+    {!compact&&<div className="chat-message-meta"><b>{m.name}</b>{host&&<em>Host</em>}<time dateTime={m.created} title={`${day(m.created)} · 北京时间`}>{clock(m.created)}</time></div>}
     <MessageMarkdown text={m.body} highlight={search}/>
     {reactions.length>0&&<div className="chat-reactions">
      {reactions.map(r=>{const on=!!me&&r.users.includes(me),who=whoReacted(r.users,me,names);return <button type="button" key={r.emoji} className={`chat-reaction${on?' is-mine':''}`} aria-pressed={on} aria-label={`${r.emoji} ${r.users.length}，${who} 回应了。${on?'点击取消你的回应':'点击一起回应'}`} onClick={()=>onToggle(m.id,r.emoji)}>
@@ -129,13 +130,13 @@ export default function Conversations({household,user,people,messages,onSent}:Pr
  const tools:[string,string,typeof Bold,()=>void][]=[['粗体','⌘B',Bold,()=>wrap('**','粗体')],['斜体','⌘I',Italic,()=>wrap('*','斜体')],['删除线','⌘⇧X',Strikethrough,()=>wrap('~~','删除线')],['代码','⌘⇧C',Code,()=>wrap('`','代码')],['链接','⌘⇧U',Link2,link],['列表','',List,list]];
 
  return <section className={`group-chat${membersOpen?' has-members':''}`} aria-label="小组交流">
-  <div className="chat-main"><div className="chat-heading"><div><h1><Hash size={20}/>小组客厅</h1><p>{household.name} · 第 {household.week} 周<span className="chat-private"><LockKeyhole size={11}/> 仅本组成员可见</span></p></div><div className="chat-heading-tools"><label className="chat-search"><Search size={15}/><input type="search" aria-label="搜索小组消息" placeholder="搜索最近 100 条消息" value={query} onChange={e=>setQuery(e.target.value)}/></label><button className="chat-members-toggle" aria-expanded={membersOpen} aria-controls="chat-member-panel" onClick={()=>setMembersOpen(v=>!v)}><span className="chat-mini-avatars">{people.slice(0,3).map((p,i)=><span key={p.user} className={`chat-tone-${i%4}`}>{p.name.slice(0,1)}</span>)}</span><Users size={15}/><span>{people.length}</span><span className="p-sr">小组成员</span></button></div></div>
+  <div className="chat-main"><div className="chat-heading"><div><h1><Hash size={20}/>小组客厅</h1><p>{household.name} · 第 {household.week} 周<span className="chat-private"><LockKeyhole size={11}/> 仅本组成员可见</span></p></div><div className="chat-heading-tools"><label className="chat-search"><Search size={15}/><input type="search" aria-label="搜索小组消息" placeholder="搜索最近 100 条消息" value={query} onChange={e=>setQuery(e.target.value)}/></label><button className="chat-members-toggle" aria-expanded={membersOpen} aria-controls="chat-member-panel" onClick={()=>setMembersOpen(v=>!v)}><span className="chat-mini-avatars">{people.slice(0,3).map((p,i)=><Avatar key={p.user} name={p.name} src={p.avatar} className={`chat-tone-${i%4}`} size={24}/>)}</span><Users size={15}/><span>{people.length}</span><span className="p-sr">小组成员</span></button></div></div>
    <div className="chat-message-region"><div className="chat-stream" ref={scroller} role="log" aria-label="小组消息" aria-live="polite" aria-relevant="additions" onScroll={()=>{const el=scroller.current;if(el){nearBottom.current=el.scrollHeight-el.scrollTop-el.clientHeight<70;if(nearBottom.current)setFresh(false);}if(picker?.kind==='react')setPicker(null);}}>
     {!search&&<div className="chat-channel-intro"><span><Hash size={28}/></span><h2>欢迎来到小组客厅</h2><p>分享一件小事，接着上次的话题，或留一个下次想问的问题。</p><div><Leaf size={14}/><b>本周话题</b><span>{household.topic}</span></div></div>}
     {search&&<p className="chat-search-result">找到 {shown.length} 条消息 · 仅搜索已加载的最近 100 条</p>}
     {search&&!shown.length&&<div className="chat-empty"><MessageSquare size={24}/><h3>还没有找到这条消息</h3><p>换个词试试，或清除搜索回到对话。</p><button onClick={()=>setQuery('')}>清除搜索</button></div>}
     {shown.map((m,i)=>{const previous=shown[i-1],newDay=!previous||day(previous.created)!==day(m.created),compact=!search&&!newDay&&previous.author===m.author&&Date.parse(m.created)-Date.parse(previous.created)<300000,person=people.find(p=>p.user===m.author);
-     return <MessageRow key={m.id} m={m} compact={compact} newDay={newDay} mine={m.author===user.id} host={person?.role==='host'} tone={Math.max(0,people.findIndex(p=>p.user===m.author))%4} search={search} me={user.id} names={names} reactions={reactionsOf(m)} quick={quick} picking={picker?.kind==='react'&&picker.message===m.id} touched={touched===m.id} onToggle={toggle} onPick={pickFor} onTouch={touch}/>;})}
+     return <MessageRow key={m.id} m={m} compact={compact} newDay={newDay} host={person?.role==='host'} avatar={person?.avatar} tone={Math.max(0,people.findIndex(p=>p.user===m.author))%4} search={search} me={user.id} names={names} reactions={reactionsOf(m)} quick={quick} picking={picker?.kind==='react'&&picker.message===m.id} touched={touched===m.id} onToggle={toggle} onPick={pickFor} onTouch={touch}/>;})}
    </div>
    {fresh&&!search&&<button className="chat-new-messages" onClick={bottom}><ArrowDown size={14}/> 有新消息 · 回到底部</button>}
    {reactError&&<p className="chat-toast" role="alert">{reactError}</p>}
@@ -162,6 +163,6 @@ export default function Conversations({household,user,people,messages,onSent}:Pr
   </div>
   {picker?.kind==='compose'&&<EmojiPicker anchor={emojiButton.current} label="插入表情" onSelect={insertEmoji} onClose={()=>setPicker(null)}/>}
   {picker?.kind==='react'&&<EmojiPicker anchor={picker.anchor} align="end" label="添加表情回应" onSelect={emoji=>void toggle(picker.message,emoji)} onClose={()=>setPicker(null)}/>}
-  {membersOpen&&<aside id="chat-member-panel" className="chat-members"><div className="chat-member-heading"><h2>小组成员 <span>{people.length}</span></h2><button aria-label="关闭成员列表" onClick={()=>setMembersOpen(false)}><X size={18}/></button></div><p>在这里认识彼此，把交流留在小组里。</p>{people.map((p,i)=><div className="chat-person" key={p.user}><span className={`chat-person-avatar chat-tone-${i%4}`}>{p.name.slice(0,1)}</span><div><b>{p.name}{p.user===user.id?'（你）':''}</b><small>{p.role==='host'?'Host':'学习伙伴'} · {p.timezone?timezoneLabel(p.timezone):'时区待确认'}</small></div></div>)}<div className="chat-member-note"><LockKeyhole size={16}/><p>本页不展示私人联系方式。安排与反馈通过平台处理。</p></div></aside>}
+  {membersOpen&&<aside id="chat-member-panel" className="chat-members"><div className="chat-member-heading"><h2>小组成员 <span>{people.length}</span></h2><button aria-label="关闭成员列表" onClick={()=>setMembersOpen(false)}><X size={18}/></button></div><p>在这里认识彼此，把交流留在小组里。</p>{people.map((p,i)=><div className="chat-person" key={p.user}><Avatar name={p.name} src={p.avatar} className={`chat-person-avatar chat-tone-${i%4}`} size={34}/><div><b>{p.name}{p.user===user.id?'（你）':''}</b><small>{p.role==='host'?'Host':'学习伙伴'} · {p.timezone?timezoneLabel(p.timezone):'时区待确认'}</small></div></div>)}<div className="chat-member-note"><LockKeyhole size={16}/><p>本页不展示私人联系方式。安排与反馈通过平台处理。</p></div></aside>}
  </section>;
 }

@@ -5,13 +5,14 @@ import {FormEvent,useState} from 'react';
 import {ArrowLeft,ArrowUpRight,Check,Leaf,UserRound} from 'lucide-react';
 import AccountMenu from '../app/account-menu';
 import WorkspaceSidebar from '../../components/workspace/sidebar';
+import AvatarUpload,{postAvatar} from '../../components/workspace/avatar-upload';
 import {standardTimezones,timezoneLabel} from '../../lib/timezones';
 
 type Profile={name:string;location:string;age_band:string;life_stage:string;mbti:string;contact_preference:string;contact:string};
 const mbtis=['INTJ','INTP','ENTJ','ENTP','INFJ','INFP','ENFJ','ENFP','ISTJ','ISFJ','ESTJ','ESFJ','ISTP','ISFP','ESTP','ESFP'];
 const statusText:Record<string,string>={new:'资料已收到，团队会跟进',interest:'意向已登记',contacted:'正在了解你的学习需要',shortlist:'正在为你安排伙伴',hold:'正在协调后续安排',declined:'本期暂无合适安排',assigned:'已加入小组'};
 
-export default function AboutProfile({email,teamAccess,role,household,profile,hasApplication,status}:{email:string;teamAccess:boolean;role:string|null;household:{name:string;timezone:string;avatar?:string|null}|null;profile:Profile;hasApplication:boolean;status:string|null}){
+export default function AboutProfile({avatar=null,email,teamAccess,role,household,profile,hasApplication,status}:{avatar?:string|null;email:string;teamAccess:boolean;role:string|null;household:{name:string;timezone:string;avatar?:string|null}|null;profile:Profile;hasApplication:boolean;status:string|null}){
   const router=useRouter();
   const [f,setF]=useState(profile),[timezone,setTimezone]=useState(()=>standardTimezones.find(z=>`UTC${z.value}`===timezoneLabel(household?.timezone||''))?.value||''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[saved,setSaved]=useState(false);
   const edit=(k:keyof Profile,v:string)=>{setF(p=>({...p,[k]:v}));setSaved(false)};
@@ -20,13 +21,14 @@ export default function AboutProfile({email,teamAccess,role,household,profile,ha
     catch(e){setError((e as Error).message)}finally{setBusy(false)}}
   const subtitle=role==='host'?'Host':household?'Learner':'New here';
   return <div className="portal workspace-ui">
-    <WorkspaceSidebar kind="learn" avatar={household?.avatar} title={household?.name||'我的 Household'} subtitle={household?'我的小组':'从认识彼此开始'} active="about" onSelect={id=>{if(id==='learn')router.push('/learn');}} teamAccess={teamAccess} sections={[{label:'我的空间',items:[{id:'learn',label:'返回学习空间',icon:ArrowLeft},{id:'about',label:'关于我',icon:UserRound}]}]}/>
+    <WorkspaceSidebar kind="learn" avatar={household?.avatar} title={household?.name||'我的 Household'} subtitle={household?'我的小组':'从认识彼此开始'} active="about" onSelect={id=>{if(id==='learn')router.push('/learn');}} teamAccess={teamAccess} sections={[{label:'我的小组',items:[{id:'learn',label:'返回学习空间',icon:ArrowLeft},{id:'about',label:'个人信息',icon:UserRound}]}]}/>
 
-    <div className="p-work"><div className="p-top"><span>YOUR HOUSEHOLD / <b>关于我</b></span><div><AccountMenu name={f.name} subtitle={subtitle} teamAccess={teamAccess} current="about"/></div></div>
+    <div className="p-work"><div className="p-top"><nav className="p-crumb" aria-label="当前位置"><a href="/learn">{household?.name||'我的 Household'}</a><span aria-hidden="true">/</span><b aria-current="page">个人信息</b></nav><div><AccountMenu avatar={avatar} name={f.name} subtitle={subtitle} teamAccess={teamAccess} current="about"/></div></div>
       <div className="p-panel"><main className="p-main p-about">
-        <div className="p-welcome"><div><h1>关于我</h1><p>伙伴看到的称呼、你的时区和联系方式，都可以在这里更新。</p></div></div>
+        <div className="p-welcome"><div><h1>个人信息</h1><p>伙伴看到的称呼、你的时区和联系方式，都可以在这里更新。</p></div></div>
         <form onSubmit={submit}>
           <section className="p-card"><h2>基本信息</h2><p>保存后，小组里显示的名字会同步更新。</p>
+            <div className="p-about-avatar"><span className="p-about-avatar-label">头像<small>显示在小组交流和成员列表里。未设置时显示名字首字。</small></span><AvatarUpload name={f.name||email} avatar={avatar} save={image=>postAvatar('/api/profile/avatar',{image})} onSaved={()=>router.refresh()}/></div>
             <label>伙伴怎么称呼你<input required maxLength={50} value={f.name} onChange={e=>edit('name',e.target.value)} autoComplete="nickname"/></label>
             <label>登录邮箱<input value={email} readOnly/></label>
             {household&&<label>我的时区<select value={timezone} onChange={e=>{setTimezone(e.target.value);setSaved(false)}}><option value="">请选择当前 UTC 时区</option>{standardTimezones.map(z=><option key={z.value} value={z.value} suppressHydrationWarning>{z.label}</option>)}</select><small className="p-muted">供本组伙伴约时间时参考；本期日程仍统一按北京时间显示。</small></label>}

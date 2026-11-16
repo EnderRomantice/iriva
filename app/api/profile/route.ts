@@ -5,7 +5,7 @@ export const runtime = 'nodejs';
 type Row = Record<string, unknown>;
 
 /**
- * 「关于我」只改个人信息：称呼、所在地区、年龄段、阶段、联系方式、MBTI，以及组内时区。
+ * 「个人信息」页只改这些：称呼、所在地区、年龄段、阶段、联系方式、MBTI，以及组内时区。
  * 不改方案 / 身份 / 学习需要 / 可用时间，也不重置团队跟进状态；这些仍在 /apply 里修改。
  */
 export async function PATCH(req: Request) {

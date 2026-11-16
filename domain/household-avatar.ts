@@ -15,3 +15,7 @@ export function parseAvatar(value: unknown): { type: string; bytes: Buffer } | n
   if (!bytes.length || bytes.length > maxAvatarBytes || !magic[match[1]](bytes)) return null;
   return { type: `image/${match[1]}`, bytes };
 }
+
+/** Versioned URLs so avatars can be cached privately and refresh after a change. */
+export const householdAvatarUrl = (updated: unknown) => updated ? `/api/household/avatar?v=${Date.parse(String(updated))}` : null;
+export const memberAvatarUrl = (userId: unknown, updated: unknown) => updated ? `/api/profile/avatar?u=${encodeURIComponent(String(userId))}&v=${Date.parse(String(updated))}` : null;

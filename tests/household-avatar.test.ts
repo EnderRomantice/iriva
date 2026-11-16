@@ -18,7 +18,7 @@ test('space avatar rejects other types, spoofed signatures and oversized images'
 });
 test('default avatar is the first visible character of the space name', () => {
   assert.equal(avatarInitial('晨光 Household'), '晨');
-  assert.equal(avatarInitial('  daniel Chen的空间'), 'D');
+  assert.equal(avatarInitial('  daniel Chen的家庭'), 'D');
   assert.equal(avatarInitial('👩‍👩‍👧 Family'), '👩‍👩‍👧');
   assert.equal(avatarInitial(''), '·');
 });
