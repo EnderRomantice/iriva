@@ -80,8 +80,11 @@ export async function claimPlacement(user: PilotUser) {
 /** 按邀请码加入 Household（仅学员，四人上限）。必须在 pilotTransaction 内调用。 */
 export async function joinByCode(code: string, userId: string, name: string): Promise<{ household: string } | { error: string; status: number }> {
   const db = await pilotDb();
+  await db.prepare('UPDATE users SET id=id WHERE id=?').run(userId);
+  // Lock the household before counting seats so simultaneous invites cannot overfill it.
+  await db.prepare('UPDATE households SET code=code WHERE code=?').run(code);
   const h = await db.prepare('SELECT id FROM households WHERE code=?').get(code) as Row | undefined;
-  if (!h) return { error: '没有找到这个邀请码，请核对后再试，或先留空提交。', status: 400 };
+  if (!h) return { error: '没有找到这个邀请码，请核对后再试。', status: 400 };
   if (await member(userId)) return { error: '你已经在一个 Household 里了。', status: 409 };
   if (count(await db.prepare("SELECT COUNT(*) AS n FROM memberships WHERE household_id=? AND role='learner'").get(h.id)) >= 4) return { error: '这个 Household 已经有四位学员了。', status: 409 };
   await db.prepare(insertMembership).run(...membershipRow(String(h.id), userId, 'learner', name));
