@@ -1,3 +1,5 @@
+import { pilotHost } from '../../../server/services/pilot-hosts';
+import { workspaceRepository } from '../../../server/container';
 import { randomUUID } from 'node:crypto';
 import { isStandardTimezone } from '../../../lib/timezones';
 import { validSlots, availabilityText } from '../../../lib/availability';
@@ -18,6 +20,7 @@ async function save(req: Request, editing: boolean) {
   const u = await currentUser(); if (!u) return out({ error: '请先登录。' }, 401);
   if (!sameOrigin(req)) return out({ error: '请求来源不正确。' }, 403);
   try {
+    if (await pilotHost(await workspaceRepository(), u.email)) return out({ error: '你已是 Host，无需提交学员申请。请进入学习空间。' }, 409);
     const raw = await req.text(); if (raw.length > 22000) return out({ error: '内容过长。' }, 413);
     let b: Row; try { b = JSON.parse(raw); } catch { return out({ error: '资料格式不正确。' }, 400); }
     if (!b || typeof b !== 'object') return out({ error: '资料格式不正确。' }, 400);

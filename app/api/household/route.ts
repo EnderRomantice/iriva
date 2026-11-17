@@ -1,3 +1,5 @@
+import { pilotHost } from '../../../server/services/pilot-hosts';
+import { workspaceRepository } from '../../../server/container';
 import { randomUUID } from 'node:crypto';
 import { isStandardTimezone } from '../../../lib/timezones';
 import { householdAvatarUrl, memberAvatarUrl, parseAvatar } from '../../../domain/household-avatar';
@@ -21,6 +23,8 @@ export async function GET() {
     await claimPlacement(u);
     const d = await pilotDb(), m = await member(u.userId);
     if (!m) {
+      const host = await pilotHost(await workspaceRepository(), u.email);
+      if (host) return reply({ user: { name: host.name, role: 'host', id: u.userId }, household: null, application: null, people: [], messages: [], sessions: [] });
       const application = await d.prepare('SELECT name,status,household FROM member_applications WHERE user_id=?').get(u.userId);
       return reply({ user: { name: (application as Row | undefined)?.name || u.displayName }, household: null, application: application || null });
     }

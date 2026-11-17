@@ -1,3 +1,5 @@
+import { addPilotHost } from '../../../server/services/pilot-hosts';
+import { errorResponse } from '../../../server/http';
 import { currentUser, pilotDb, pilotTransaction, reply as out, sameOrigin, teamRole, text, createHousehold } from '../../../server/pilot';
 import { userByEmail } from '../../../server/repositories/queries';
 import { workspaceRepository } from '../../../server/container';
@@ -10,7 +12,7 @@ export async function GET() {
   const role = await teamRole(u); if (!role) return out({ error: '仅限获授权的青鸟团队。' }, 403);
   try {
     const db = await pilotDb();
-    const [applications, households, tasks, staff, placements, pairs, feedback] = await Promise.all([
+    const [applications, households, tasks, staff, placements, pairs, feedback, hosts] = await Promise.all([
       db.prepare('SELECT * FROM member_applications ORDER BY created DESC LIMIT 500').all(),
       db.prepare('SELECT id,name,week,theme AS topic,duration FROM households ORDER BY name LIMIT 500').all(),
       db.prepare('SELECT * FROM team_tasks ORDER BY done ASC,created DESC LIMIT 200').all(),
@@ -18,9 +20,10 @@ export async function GET() {
       db.prepare('SELECT * FROM placements LIMIT 2000').all(),
       db.prepare("SELECT p.id,p.household,p.url,COALESCE(NULLIF(a.display_name,''),ua.name) AS \"firstName\",COALESCE(NULLIF(b.display_name,''),ub.name) AS \"secondName\" FROM practice_pairs p JOIN memberships a ON a.user_id=p.first AND a.household_id=p.household JOIN users ua ON ua.id=a.user_id JOIN memberships b ON b.user_id=p.second AND b.household_id=p.household JOIN users ub ON ub.id=b.user_id LIMIT 1000").all(),
       db.prepare('SELECT * FROM suggestions ORDER BY created DESC LIMIT 200').all(),
+      db.prepare("SELECT h.email,h.name,u.id AS user_id,COALESCE(p.household,(SELECT m.household_id FROM memberships m WHERE m.user_id=u.id AND m.role='host' ORDER BY m.created_at ASC LIMIT 1)) AS household FROM pilot_hosts h LEFT JOIN users u ON lower(u.email)=h.email LEFT JOIN placements p ON p.email=h.email AND p.role='host' ORDER BY h.created DESC LIMIT 2000").all(),
     ]);
     const num = (rows: unknown[]) => (rows as Row[]).map(r => ({ ...r, ...('revision' in r ? { revision: Number(r.revision) } : {}), ...('done' in r ? { done: Number(r.done) } : {}), ...('week' in r ? { week: Number(r.week), duration: Number(r.duration) } : {}) }));
-    return out({ feedback, pairs, role, applications: num(applications), households: num(households), tasks: num(tasks), staff, placements });
+    return out({ hosts, feedback, pairs, role, applications: num(applications), households: num(households), tasks: num(tasks), staff, placements });
   } catch (e) { console.error(e); return out({ error: '暂时无法读取运营工作台。' }, 503); }
 }
 
@@ -31,7 +34,9 @@ export async function POST(req: Request) {
     const raw = await req.text(); if (raw.length > 20000) return out({ error: '内容过长。' }, 413);
     const b = JSON.parse(raw) as Row, db = await pilotDb(), val = (k: string, n: number) => text(b, k, n);
     const action = val('action', 30), id = val('id', 100);
-    if (action === 'review') {
+    if (action === 'host') {
+      try { await addPilotHost(await workspaceRepository(), b); } catch (e) { return errorResponse(e); }
+    } else if (action === 'review') {
       const status = val('status', 20);
       if (!['new', 'contacted', 'shortlist', 'hold', 'declined', 'interest'].includes(status)) return out({ error: '无效状态。' }, 400);
       if (!Number.isInteger(b.revision) || (b.revision as number) < 0) return out({ error: '请刷新后读取最新资料。' }, 409);
@@ -76,6 +81,7 @@ export async function POST(req: Request) {
       const candidates = await db.prepare(`SELECT * FROM member_applications WHERE id IN (${ids.map(() => '?').join(',')}) AND role='learner' AND plan='native' AND language='English' AND status='shortlist' AND household IS NULL`).all(...ids) as Row[];
       if (candidates.length !== 4) return out({ error: '所有学员必须在候选名单中，且尚未分组。' }, 409);
       if (candidates.some(x => String(x.email).toLowerCase() === hostEmail)) return out({ error: 'Host 不能同时是这组的学员。' }, 409);
+      if (await db.prepare(`SELECT 1 FROM pilot_hosts WHERE email IN (${candidates.map(() => '?').join(',')})`).get(...candidates.map(x => String(x.email).toLowerCase()))) return out({ error: '候选学员中有已授权的 Host，请重新选择。' }, 409);
       const repo = await workspaceRepository(), hostUser = await userByEmail(repo, hostEmail);
       const accounts = [...candidates.map(x => String(x.user_id)), ...(hostUser ? [hostUser.id] : [])];
       if (await db.prepare(`SELECT user_id FROM memberships WHERE user_id IN (${accounts.map(() => '?').join(',')}) LIMIT 1`).get(...accounts)) return out({ error: '有成员或 Host 已在其他 Household，需先人工协调。' }, 409);
@@ -95,6 +101,7 @@ export async function POST(req: Request) {
           await db.prepare(place).run(x.email, house, 'learner', x.name);
           await db.prepare("UPDATE member_applications SET household=?,status='assigned' WHERE id=?").run(house, x.id);
         }
+        await db.prepare('INSERT INTO pilot_hosts (email,name,created) VALUES (?,?,?) ON CONFLICT(email) DO UPDATE SET name=excluded.name').run(hostEmail, hostName, new Date().toISOString());
         await db.prepare(place).run(hostEmail, house, 'host', hostName);
         await db.prepare("UPDATE member_applications SET household=?,status='assigned' WHERE lower(email)=? AND role='host' AND household IS NULL").run(house, hostEmail);
       });
