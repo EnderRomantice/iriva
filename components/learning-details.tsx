@@ -11,7 +11,7 @@ const host={
  work:{en:'Has spent years teaching adult learners and working professionals. She truly loves this work and feels she has found her life’s calling: helping people communicate with more confidence.',zh:'长期从事成年学员与职场精英的教学工作。真心热爱这份工作，并且觉得自己找到了毕生使命——帮助人们建立更自信的沟通能力。'},
  about:{en:'She keeps orchids on her windowsill and shares her home with three Bengal cats and an English Mastiff. She loves cooking, exploring different cultures, and hearing people’s real-life stories.',zh:'窗台上养着兰花，家里还有三只孟加拉猫和一只英国獒犬。她喜欢做饭、探索不同文化，也喜欢听人讲真实的生活故事。'},
  q:{en:'If, after four weeks, your group remembers just one thing about their time with you, what would you want it to be?',zh:'如果四周后，组员只记住与你相处的一件事，你最希望是什么？'},
- a:{en:'I want people to remember that you don’t need perfect English to have a real conversation. I hope my members stop being afraid of mistakes, speak up with ease, enjoy it, and discover that English is far less scary than they imagined — and that they are better than they think.',zh:'我希望大家记住：你不需要说一口完美的英语，也能进行真正的交流。我希望我的会员们能有这样的体验：不再害怕犯错，自在地开口交流、享受其中，并发现英语远没有想象中可怕，他们其实比自己以为的更出色。'}
+ a:{en:'I want people to remember that you don’t need perfect English to have a real conversation. I want my members to feel comfortable to share their thoughts, enjoy themselves. I want them to realize that English isn’t as scary, and that they’re much more capable than they give themselves credit for.',zh:'我希望大家记住：你不需要说一口完美的英语，也能进行真正的交流。我希望我的会员们能自在地分享想法，享受其中。我希望他们意识到，英语并没有那么可怕，而他们其实比自己以为的要厉害得多。'}
 };
 
 export function HostStandards({english=false}:{english?:boolean}){
