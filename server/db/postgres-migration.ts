@@ -25,7 +25,7 @@ export function sqliteSnapshot(repo:SqliteRepository):DataSnapshot {
   return repo.atomic(()=>Object.fromEntries(migrationTables.map(table=>[table,repo.db.prepare(`SELECT * FROM ${table}`).all() as Record<string,unknown>[]])));
 }
 export async function applyPostgresMigrations(sql:Sql) {
-  for (const filename of ['20261101224532_iriva_postgres.sql','20261106000000_iriva_assistant.sql','20261110074222_mutation_receipt_fingerprint.sql','20261112021222_bounded_workspace_reads.sql','20261113000000_pilot.sql','20261116011519_activity_reviews.sql','20261116120000_household_reactions.sql','20261116130000_household_avatars.sql','20261116140000_household_names.sql','20261116150000_member_avatars.sql','20261117022431_pilot_hosts.sql']) {
+  for (const filename of ['20261101224532_iriva_postgres.sql','20261106000000_iriva_assistant.sql','20261110074222_mutation_receipt_fingerprint.sql','20261112021222_bounded_workspace_reads.sql','20261113000000_pilot.sql','20261116011519_activity_reviews.sql','20261116120000_household_reactions.sql','20261116130000_household_avatars.sql','20261116140000_household_names.sql','20261116150000_member_avatars.sql','20261117022431_pilot_hosts.sql','20261117030000_team_passwords.sql']) {
     await applyMigration(sql,filename);
   }
 }

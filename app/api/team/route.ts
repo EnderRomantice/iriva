@@ -1,4 +1,5 @@
 import { addPilotHost } from '../../../server/services/pilot-hosts';
+import { saveTeamAccount } from '../../../server/team-auth';
 import { errorResponse } from '../../../server/http';
 import { currentUser, pilotDb, pilotTransaction, reply as out, sameOrigin, teamRole, text, createHousehold } from '../../../server/pilot';
 import { userByEmail } from '../../../server/repositories/queries';
@@ -67,7 +68,7 @@ export async function POST(req: Request) {
       if (role !== 'admin') return out({ error: '只有管理员可以授权工作人员。' }, 403);
       const email = val('email', 254).toLowerCase(), name = val('name', 60);
       if (!name || !/^\S+@\S+\.\S+$/.test(email)) return out({ error: '填写姓名与有效邮箱。' }, 400);
-      await db.prepare('INSERT INTO team_members (email,name) VALUES (?,?) ON CONFLICT(email) DO UPDATE SET name=excluded.name').run(email, name);
+      try { await saveTeamAccount(await workspaceRepository(), { email, name, password: typeof b.password === 'string' ? b.password : undefined }); } catch (e) { return errorResponse(e); }
     } else if (action === 'removeStaff') {
       if (role !== 'admin') return out({ error: '只有管理员可以移除授权。' }, 403);
       await db.prepare('DELETE FROM team_members WHERE email=?').run(val('email', 254).toLowerCase());

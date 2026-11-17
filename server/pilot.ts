@@ -50,7 +50,8 @@ export async function teamRole(user: PilotUser | null): Promise<'admin' | 'staff
   const admins = (process.env.IRIVA_ADMIN_EMAILS || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
   if (admins.includes(user.email.toLowerCase())) return 'admin';
   const db = await pilotDb();
-  if (await db.prepare('SELECT email FROM team_members WHERE email=?').get(user.email.toLowerCase())) return 'staff';
+  const team = await db.prepare('SELECT role FROM team_members WHERE email=?').get(user.email.toLowerCase()) as { role?: string } | undefined;
+  if (team) return team.role === 'admin' ? 'admin' : 'staff';
   if (await db.prepare("SELECT 1 FROM organization_memberships WHERE user_id=? AND organization_id=? AND role='ops'").get(user.userId, defaultOrganizationId)) return 'staff';
   return null;
 }
