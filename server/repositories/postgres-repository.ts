@@ -20,6 +20,7 @@ export function postgresQuery(query:string) {
 
 /** A query this slow means a dead connection (e.g. a socket frozen with a serverless instance), not real work. */
 export const queryTimeoutMs=20_000;
+const poolSize=3;
 export class DatabaseTimeoutError extends DomainError { constructor(){super(503,'数据库暂时没有响应，请稍后重试。');} }
 
 export class PostgresRepository implements DatabaseRepository {
@@ -28,7 +29,19 @@ export class PostgresRepository implements DatabaseRepository {
   constructor(private readonly url:string) {
     this.pool=this.connect();
   }
-  private connect() { return postgres(this.url,{max:3,prepare:false,ssl:postgresTls(this.url),connect_timeout:10,idle_timeout:20,max_lifetime:1800}); }
+  private connect() { return postgres(this.url,{max:poolSize,prepare:false,ssl:postgresTls(this.url),connect_timeout:10,idle_timeout:20,max_lifetime:1800}); }
+  /**
+   * postgres.js pipelines extra queries onto busy connections once every pooled connection is in use.
+   * Supabase's transaction pooler stalls pipelined queries, so never run more work than there are connections.
+   */
+  private active=0;
+  private readonly waiting:(()=>void)[]=[];
+  private async slot<T>(work:()=>Promise<T>):Promise<T> {
+    if(this.active>=poolSize) await new Promise<void>(resolve=>this.waiting.push(resolve));
+    else this.active++;
+    try { return await work(); }
+    finally { const next=this.waiting.shift(); if(next) next(); else this.active--; }
+  }
   get sql():Sql { return this.pool; }
   /**
    * Drop every pooled connection and start fresh. A connection that stalls mid-query
@@ -50,10 +63,14 @@ export class PostgresRepository implements DatabaseRepository {
   /** Optional test/diagnostic observer; no row contents or bound values leave the adapter. */
   onQuery?: (event:{sql:string;bytes:number;rows:number})=>void;
   private async query(query:string,values:unknown[]) {
+    const tx=this.context.getStore();
+    return tx ? this.run(tx,query,values) : this.slot(()=>this.run(undefined,query,values));
+  }
+  private async run(tx:TransactionSql|undefined,query:string,values:unknown[]) {
     const pool=this.pool;
     let timer:NodeJS.Timeout|undefined;
     const timeout=new Promise<never>((_,reject)=>{timer=setTimeout(()=>{this.resetPool(pool);reject(new DatabaseTimeoutError());},queryTimeoutMs);});
-    const result=await Promise.race([(this.context.getStore()||pool).unsafe(postgresQuery(query),values as postgres.ParameterOrJSON<never>[]),timeout]).finally(()=>clearTimeout(timer));
+    const result=await Promise.race([(tx||pool).unsafe(postgresQuery(query),values as postgres.ParameterOrJSON<never>[]),timeout]).finally(()=>clearTimeout(timer));
     this.onQuery?.({sql:query,bytes:Buffer.byteLength(JSON.stringify(result)),rows:result.length});
     return result;
   }
@@ -63,7 +80,7 @@ export class PostgresRepository implements DatabaseRepository {
       try {
         // Serializable transactions preserve the domain's read/validate/write invariants
         // across independent serverless instances. Retry only database rollbacks.
-        return await this.sql.begin('isolation level serializable',async sql=>this.context.run(sql,async()=>await work(this))) as T;
+        return await this.slot(async()=>await this.sql.begin('isolation level serializable',async sql=>this.context.run(sql,async()=>await work(this))) as T);
       } catch(error) {
         const code=(error as {code?:string}).code;
         if(attempt>=4||!['40001','40P01'].includes(code||'')) throw error;
