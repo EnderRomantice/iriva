@@ -7,10 +7,10 @@ test('activity review: learner → Host → team publication → notification �
  if(process.env.PG_LOCAL_TEST!=='1'||!process.env.DATABASE_URL)throw new Error('Use npm run test:reviews with the disposable PostgreSQL harness.');
  const repo=new PostgresRepository(process.env.DATABASE_URL);
  const ids=await reviewFixture(repo);
- await repo.db.prepare('INSERT INTO team_members VALUES (?,?)').run(`${ids.team}@example.test`,'Review team');
+ await repo.db.prepare("INSERT INTO organization_access VALUES ('10000000-0000-4000-8000-000000001001',?,'admin',?)").run(ids.team,new Date().toISOString());
 const errors:string[]=[];const pages:Record<string,Page>={};const contexts:BrowserContext[]=[];
 try{
-for(const role of ['learner','host','team','outsider']){const context=await browser.newContext({viewport:{width:1440,height:1100}});contexts.push(context);const token=randomUUID();await repo.db.prepare('INSERT INTO auth_sessions VALUES (?,?,?)').run(createHash('sha256').update(token).digest('hex'),ids[role as 'learner'|'host'|'team'|'outsider'],Date.now()+3600000);await context.addCookies([{name:'iriva_session',value:token,domain:'127.0.0.1',path:'/'}]);const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));pages[role]=page;}
+for(const role of ['learner','host','team','outsider']){const context=await browser.newContext({viewport:{width:1440,height:1100}});contexts.push(context);const token=randomUUID();await repo.db.prepare("INSERT INTO auth_sessions (token_hash,user_id,expires_at,auth_method) VALUES (?,?,?,'password')").run(createHash('sha256').update(token).digest('hex'),ids[role as 'learner'|'host'|'team'|'outsider'],Date.now()+3600000);await context.addCookies([{name:'iriva_session',value:token,domain:'127.0.0.1',path:'/'}]);const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));pages[role]=page;}
 const learner=pages.learner;await learner.goto('http://127.0.0.1:3117/learn');await learner.getByRole('button',{name:'活动复盘',exact:true}).click();
 await learner.getByLabel('今天有没有一个时刻').fill('我主动追问了伙伴的故事。');
 await learner.getByLabel('今天卡住时').selectOption('Host 的提问');await learner.locator('input[name="comfort"][value="4"]').check();
@@ -39,7 +39,7 @@ test('Slack-style group chat: draft recovery, IME, retry deduplication, search a
  if(process.env.PG_LOCAL_TEST!=='1'||!process.env.DATABASE_URL)throw new Error('Use the disposable PostgreSQL harness.');
  const repo=new PostgresRepository(process.env.DATABASE_URL),ids=await reviewFixture(repo),contexts:BrowserContext[]=[];
  try{
-  async function session(user:string){const token=randomUUID();await repo.db.prepare('INSERT INTO auth_sessions VALUES (?,?,?)').run(createHash('sha256').update(token).digest('hex'),user,Date.now()+3600000);const c=await browser.newContext({baseURL:'http://127.0.0.1:3117',viewport:{width:1440,height:1000}});contexts.push(c);await c.addCookies([{name:'iriva_session',value:token,domain:'127.0.0.1',path:'/'}]);return c;}
+  async function session(user:string){const token=randomUUID();await repo.db.prepare("INSERT INTO auth_sessions (token_hash,user_id,expires_at,auth_method) VALUES (?,?,?,'password')").run(createHash('sha256').update(token).digest('hex'),user,Date.now()+3600000);const c=await browser.newContext({baseURL:'http://127.0.0.1:3117',viewport:{width:1440,height:1000}});contexts.push(c);await c.addCookies([{name:'iriva_session',value:token,domain:'127.0.0.1',path:'/'}]);return c;}
   const context=await session(ids.learner),host=await session(ids.host),outsider=await session(ids.outsider),page=await context.newPage(),errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
   const welcome=await host.request.post('/api/household',{data:{action:'message',body:'欢迎来到小组客厅！这周有什么想分享的小事？'}});if(welcome.status()!==200)throw new Error(await welcome.text());
   await page.goto('/learn');await page.getByRole('button',{name:'小组交流',exact:true}).click();
@@ -68,7 +68,7 @@ test('Slack-style group chat: draft recovery, IME, retry deduplication, search a
   const spoof=await host.request.post('/api/household',{data:{action:'message',id:rows[0].id,body:rows[0].body}});if(spoof.status()!==409)throw new Error('Peer reused message ID');
   const deny=await outsider.request.post('/api/household',{data:{action:'message',body:'not a member'}});if(deny.status()!==403)throw new Error('Nonmember could post');
   const palette=await page.locator('.portal').evaluate(el=>getComputedStyle(el).getPropertyValue('--ws-sidebar'));
-  await repo.db.prepare('INSERT INTO team_members VALUES (?,?)').run(`${ids.learner}@example.test`,'Review operator');
+  await repo.db.prepare("INSERT INTO organization_access VALUES ('10000000-0000-4000-8000-000000001001',?,'admin',?) ON CONFLICT(organization_id,user_id) DO UPDATE SET role='admin'").run(ids.learner,new Date().toISOString());
   await page.setViewportSize({width:1440,height:1000});await page.goto('/team');await page.locator('.team-page').waitFor();
   if(await page.locator('.team-page').evaluate(el=>getComputedStyle(el).getPropertyValue('--ws-sidebar'))!==palette)throw new Error('Workspace palettes diverge');
   await page.screenshot({path:testInfo.outputPath('unified-team.png'),fullPage:true});

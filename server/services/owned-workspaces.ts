@@ -16,6 +16,8 @@ export async function platformId(repo:DatabaseRepository, organizationId=default
   return org.parentId || org.id;
 }
 async function membership(repo:DatabaseRepository, organizationId:string, userId:string, role:Role) {
+  const org=await one(repo,'organizations','t.id=?',[organizationId]);
+  if(org&&org.kind!=='platform')await repo.db.prepare('INSERT INTO organization_access VALUES (?,?,?,?) ON CONFLICT(organization_id,user_id) DO NOTHING').run(organizationId,userId,org.ownerId===userId?'owner':'partner',new Date().toISOString());
   const existing=await one(repo,'organizationMemberships','t.organization_id=? AND t.user_id=?',[organizationId,userId]);
   if(existing) {
     if(existing.role!==role) await repo.saveOrganizationMembership({...existing,role,version:existing.version+1,updatedAt:new Date().toISOString()});
@@ -26,6 +28,7 @@ export async function ensurePersonalWorkspace(repo:DatabaseRepository,user:User,
   if(existing) return existing;
   const space:Organization={...meta(),name:`${user.name}的家庭`,initials:user.name.slice(0,1),color:'#12658a',kind:'personal',ownerId:user.id,parentId,isPrimary:1};
   await repo.put('organizations',space);
+  await repo.db.prepare("INSERT INTO organization_access VALUES (?,?,'owner',?) ON CONFLICT(organization_id,user_id) DO NOTHING").run(space.id,user.id,space.createdAt);
   await membership(repo,space.id,user.id,'learn');
   return space;
 }

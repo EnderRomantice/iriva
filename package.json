@@ -18,7 +18,8 @@
     "test:invites": "tsx scripts/test-postgres.ts --invites",
     "test:hosts": "tsx scripts/test-postgres.ts --hosts",
     "test:reviews": "tsx scripts/test-postgres.ts --reviews",
-    "team:account": "tsx scripts/team-account.ts"
+    "team:account": "tsx scripts/team-account.ts",
+    "test:teams": "tsx scripts/test-team-http.ts"
   },
   "dependencies": {
     "@chinese-fonts/yozai": "^3.0.0",

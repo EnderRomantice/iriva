@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import type { DatabaseRepository } from './repositories/database-repository';
 import { WorkspaceService } from './services/workspace-service';
+import { bootstrapOrganizationAccess } from './services/organization-access';
 import { bootstrapOwnedWorkspaces } from './services/owned-workspaces';
 
 let repository:Promise<DatabaseRepository>|undefined;
@@ -13,7 +14,9 @@ async function initialize():Promise<DatabaseRepository> {
   if(process.env.DATABASE_URL) {
     const {PostgresRepository}=await import('./repositories/postgres-repository');
     // Schema and data migration run explicitly before deployment, never on requests.
-    return new PostgresRepository(process.env.DATABASE_URL);
+    const repo=new PostgresRepository(process.env.DATABASE_URL);
+    await bootstrapOrganizationAccess(repo);
+    return repo;
   }
   if(process.env.VERCEL || process.env.NODE_ENV==='production') throw new Error('DATABASE_URL is required in production. SQLite is only supported for local development.');
   const {SqliteRepository}=await import('./repositories/sqlite-repository');
@@ -24,6 +27,8 @@ async function initialize():Promise<DatabaseRepository> {
   seedDemo(repo);
   await bootstrapOwnedWorkspaces(repo);
   const {asyncSqliteRepository}=await import('./repositories/async-sqlite-repository');
-  return asyncSqliteRepository(repo);
+  const facade=asyncSqliteRepository(repo);
+  await bootstrapOrganizationAccess(facade);
+  return facade;
 }
 export async function workspaceService(){return new WorkspaceService(await workspaceRepository());}

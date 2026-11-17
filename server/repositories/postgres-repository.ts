@@ -10,7 +10,7 @@ import { DomainError } from '../../domain/commands';
 
 const snake=(key:string)=>key.replace(/[A-Z]/g,c=>`_${c.toLowerCase()}`);
 const camel=(key:string)=>key.replace(/_([a-z])/g,(_,c:string)=>c.toUpperCase());
-const sqlTables=[...tables.map(snake),'profile_avatars','workspace_revisions','mutation_receipts','mutation_fingerprints','audit_events','credentials','auth_sessions','bookings','plan_orders','email_challenges','email_identities','host_grants','group_requests','iriva_memory','iriva_contacts','household_messages','member_applications','placements','team_members','team_tasks','practice_pairs','notifications','practice_invites','coach_drafts','coach_usage','suggestions','activity_reflections','activity_observations','activity_cards','household_message_reactions','household_avatars','member_avatars','pilot_hosts','password_attempts'];
+const sqlTables=[...tables.map(snake),'profile_avatars','workspace_revisions','mutation_receipts','mutation_fingerprints','audit_events','credentials','auth_sessions','bookings','plan_orders','email_challenges','email_identities','host_grants','group_requests','iriva_memory','iriva_contacts','household_messages','member_applications','placements','team_members','team_tasks','practice_pairs','notifications','practice_invites','coach_drafts','coach_usage','suggestions','activity_reflections','activity_observations','activity_cards','household_message_reactions','household_avatars','member_avatars','pilot_hosts','password_attempts','organization_access','organization_hosts','organization_audit'];
 /** Convert the internal SQL dialect; quoted strings never contain placeholders. */
 export function postgresQuery(query:string) {
   let parameter=0;
@@ -83,8 +83,8 @@ export class PostgresRepository implements DatabaseRepository {
         return await this.slot(async()=>await this.sql.begin('isolation level serializable',async sql=>this.context.run(sql,async()=>await work(this))) as T);
       } catch(error) {
         const code=(error as {code?:string}).code;
-        if(attempt>=4||!['40001','40P01'].includes(code||'')) throw error;
-        await new Promise(resolve=>setTimeout(resolve,10*(attempt+1)+Math.random()*20));
+        if(attempt>=7||!['40001','40P01'].includes(code||'')) throw error;
+        await new Promise(resolve=>setTimeout(resolve,Math.min(500,20*2**attempt)+Math.random()*40));
       }
     }
   }

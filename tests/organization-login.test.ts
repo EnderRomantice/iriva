@@ -1,0 +1,33 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
+import {randomUUID} from 'node:crypto';
+const dir=mkdtempSync(path.join(tmpdir(),'iriva-org-login-'));
+process.env.SQLITE_PATH=path.join(dir,'auth.sqlite');
+test('team identities use passwords; an older email challenge or email session cannot grant team access',async t=>{
+ t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const {workspaceRepository}=await import('../server/container');
+ const {saveTeamAccount,passwordSignIn}=await import('../server/team-auth');
+ const {beginEmailSignIn,verifyEmailSignIn}=await import('../server/email-auth');
+ const {digest}=await import('../server/auth');const {teamRole}=await import('../server/pilot');
+ const {defaultOrganizationId}=await import('../domain/workspace');
+ const repo=await workspaceRepository();
+ await saveTeamAccount(repo,{email:'admin@test.example',name:'Admin',role:'admin',password:'safe-password'});
+ const user=await repo.db.prepare('SELECT id FROM users WHERE email=?').get('admin@test.example');
+ const req=new Request('http://localhost/api/auth');
+ const start=await beginEmailSignIn({email:'ADMIN@test.example'},defaultOrganizationId,req);
+ assert.deepEqual(await start.json(),{method:'password'});
+ assert.equal((await repo.db.prepare('SELECT COUNT(*) AS n FROM email_challenges WHERE email=?').get('admin@test.example')).n,0);
+ const id=randomUUID();await repo.db.prepare('INSERT INTO email_challenges (id,email,organization_id,code_hash,created_at,expires_at,delivered) VALUES (?,?,?,?,?,?,1)').run(id,'admin@test.example',defaultOrganizationId,digest(id+':123456'),Date.now(),Date.now()+600000);
+ await assert.rejects(verifyEmailSignIn({challengeId:id,code:'123456'},defaultOrganizationId,req),/密码登录/);
+ assert.equal(await teamRole({userId:user.id,email:'admin@test.example',displayName:'Admin',authMethod:'email'}),null);
+ const signed=await passwordSignIn({email:'admin@test.example',password:'safe-password'});assert.equal(signed.status,200);
+ const token=/iriva_session=([0-9a-f]+)/.exec(signed.headers.get('set-cookie')||'')![1];
+ assert.equal((await repo.db.prepare('SELECT auth_method FROM auth_sessions WHERE token_hash=?').get(digest(token))).auth_method,'password');
+ // Ordinary users still verify email codes and receive no team role.
+ const learnerId=randomUUID();await repo.db.prepare('INSERT INTO email_challenges (id,email,organization_id,code_hash,created_at,expires_at,delivered) VALUES (?,?,?,?,?,?,1)').run(learnerId,'learner@test.example',defaultOrganizationId,digest(learnerId+':654321'),Date.now(),Date.now()+600000);
+ const learner=await verifyEmailSignIn({challengeId:learnerId,code:'654321'},defaultOrganizationId,req);assert.equal(learner.status,200);
+ const normal=await repo.db.prepare('SELECT id FROM users WHERE email=?').get('learner@test.example');assert.equal(await teamRole({userId:normal.id,email:'learner@test.example',displayName:'Learner',authMethod:'email'}),null);
+});

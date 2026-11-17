@@ -14,7 +14,7 @@ test('submit profile, enter code, reach household; invalid, missing-profile and 
   async function learner() {
     const id = randomUUID(), token = randomBytes(32).toString('hex'), email = `${id}@example.test`;
     await db`INSERT INTO iriva.users(id,name,email,timezone,avatar,version,created_at,updated_at) VALUES (${id},'Invite learner',${email},'UTC','',1,${now},${now})`;
-    await db`INSERT INTO iriva.auth_sessions VALUES (${createHash('sha256').update(token).digest('hex')},${id},${Date.now()+3600000})`;
+    await db`INSERT INTO iriva.auth_sessions (token_hash,user_id,expires_at) VALUES (${createHash('sha256').update(token).digest('hex')},${id},${Date.now()+3600000})`;
     const context = await browser.newContext(); contexts.push(context);
     await context.addCookies([{ name: 'iriva_session', value: token, url: origin }]);
     return { id, context, join: () => context.request.post(`${origin}/api/apply/join`, { headers, data: { code } }) };

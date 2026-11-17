@@ -30,8 +30,9 @@ test('team accounts sign in with a password; others and wrong passwords cannot',
 
   // Losing team access disables password sign-in even though the credential remains.
   await saveTeamAccount(repo, { email: 'staff@example.com', name: 'Staff', password: 'staff-password' });
-  assert.equal(await teamRole({ userId: 'x', email: 'staff@example.com', displayName: 'Staff' }), 'staff');
-  await repo.db.prepare('DELETE FROM team_members WHERE email=?').run('staff@example.com');
+  const staff=await repo.db.prepare('SELECT id FROM users WHERE email=?').get('staff@example.com');
+  assert.equal(await teamRole({ userId: staff.id, email: 'staff@example.com', displayName: 'Staff' }), 'staff');
+  await repo.db.prepare('DELETE FROM organization_access WHERE user_id=?').run(staff.id);
   await assert.rejects(signIn('staff@example.com', 'staff-password'), /邮箱或密码不正确/);
 
   // Resetting a password signs out existing sessions.

@@ -26,8 +26,8 @@ export function ChatSkeleton() {
 }
 
 /** Activity reviews: stats strip, toolbar, grouped queue + detail. */
-export function QueueSkeleton() {
-  return <div className="ws-skeleton" aria-busy="true" aria-label="正在加载活动记录">
+export function QueueSkeleton({label='正在加载活动记录'}:{label?:string}={}) {
+  return <div className="ws-skeleton" aria-busy="true" aria-label={label}>
     <div className="sk" style={bar('100%', 64, { borderRadius: 12 })}/>
     <div className="ws-sk-toolbar"><div className="sk" style={bar(220, 34)}/><div className="sk" style={bar(80, 34)}/></div>
     <div className="ws-sk-split">
@@ -48,8 +48,8 @@ export function QueueSkeleton() {
 }
 
 /** Generic list page: filter row and list rows. */
-export function ListSkeleton({ rows = 5 }: { rows?: number }) {
-  return <div className="ws-skeleton" aria-busy="true" aria-label="正在加载">
+export function ListSkeleton({ rows = 5, label='正在加载' }: { rows?: number; label?:string }) {
+  return <div className="ws-skeleton" aria-busy="true" aria-label={label}>
     <div className="ws-sk-toolbar"><div className="sk" style={bar('100%', 38)}/></div>
     {Array.from({ length: rows }, (_, i) => <div className="ws-sk-card" key={i}>
       <div><div className="sk" style={bar(90, 10)}/><div className="sk" style={bar(160, 16, { marginTop: 10 })}/><div className="sk" style={bar('60%', 12, { marginTop: 10 })}/></div>
