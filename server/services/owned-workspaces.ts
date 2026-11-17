@@ -24,7 +24,7 @@ async function membership(repo:DatabaseRepository, organizationId:string, userId
 export async function ensurePersonalWorkspace(repo:DatabaseRepository,user:User,parentId=defaultOrganizationId) {
   const existing=await one(repo,'organizations','t.owner_id=? AND t.is_primary=1',[user.id]);
   if(existing) return existing;
-  const space:Organization={...meta(),name:`${user.name}的空间`,initials:user.name.slice(0,1),color:'#12658a',kind:'personal',ownerId:user.id,parentId,isPrimary:1};
+  const space:Organization={...meta(),name:`${user.name}的家庭`,initials:user.name.slice(0,1),color:'#12658a',kind:'personal',ownerId:user.id,parentId,isPrimary:1};
   await repo.put('organizations',space);
   await membership(repo,space.id,user.id,'learn');
   return space;
@@ -115,7 +115,7 @@ export async function manageWorkspace(repo:DatabaseRepository,actor:Actor,input:
       const user=await userByEmail(repo,email);
       if(user) {
         const primary=await ensurePersonalWorkspace(repo,user,parent);
-        requireRule(primary.parentId===parent,'该账号的空间属于其他平台。',409);
+        requireRule(primary.parentId===parent,'该账号的家庭属于其他平台。',409);
         requireRule(!await exists(repo,"SELECT 1 FROM organization_memberships WHERE organization_id=? AND user_id=? AND role='ops'",[parent,user.id]),'运营账号不能转为 Host。',409);
       }
       await repo.db.prepare('INSERT INTO host_grants VALUES (?,?,?,?,?,?) ON CONFLICT(platform_id,email) DO NOTHING').run(randomUUID(),parent,email,user?.id||null,actor.userId,new Date().toISOString());

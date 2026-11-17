@@ -2,14 +2,17 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { SqliteRepository } from "../server/repositories/sqlite-repository";
 
+import { pilotBackupTables } from '../server/db/pilot-backup';
+
 const filename = process.env.SQLITE_PATH || path.join(process.cwd(), "data/iriva.sqlite");
 const repo = new SqliteRepository(filename);
 // One consistent read transaction, including idempotency and audit history.
 const backup = repo.atomic(() => ({
   format: "iriva-portable-v1",
-  schemaVersion: 13,
+  schemaVersion: 16,
   exportedAt: new Date().toISOString(),
   data: repo.read(),
+  pilot: Object.fromEntries(pilotBackupTables.map(table => [table, repo.db.prepare(`SELECT * FROM ${table}`).all()])),
   irivaMemory: repo.db.prepare('SELECT * FROM iriva_memory').all(),
   irivaContacts: repo.db.prepare('SELECT * FROM iriva_contacts').all(),
   hostGrants: repo.db.prepare('SELECT * FROM host_grants').all(),
@@ -21,4 +24,4 @@ const destination = process.argv[2] || path.join(process.cwd(), "data/exports", 
 mkdirSync(path.dirname(destination), { recursive: true });
 writeFileSync(destination, JSON.stringify(backup, null, 2), { mode: 0o600 });
 repo.db.close();
-console.log(`Exported IRIVA schema v13 to ${destination}`);
+console.log(`Exported IRIVA schema v16 to ${destination}`);

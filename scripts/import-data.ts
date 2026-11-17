@@ -3,12 +3,14 @@ import path from "node:path";
 import { SqliteRepository, tables } from "../server/repositories/sqlite-repository";
 import type { State } from "../domain/models";
 
+import { pilotBackupTables } from '../server/db/pilot-backup';
+
 const source = process.argv[2];
 const destination = process.argv[3];
 if (!source || !destination) throw new Error("Usage: npm run db:import -- export.json new.sqlite");
 if (existsSync(destination)) throw new Error("Restore only into a new database file; existing databases are never overwritten.");
 const backup = JSON.parse(readFileSync(source, "utf8"));
-if (backup.format !== "iriva-portable-v1" || ![1, 2, 3, 4, 11, 12, 13].includes(backup.schemaVersion)) throw new Error("Unsupported export format");
+if (backup.format !== "iriva-portable-v1" || ![1, 2, 3, 4, 11, 12, 13, 16].includes(backup.schemaVersion)) throw new Error("Unsupported export format");
 mkdirSync(path.dirname(destination), { recursive: true });
 const repo = new SqliteRepository(destination);
 try {
@@ -32,7 +34,19 @@ try {
       if(row.fingerprint) repo.db.prepare("INSERT INTO mutation_fingerprints VALUES (?,?,?)").run(row.actor_id,row.command_id,row.fingerprint);
     }
     for (const row of backup.auditEvents || []) repo.db.prepare("INSERT INTO audit_events VALUES (?,?,?,?,?)").run(row.id, row.actor_id, row.kind, row.entity_id, row.created_at);
+    if (backup.schemaVersion >= 16) {
+      for (const table of pilotBackupTables) {
+        const allowed = new Set((repo.db.prepare(`PRAGMA table_info(${table})`).all() as {name:string}[]).map(c=>c.name));
+        const rows = backup.pilot?.[table];
+        if (!Array.isArray(rows)) throw new Error(`Missing pilot table ${table}`);
+        for (const row of rows) {
+          const columns=Object.keys(row);
+          if (!columns.length || columns.some(c=>!allowed.has(c))) throw new Error(`Invalid columns in ${table}`);
+          repo.db.prepare(`INSERT INTO ${table} (${columns.join(',')}) VALUES (${columns.map(()=>'?').join(',')})`).run(...columns.map(c=>row[c]));
+        }
+      }
+    }
     if (repo.db.prepare("PRAGMA foreign_key_check").all().length) throw new Error("Foreign key validation failed");
   });
-  console.log(`Restored schema v13 to ${destination}`);
+  console.log(`Restored schema v16 to ${destination}`);
 } finally { repo.db.close(); }

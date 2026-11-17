@@ -13,7 +13,7 @@ export async function GET() {
     // 补齐提前一天和提前 15 分钟的提醒（每个会话每种只写一次）。
     const events = await db.prepare(`SELECT s.id,s.starts_at AS at FROM sessions s WHERE ${visibleSession()} AND s.starts_at>? AND (SELECT COUNT(*) FROM notifications existing WHERE existing.user_id=? AND existing.session=s.id AND existing.kind IN ('day','soon'))<2 ORDER BY s.starts_at LIMIT 100`).all(...args, now, u.userId) as Row[];
     for (const s of events) for (const r of reminderDue(String(s.at))) await db.prepare(insertNotification).run(randomUUID(), u.userId, s.id, r.kind, r.due);
-    const items = await db.prepare(`SELECT n.id,n.kind,n.read,s.id AS "sessionId",s.title,s.starts_at AS at,s.meeting_url AS url FROM notifications n JOIN sessions s ON s.id=n.session WHERE n.user_id=? AND n.due<=? AND s.starts_at>? AND ${visibleSession()} ORDER BY n.read ASC,n.due DESC LIMIT 100`).all(u.userId, now, new Date(Date.now() - 2 * 3600000).toISOString(), ...args) as Row[];
+    const items = await db.prepare(`SELECT n.id,n.kind,n.read,s.id AS "sessionId",s.title,s.starts_at AS at,s.meeting_url AS url FROM notifications n JOIN sessions s ON s.id=n.session WHERE n.user_id=? AND n.due<=? AND (n.kind='review' OR s.starts_at>?) AND ${visibleSession()} ORDER BY n.read ASC,n.due DESC LIMIT 100`).all(u.userId, now, new Date(Date.now() - 2 * 3600000).toISOString(), ...args) as Row[];
     const list = items.map(x => ({ ...x, read: Number(x.read) }));
     return out({ items: list, unread: list.filter(x => !x.read).length });
   } catch (e) { console.error(e); return out({ error: '暂时无法读取通知。' }, 503); }
