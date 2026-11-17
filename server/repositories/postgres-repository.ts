@@ -6,6 +6,7 @@ import type { DatabaseRepository } from './database-repository';
 import type { Awaitable, WorkspaceUnitOfWork } from './workspace-repository';
 import type { State, Channel, ChannelParticipant, Message, Submission, Feedback, Application, Assignment, Household, Session, Membership, Enrollment, OrganizationMembership, User } from '../../domain/models';
 import { tables } from './tables';
+import { DomainError } from '../../domain/commands';
 
 const snake=(key:string)=>key.replace(/[A-Z]/g,c=>`_${c.toLowerCase()}`);
 const camel=(key:string)=>key.replace(/_([a-z])/g,(_,c:string)=>c.toUpperCase());
@@ -17,11 +18,26 @@ export function postgresQuery(query:string) {
   return tokens.map((token,index)=>index%2?token:token.replace(/\?/g,()=>`$${++parameter}`).replace(new RegExp(`\\b(FROM|JOIN|INTO|UPDATE)\\s+(${sqlTables.join('|')})\\b`,'gi'),(_m,verb,table)=>`${verb} iriva.${table.toLowerCase()}`)).join('');
 }
 
+/** A query this slow means a dead connection (e.g. a socket frozen with a serverless instance), not real work. */
+export const queryTimeoutMs=20_000;
+export class DatabaseTimeoutError extends DomainError { constructor(){super(503,'数据库暂时没有响应，请稍后重试。');} }
+
 export class PostgresRepository implements DatabaseRepository {
   private readonly context=new AsyncLocalStorage<TransactionSql>();
-  readonly sql:Sql;
-  constructor(url:string) {
-    this.sql=postgres(url,{max:3,prepare:false,ssl:postgresTls(url),connect_timeout:10,idle_timeout:20,max_lifetime:1800});
+  private pool:Sql;
+  constructor(private readonly url:string) {
+    this.pool=this.connect();
+  }
+  private connect() { return postgres(this.url,{max:3,prepare:false,ssl:postgresTls(this.url),connect_timeout:10,idle_timeout:20,max_lifetime:1800}); }
+  get sql():Sql { return this.pool; }
+  /**
+   * Drop every pooled connection and start fresh. A connection that stalls mid-query
+   * would otherwise hold its pool slot forever and every later request would queue behind it.
+   */
+  private resetPool(stalled:Sql) {
+    if(this.pool!==stalled) return;
+    this.pool=this.connect();
+    stalled.end({timeout:0}).catch(()=>{});
   }
   readonly db:DatabaseRepository["db"]={
     prepare:(query:string)=>({
@@ -34,7 +50,10 @@ export class PostgresRepository implements DatabaseRepository {
   /** Optional test/diagnostic observer; no row contents or bound values leave the adapter. */
   onQuery?: (event:{sql:string;bytes:number;rows:number})=>void;
   private async query(query:string,values:unknown[]) {
-    const result=await (this.context.getStore()||this.sql).unsafe(postgresQuery(query),values as postgres.ParameterOrJSON<never>[]);
+    const pool=this.pool;
+    let timer:NodeJS.Timeout|undefined;
+    const timeout=new Promise<never>((_,reject)=>{timer=setTimeout(()=>{this.resetPool(pool);reject(new DatabaseTimeoutError());},queryTimeoutMs);});
+    const result=await Promise.race([(this.context.getStore()||pool).unsafe(postgresQuery(query),values as postgres.ParameterOrJSON<never>[]),timeout]).finally(()=>clearTimeout(timer));
     this.onQuery?.({sql:query,bytes:Buffer.byteLength(JSON.stringify(result)),rows:result.length});
     return result;
   }
