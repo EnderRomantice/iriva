@@ -16,7 +16,8 @@
     "test:load": "tsx scripts/test-postgres.ts --load",
     "test:release": "npm run typecheck && npm test && npm run build && npm run test:postgres && npm run test:e2e && npm run test:load",
     "test:hosts": "tsx scripts/test-postgres.ts --hosts",
-    "test:reviews": "tsx scripts/test-postgres.ts --reviews"
+    "test:reviews": "tsx scripts/test-postgres.ts --reviews",
+    "team:account": "tsx scripts/team-account.ts"
   },
   "dependencies": {
     "@chinese-fonts/yozai": "^3.0.0",
