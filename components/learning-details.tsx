@@ -1,15 +1,18 @@
 type Text={en:string;zh:string};
-const hosts:{name:string;photo:string;education:{school:Text;detail:Text;years:string}[]}[]=[
- {name:'Olena',photo:'/avatars/host-1.webp',education:[
-  {school:{en:'Global TESOL College Canada',zh:'加拿大环球 TESOL 学院'},detail:{en:'Other, Teaching English to Speakers of Other Languages (TESOL)',zh:'其他，对外英语教学（TESOL）'},years:'2017-2017'},
-  {school:{en:'Yuriy Fedkovich Chernivtsi National University',zh:'切尔诺夫策国立大学（尤里·费德科维奇）'},detail:{en:'Master of Arts (MA), International Information: Information Analyst in International Affairs',zh:'文学硕士（MA），国际信息：国际事务信息分析'},years:'2008-2013'}
- ]},
- // TODO: placeholder education — replace with the second Host's real background.
- {name:'Daniel',photo:'/avatars/host-2.webp',education:[
-  {school:{en:'Cambridge English (CELTA)',zh:'剑桥英语（CELTA）'},detail:{en:'Certificate in Teaching English to Speakers of Other Languages',zh:'对外英语教学证书'},years:'2016-2016'},
-  {school:{en:'The University of Texas at Austin',zh:'得克萨斯大学奥斯汀分校'},detail:{en:'Bachelor of Arts (BA), English Language and Literature',zh:'文学学士（BA），英语语言文学'},years:'2009-2013'}
- ]}
-];
+const host={
+ name:'Inna Tserniuk',
+ photo:'/avatars/host-1.webp',
+ role:{en:'Business Communication Coach · Business English Trainer',zh:'商务沟通教练 · 商务英语培训师'},
+ origin:{en:'Grew up in Canada, now lives in Ukraine. Bilingual native speaker of English and Ukrainian.',zh:'成长于加拿大，现居乌克兰。英语与乌克兰语双母语。'},
+ education:[
+  {school:{en:'Chernivtsi National University',zh:'切尔诺夫策国立大学'},detail:{en:'Master’s in International Information · Information Analysis in International Affairs',zh:'国际信息硕士 · 专业方向：国际事务信息分析'}},
+  {school:{en:'Advanced TESOL Certificate',zh:'Advanced TESOL 证书'},detail:{en:'120 hours',zh:'120 小时'}}
+ ] as {school:Text;detail:Text}[],
+ work:{en:'Has spent years teaching adult learners and working professionals. She truly loves this work and feels she has found her life’s calling: helping people communicate with more confidence.',zh:'长期从事成年学员与职场精英的教学工作。真心热爱这份工作，并且觉得自己找到了毕生使命——帮助人们建立更自信的沟通能力。'},
+ about:{en:'She keeps orchids on her windowsill and shares her home with three Bengal cats and an English Mastiff. She loves cooking, exploring different cultures, and hearing people’s real-life stories.',zh:'窗台上养着兰花，家里还有三只孟加拉猫和一只英国獒犬。她喜欢做饭、探索不同文化，也喜欢听人讲真实的生活故事。'},
+ q:{en:'If, after four weeks, your group remembers just one thing about their time with you, what would you want it to be?',zh:'如果四周后，组员只记住与你相处的一件事，你最希望是什么？'},
+ a:{en:'I want people to remember that you don’t need perfect English to have a real conversation. I hope my members stop being afraid of mistakes, speak up with ease, enjoy it, and discover that English is far less scary than they imagined — and that they are better than they think.',zh:'我希望大家记住：你不需要说一口完美的英语，也能进行真正的交流。我希望我的会员们能有这样的体验：不再害怕犯错，自在地开口交流、享受其中，并发现英语远没有想象中可怕，他们其实比自己以为的更出色。'}
+};
 
 export function HostStandards({english=false}:{english?:boolean}){
  const criteria=english?[
@@ -21,5 +24,6 @@ export function HostStandards({english=false}:{english?:boolean}){
  ['尊重与倾听','尊重不同文化、表达节奏与个人边界。'],
  ['稳定同行','为四周交流持续投入时间与关注。']
  ];
- return <section className="host-standards" id="your-host" aria-labelledby="host-standards-title"><div className="wrap host-layout"><div className="host-intro"><h2 id="host-standards-title">{english?'Someone who makes room for you.':<>有人，<br/>认真听你说。</>}</h2><div className="host-criteria">{criteria.map(([title,body])=><article key={title}><h3>{title}</h3><p>{body}</p></article>)}</div></div><div className="host-profiles">{hosts.map(host=><article key={host.photo} className="host-profile"><img src={host.photo} alt={english?`${host.name}, Host`:`Host ${host.name} 头像`} width={112} height={112} loading="lazy"/><div><h3>{host.name}</h3><h4>{english?'Education':'教育背景'}</h4><ul>{host.education.map(e=>{const lang=english?'en':'zh';return <li key={e.school.en}><strong>{e.school[lang]}</strong><span>{e.detail[lang]} | <time>{e.years}</time></span></li>})}</ul></div></article>)}</div></div></section>
+ const lang=english?'en':'zh';
+ return <section className="host-standards" id="your-host" aria-labelledby="host-standards-title"><div className="wrap host-layout"><div className="host-intro"><h2 id="host-standards-title">{english?'Someone who makes room for you.':<>有人，<br/>认真听你说。</>}</h2><div className="host-criteria">{criteria.map(([title,body])=><article key={title}><h3>{title}</h3><p>{body}</p></article>)}</div></div><article className="host-profile host-highlight" aria-label="Host highlight"><p className="host-highlight-label">HOST HIGHLIGHT</p><div className="host-highlight-head"><img src={host.photo} alt={english?`${host.name}, Host`:`Host ${host.name} 头像`} width={112} height={112} loading="lazy"/><div><h3>{host.name}</h3><p className="host-role">{host.role[lang]}</p><p className="host-origin">{host.origin[lang]}</p></div></div><blockquote className="host-qa"><p className="host-q"><b>Q</b>{host.q[lang]}</p><p className="host-a"><b>A</b>{host.a[lang]}</p></blockquote><details className="host-more"><summary>{english?'More about Inna':'了解更多'}</summary><div className="host-highlight-body"><section><h4>{english?'Education':'教育背景'}</h4><ul>{host.education.map(e=><li key={e.school.en}><strong>{e.school[lang]}</strong><span>{e.detail[lang]}</span></li>)}</ul></section><section><h4>{english?'Experience':'工作背景'}</h4><p>{host.work[lang]}</p></section><section><h4>{english?'About her':'关于她'}</h4><p>{host.about[lang]}</p></section></div></details></article></div></section>
 }

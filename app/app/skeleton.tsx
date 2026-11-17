@@ -1,3 +1,5 @@
+'use client';
+import LearnSidebar,{lastLearnSidebar} from './learn-sidebar';
 /** 页面切换与首次读取时的骨架屏，形状与学习空间一致，避免内容跳动。 */
 export function MainSkeleton(){
   return <div className="p-skeleton" aria-busy="true" aria-label="正在加载">
@@ -8,11 +10,13 @@ export function MainSkeleton(){
   </div>;
 }
 
-export default function PortalSkeleton(){
+export default function PortalSkeleton({active='Home'}:{active?:string}){
+  // After a client-side switch the real sidebar is already known; draw it instead of grey bars.
+  const known=lastLearnSidebar();
   return <div className="portal workspace-ui">
-    <aside className="p-sidebar"><span className="p-brand">iriva<span>青鸟</span></span>
+    {known?<LearnSidebar state={known} active={active} onSelect={()=>{}}/>:<aside className="p-sidebar"><span className="workspace-brand">iriva <span>青鸟</span></span>
       <div className="p-skeleton-side">{Array.from({length:7},(_,i)=><div key={i} className={`sk sk-line${i===0?' tall':''}`}/>)}</div>
-    </aside>
+    </aside>}
     <div className="p-work"><div className="p-top"><div className="sk sk-line w30"/><div className="sk sk-avatar"/></div>
       <div className="p-panel"><main className="p-main"><MainSkeleton/></main></div>
     </div>

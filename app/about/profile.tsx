@@ -2,9 +2,9 @@
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
 import {FormEvent,useState} from 'react';
-import {ArrowLeft,ArrowUpRight,Check,Leaf,UserRound} from 'lucide-react';
+import {ArrowUpRight,Check} from 'lucide-react';
 import AccountMenu from '../app/account-menu';
-import WorkspaceSidebar from '../../components/workspace/sidebar';
+import LearnSidebar,{lastLearnSidebar} from '../app/learn-sidebar';
 import AvatarUpload,{postAvatar} from '../../components/workspace/avatar-upload';
 import {standardTimezones,timezoneLabel} from '../../lib/timezones';
 
@@ -19,9 +19,11 @@ export default function AboutProfile({avatar=null,email,teamAccess,role,househol
   async function submit(e:FormEvent){e.preventDefault();setBusy(true);setError('');setSaved(false);
     try{const r=await fetch('/api/profile',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({...f,timezone})});const d=await r.json() as {error?:string};if(!r.ok)throw new Error(d.error);setSaved(true);router.refresh()}
     catch(e){setError((e as Error).message)}finally{setBusy(false)}}
+  // Same sidebar as 学习空间: reuse what it last showed so switching pages doesn't reshuffle it.
+  const sidebar={...(lastLearnSidebar()||{subtitle:household?'我的小组':'从认识彼此开始',household:!!household,host:role==='host',badge:0}),title:household?.name||'我的 Household',avatar:household?.avatar||null};
   const subtitle=role==='host'?'Host':household?'Learner':'New here';
   return <div className="portal workspace-ui">
-    <WorkspaceSidebar kind="learn" avatar={household?.avatar} title={household?.name||'我的 Household'} subtitle={household?'我的小组':'从认识彼此开始'} active="about" onSelect={id=>{if(id==='learn')router.push('/learn');}} teamAccess={teamAccess} sections={[{label:'我的小组',items:[{id:'learn',label:'返回学习空间',icon:ArrowLeft},{id:'about',label:'个人信息',icon:UserRound}]}]}/>
+    <LearnSidebar state={sidebar} active="about" onSelect={id=>router.push(id==='Home'?'/learn':`/learn?tab=${encodeURIComponent(id)}`)} teamAccess={teamAccess}/>
 
     <div className="p-work"><div className="p-top"><nav className="p-crumb" aria-label="当前位置"><a href="/learn">{household?.name||'我的 Household'}</a><span aria-hidden="true">/</span><b aria-current="page">个人信息</b></nav><div><AccountMenu avatar={avatar} name={f.name} subtitle={subtitle} teamAccess={teamAccess} current="about"/></div></div>
       <div className="p-panel"><main className="p-main p-about">
