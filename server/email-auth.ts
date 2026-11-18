@@ -1,3 +1,4 @@
+import { teamIdentity } from './services/organization-access';
 import { one, userByEmail, exists } from './repositories/queries';
 import { activateHostGrants, ensurePersonalWorkspace } from './services/owned-workspaces';
 import { randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
@@ -13,6 +14,7 @@ const meta = () => ({id:randomUUID(),version:1,createdAt:new Date().toISOString(
 export async function beginEmailSignIn(input: unknown, organizationId: string, request: Request) {
   const { email } = z.object({email:emailSchema}).parse(input);
   const repo = await workspaceRepository(), now = Date.now(), id = randomUUID();
+  if(await teamIdentity(repo,email))return Response.json({method:'password'},{headers:{'Cache-Control':'no-store'}});
   const code = String(randomInt(0,1000000)).padStart(6,'0');
   await repo.transaction(async () => {
     if (!await exists(repo,"SELECT 1 FROM organizations WHERE id=? AND kind='platform'",[organizationId])) throw new DomainError(404,'工作区不存在。');
@@ -47,6 +49,7 @@ export async function verifyEmailSignIn(input: unknown, organizationId: string, 
     await repo.db.prepare('UPDATE email_challenges SET attempts=attempts+1 WHERE id=?').run(challengeId);
     if (!localTestCode && !timingSafeEqual(Buffer.from(challenge.code_hash,'hex'),Buffer.from(digest(`${challengeId}:${code}`),'hex'))) return {error:'验证码不正确，请重试。'};
     if (!await exists(repo,"SELECT 1 FROM organizations WHERE id=? AND kind='platform'",[organizationId])) return {error:'请从平台登录入口验证邮箱。'};
+    if(await teamIdentity(repo,challenge.email))return {error:'此账号请使用密码登录。'};
     let user = await userByEmail(repo,challenge.email);
     if (!user) {
       user={...meta(),name:challenge.email.split('@')[0],email:challenge.email,timezone:'Asia/Shanghai',city:'',avatar:'blue'};

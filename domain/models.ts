@@ -1,5 +1,7 @@
 import type { MessageCard, CardPreview } from './message-cards';
 import type { MessageReaction } from './reactions';
+export type AccessRole = "owner" | "admin" | "partner";
+export interface OrganizationAccess { organizationId:string; userId:string; role:AccessRole; createdAt:string }
 export type Role = "learn" | "host" | "ops";
 export interface Entity { id: string; version: number; createdAt: string; updatedAt: string }
 // city stores the local official name (上海, New York, London), independent of UI language.

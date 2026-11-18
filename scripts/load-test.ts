@@ -19,7 +19,7 @@ async function main() {
     for(let i=0;i<rows;i++)await tx`INSERT INTO iriva.messages (id,channel_id,author_id,body,version,created_at,updated_at) VALUES (${randomUUID()},${channelId},${actor.userId},${'Load history '+i},1,${now},${now})`;
   });
   const token=randomUUID();
-  await repo.db.prepare('INSERT INTO auth_sessions VALUES (?,?,?)').run(createHash('sha256').update(token).digest('hex'),actor.userId,Date.now()+3600000);
+  await repo.db.prepare("INSERT INTO auth_sessions (token_hash,user_id,expires_at,auth_method) VALUES (?,?,?,'password')").run(createHash('sha256').update(token).digest('hex'),actor.userId,Date.now()+3600000);
   mkdirSync('test-results',{recursive:true});
   const fd=openSync('test-results/load-server.log','w');
   const server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port','3118'],{env:{...process.env,NODE_ENV:'production'},stdio:['ignore',fd,fd]});

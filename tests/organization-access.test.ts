@@ -1,0 +1,67 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {SqliteRepository} from '../server/repositories/sqlite-repository';
+import {asyncSqliteRepository} from '../server/repositories/async-sqlite-repository';
+import {defaultOrganizationId} from '../domain/workspace';
+import {auditOperation,auditedOperation,teamContext,teamIdentity,teamOrganizations,saveOrganizationMember,removeOrganizationMember,createTeamOrganization,transferOwnership,type TeamContext} from '../server/services/organization-access';
+import {organizationAudit} from '../server/services/organization-audit';
+import {ensurePersonalWorkspace} from '../server/services/owned-workspaces';
+async function fixture(){const repo=asyncSqliteRepository(new SqliteRepository(':memory:'));const now=new Date().toISOString();const user={id:randomUUID(),name:'Owner',email:'owner@example.test',avatar:'',timezone:'UTC',version:1,createdAt:now,updatedAt:now};await repo.saveUser(user);await repo.db.prepare("INSERT INTO organization_access VALUES (?,?,'owner',?)").run(defaultOrganizationId,user.id,now);const ctx=await teamContext(repo,{userId:user.id,email:user.email,displayName:user.name});return {repo,ctx,user};}
+test('teams and Home share owner/admin/partner structure without making Home owners team admins',async t=>{
+ const {repo,ctx,user}=await fixture();t.after(()=>repo.db.close());
+ const home=await ensurePersonalWorkspace(repo,user);
+ assert.equal((await repo.db.prepare('SELECT role FROM organization_access WHERE organization_id=? AND user_id=?').get(home.id,user.id)).role,'owner');
+ assert.equal((await teamOrganizations(repo,user.id)).length,1);
+ const second=await createTeamOrganization(repo,ctx,'Second team');
+ assert.equal((await teamOrganizations(repo,user.id)).length,2);
+ assert.equal((await teamContext(repo,ctx.user,second.id)).organization.role,'owner');
+ assert.equal((await teamIdentity(repo,' OWNER@EXAMPLE.TEST ')).id,user.id);
+});
+test('only owner/admin can add admins; partner cannot change access; owner transfer stays atomic',async t=>{
+ const {repo,ctx,user}=await fixture();t.after(()=>repo.db.close());
+ await saveOrganizationMember(repo,ctx,{email:'partner@example.test',name:'Partner',role:'partner',password:'safe-password'});
+ const partner=await repo.db.prepare('SELECT id FROM users WHERE email=?').get('partner@example.test');
+ const pc=await teamContext(repo,{userId:partner.id,email:'partner@example.test',displayName:'Partner'});
+ await assert.rejects(saveOrganizationMember(repo,pc,{email:'forged@example.test',name:'Bad',role:'admin',password:'safe-password'}),/只有/);
+ await assert.rejects(removeOrganizationMember(repo,pc,user.email),/只有/);
+ await assert.rejects(createTeamOrganization(repo,pc,'Forged'),/只有/);
+ await saveOrganizationMember(repo,ctx,{email:'admin@example.test',name:'Admin',role:'admin',password:'safe-password'});
+ const admin=await repo.db.prepare('SELECT id FROM users WHERE email=?').get('admin@example.test');
+ const ac=await teamContext(repo,{userId:admin.id,email:'admin@example.test',displayName:'Admin'});
+ await assert.rejects(removeOrganizationMember(repo,ac,user.email),/owner/);
+ await assert.rejects(saveOrganizationMember(repo,ac,{email:user.email,name:'Owner',role:'partner'}),/Owner/);
+ await assert.rejects(transferOwnership(repo,ac,partner.id),/owner/);
+ await repo.transaction(()=>transferOwnership(repo,ctx,admin.id));
+ assert.equal((await teamContext(repo,ctx.user)).organization.role,'admin');
+ assert.equal((await teamContext(repo,ac.user)).organization.role,'owner');
+ assert.equal((await repo.db.prepare("SELECT COUNT(*) AS n FROM organization_access WHERE organization_id=? AND role='owner'").get(defaultOrganizationId)).n,1);
+ const other=await createTeamOrganization(repo,ac,'Other');
+ await assert.rejects(teamContext(repo,pc.user,other.id),/权限/);
+ await assert.rejects(saveOrganizationMember(repo,{...ac,organization:{id:other.id,name:'Other',role:'owner'}},{email:'partner@example.test',name:'Partner',role:'admin',password:'change-password'}),/已有密码/);
+});
+test('audited writes roll back on errors, retain denied attempts and cannot use revoked permissions',async t=>{
+ const {repo,ctx}=await fixture();t.after(()=>repo.db.close());
+ const result=await auditedOperation(repo,ctx,'task','demo',async()=>{await repo.db.prepare("INSERT INTO team_tasks VALUES ('rollback','test','','',0,?,?)").run(new Date().toISOString(),ctx.organization.id);return Response.json({error:'denied'},{status:403});});
+ assert.equal(result.status,403);assert.equal(await repo.db.prepare("SELECT 1 FROM team_tasks WHERE id='rollback'").get(),undefined);
+ assert.equal((await repo.db.prepare("SELECT result FROM organization_audit WHERE action='task'").get()).result,'denied');
+ await auditedOperation(repo,ctx,'staff','new',async current=>{await saveOrganizationMember(repo,current,{email:'admin@example.test',name:'Admin',role:'admin',password:'never-in-audit'});return Response.json({ok:true});});
+ const logs=await repo.db.prepare('SELECT * FROM organization_audit').all();assert.ok(!JSON.stringify(logs).includes('never-in-audit'));
+ await repo.db.prepare('DELETE FROM organization_access WHERE user_id=?').run(ctx.user.userId);
+ await assert.rejects(auditedOperation(repo,ctx,'task','x',async()=>Response.json({ok:true})),/权限/);
+});
+test('audit filters, pagination and organization isolation',async t=>{
+ const {repo,ctx}=await fixture();t.after(()=>repo.db.close());
+ const org=await createTeamOrganization(repo,ctx,'Second');const second=await teamContext(repo,ctx.user,org.id);
+ for(let i=0;i<31;i++)await auditOperation(repo,ctx,'task',`task-${i}`,i%2?403:200);
+ await auditOperation(repo,second,'private','other-team');
+ const all=await organizationAudit(repo,ctx,{});assert.equal(all.total,31);assert.equal(all.items.length,25);
+ const next=await organizationAudit(repo,ctx,{page:1,asOf:all.asOf});assert.equal(next.items.length,6);assert.ok(!next.items.some(a=>all.items.some(b=>b.id===a.id)));
+ assert.equal((await organizationAudit(repo,ctx,{result:'denied'})).total,15);
+ assert.equal((await organizationAudit(repo,ctx,{q:'task-30',actor:ctx.user.userId,action:'task'})).total,1);
+ assert.equal((await organizationAudit(repo,ctx,{q:'other-team'})).total,0);
+ assert.equal((await organizationAudit(repo,ctx,{q:'%'})).total,0);
+ assert.equal((await organizationAudit(repo,ctx,{from:'2000-01-01',to:'2000-01-02'})).total,0);
+ await assert.rejects(organizationAudit(repo,ctx,{from:'2026-11-20',to:'2026-11-01'}),/开始日期/);
+ await assert.rejects(organizationAudit(repo,{...ctx,organization:{...ctx.organization,role:'partner'}},{}),/只有管理员/);
+});

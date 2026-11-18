@@ -13,7 +13,7 @@ test('team adds Host, first email verification enters Host waiting page, matchin
   const hash = (value: string) => createHash('sha256').update(value).digest('hex');
   try {
     const token = randomBytes(32).toString('hex');
-    await db`INSERT INTO iriva.auth_sessions VALUES (${hash(token)},${seedId(6)},${Date.now()+3600000})`;
+    await db`INSERT INTO iriva.auth_sessions (token_hash,user_id,expires_at,auth_method) VALUES (${hash(token)},${seedId(6)},${Date.now()+3600000},'password')`;
     await team.addCookies([{ name: 'iriva_session', value: token, url: origin }]);
     expect((await host.request.post(`${origin}/api/team`, { headers, data: { action: 'host', email, name: 'Emma' } })).status()).toBe(401);
     const page = await team.newPage();

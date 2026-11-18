@@ -21,7 +21,7 @@ export async function sessionActor(request: Request): Promise<Actor | undefined>
   if(!membership) throw new DomainError(403,'你没有访问这个工作区的权限。');
   return {userId:session.user_id,role:membership.role,organizationId};
 }
-export async function newSession(userId: string) { const token=randomBytes(32).toString('hex'); await (await workspaceRepository()).db.prepare('INSERT INTO auth_sessions VALUES (?,?,?)').run(digest(token),userId,Date.now()+30*86400000); return token; }
+export async function newSession(userId: string, method: 'email' | 'password' = 'email') { const token=randomBytes(32).toString('hex'); await (await workspaceRepository()).db.prepare('INSERT INTO auth_sessions (token_hash,user_id,expires_at,auth_method) VALUES (?,?,?,?)').run(digest(token),userId,Date.now()+30*86400000,method); return token; }
 export function sessionCookie(token:string) { return `iriva_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${token?2592000:0}${process.env.NODE_ENV==='production'?'; Secure':''}`; }
 
 // Refresh an active session at most once a week; cookies stay HttpOnly and same-site.

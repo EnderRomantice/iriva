@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { DatabaseRepository } from '../repositories/database-repository';
 import { reviewCommand, type ReviewPayload, type ReviewRecord, type Reflection, type Observation, type ReviewCard } from '../../domain/activity-reviews';
 export class ReviewError extends Error { constructor(message:string, public status=400){super(message);} }
-type Actor={userId:string;team:boolean};
+type Actor={userId:string;team:boolean;organizationId?:string};
 // Current membership and session participants both constrain access. A later join
 // never grants access to earlier activities. No private coach draft is queried.
 const eligible = `FROM sessions s JOIN households h ON h.id=s.household_id
@@ -19,7 +19,7 @@ export class ActivityReviews {
   return await this.repo.db.prepare("SELECT 1 FROM memberships WHERE user_id=? AND role='host'").get(actor.userId)?'host':'learner';
  }
  private scope(actor:Actor,role:ReviewPayload['role']){
-  return role==='team'?{sql:'',args:[] as string[]}:role==='host'?{sql:" AND h.host_id=? AND EXISTS(SELECT 1 FROM memberships hm WHERE hm.household_id=h.id AND hm.user_id=? AND hm.role='host')",args:[actor.userId,actor.userId]}:{sql:' AND m.user_id=?',args:[actor.userId]};
+  return role==='team'?{sql:actor.organizationId?' AND (h.organization_id=? OR h.organization_id IN (SELECT id FROM organizations WHERE parent_id=?))':'',args:actor.organizationId?[actor.organizationId,actor.organizationId]:[] as string[]}:role==='host'?{sql:" AND h.host_id=? AND EXISTS(SELECT 1 FROM memberships hm WHERE hm.household_id=h.id AND hm.user_id=? AND hm.role='host')",args:[actor.userId,actor.userId]}:{sql:' AND m.user_id=?',args:[actor.userId]};
  }
  async list(actor:Actor,options:{page?:number;status?:string;learner?:string;session?:string}={}):Promise<ReviewPayload>{
   const role=await this.role(actor),scope=this.scope(actor,role),now=new Date().toISOString(),page=options.page||0;

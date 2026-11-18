@@ -11,7 +11,7 @@ async function fixture(browser:Browser) {
   const org=String(group.organization_id);
   async function session(userId:string) {
     const token=randomBytes(32).toString('hex');
-    await db`INSERT INTO iriva.auth_sessions VALUES (${createHash('sha256').update(token).digest('hex')},${userId},${Date.now()+3600000})`;
+    await db`INSERT INTO iriva.auth_sessions (token_hash,user_id,expires_at,auth_method) VALUES (${createHash('sha256').update(token).digest('hex')},${userId},${Date.now()+3600000},'password')`;
     const context=await browser.newContext({baseURL:"http://127.0.0.1:3117"});contexts.push(context);
     await context.addCookies([{name:'iriva_session',value:token,url:'http://127.0.0.1:3117',httpOnly:true,sameSite:'Lax'}]);
     return context;

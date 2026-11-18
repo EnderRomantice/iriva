@@ -1,0 +1,9 @@
+.invite-code{padding:24px;background:var(--surface);border:1px solid var(--line-strong);border-radius:12px;text-align:left;color:var(--ink)}
+.invite-code h2{font-family:var(--sans);font-size:18px;line-height:1.5;letter-spacing:0;margin:0 0 8px}
+.invite-code p{font-size:14px;line-height:1.8;color:var(--muted);margin:0 0 18px}
+.invite-code form{margin:0}.invite-code label{display:block;font-size:14px;margin:0 0 8px}
+.invite-code-controls{display:flex;gap:12px}.invite-code-controls input{flex:1;min-width:0;width:100%;border:1px solid var(--line-control);background:var(--paper);color:var(--ink);border-radius:6px;padding:12px;font:inherit;margin:0}
+.invite-code-controls button{display:inline-flex;align-items:center;justify-content:center;gap:10px;white-space:nowrap;border:0;border-radius:6px;background:var(--primary);color:var(--on-deep);padding:12px 18px;font:inherit;font-size:14px}
+.invite-code-controls button:hover{background:var(--primary-hover)}.invite-code-controls button:disabled{opacity:.55;cursor:default}
+.invite-code .invite-code-error{margin:12px 0 0;color:var(--warm)}.p-onboarding>.invite-code{margin:24px 0}
+@media(max-width:600px){.invite-code{padding:20px}.invite-code-controls{flex-direction:column}.invite-code-controls button{width:100%}}

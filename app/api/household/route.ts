@@ -49,8 +49,8 @@ export async function POST(req: Request) {
   try {
     const b = await req.json() as Row, action = text(b, 'action', 20), d = await pilotDb();
     const m = await member(u.userId);
-    // 邀请码只能在加入资料（/apply）里填写，不能绕过资料直接进组。
-    if (action === 'join') return reply({ error: '请在加入资料中填写邀请码。' }, 400);
+    // 邀请码通过 /api/apply/join 使用，必须先提交加入资料。
+    if (action === 'join') return reply({ error: '请先提交加入资料，再在完成页填写邀请码。' }, 400);
     if (action === 'create') {
       if (m) return reply({ error: '你已经在一个 Household 里了。' }, 409);
       const name = text(b, 'name', 50); if (!name) return reply({ error: '请填写你的显示名称。' }, 400);

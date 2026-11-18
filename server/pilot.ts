@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { randomUUID } from 'node:crypto';
 import { workspaceRepository } from './container';
 import { digest } from './auth';
+import { teamOrganizations, teamContext } from './services/organization-access';
 import { defaultOrganizationId } from '../domain/workspace';
 
 /**
@@ -10,7 +11,7 @@ import { defaultOrganizationId } from '../domain/workspace';
  * 数据走现有的 SQLite / Postgres 适配器。所有 SQL 只用两边都支持的写法，
  * camelCase 别名一律加双引号，否则 Postgres 会把它们转成小写。
  */
-export type PilotUser = { userId: string; email: string; displayName: string };
+export type PilotUser = { userId: string; email: string; displayName: string; authMethod?: 'email'|'password' };
 export type Member = { household: string; role: 'learner' | 'host'; name: string; user: string };
 type Row = Record<string, unknown>;
 
@@ -26,8 +27,8 @@ export async function ownApplication(userId: string): Promise<(Row & { revision:
 async function userForToken(token: string | undefined): Promise<PilotUser | null> {
   if (!token) return null;
   const db = await pilotDb();
-  const row = await db.prepare('SELECT u.id,u.email,u.name FROM auth_sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?').get(digest(token), Date.now()) as Row | undefined;
-  return row ? { userId: String(row.id), email: String(row.email), displayName: String(row.name || row.email) } : null;
+  const row = await db.prepare('SELECT u.id,u.email,u.name,s.auth_method FROM auth_sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?').get(digest(token), Date.now()) as Row | undefined;
+  return row ? { userId: String(row.id), email: String(row.email), displayName: String(row.name || row.email), authMethod: row.auth_method as 'email'|'password' } : null;
 }
 /** For server components and route handlers. */
 export async function currentUser(): Promise<PilotUser | null> {
@@ -44,16 +45,18 @@ export function safeReturnTo(value: string | null | undefined) {
   try { const url = new URL(value, 'https://app.local'); return url.origin === 'https://app.local' && url.pathname !== '/signin' ? `${url.pathname}${url.search}${url.hash}` : '/learn'; } catch { return '/learn'; }
 }
 
-/** 管理员来自 IRIVA_ADMIN_EMAILS；工作人员来自 team_members，或平台上已有的运营（ops）身份。 */
+/** Team roles are organization-scoped; business roles never grant administrative access. */
 export async function teamRole(user: PilotUser | null): Promise<'admin' | 'staff' | null> {
-  if (!user) return null;
-  const admins = (process.env.IRIVA_ADMIN_EMAILS || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
-  if (admins.includes(user.email.toLowerCase())) return 'admin';
-  const db = await pilotDb();
-  const team = await db.prepare('SELECT role FROM team_members WHERE email=?').get(user.email.toLowerCase()) as { role?: string } | undefined;
-  if (team) return team.role === 'admin' ? 'admin' : 'staff';
-  if (await db.prepare("SELECT 1 FROM organization_memberships WHERE user_id=? AND organization_id=? AND role='ops'").get(user.userId, defaultOrganizationId)) return 'staff';
-  return null;
+  if (!user || (user.authMethod && user.authMethod!=='password')) return null;
+  const organizations=await teamOrganizations(await workspaceRepository(),user.userId);
+  return organizations.some(o=>o.role==='owner'||o.role==='admin')?'admin':organizations.length?'staff':null;
+}
+export async function currentTeamContext() {
+  const user=await currentUser();
+  if(!user || user.authMethod!=='password') return null;
+  const selected=(await cookies()).get('iriva_team')?.value;
+  const repo=await workspaceRepository(),organizations=await teamOrganizations(repo,user.userId);
+  return teamContext(repo,user,organizations.some(o=>o.id===selected)?selected:undefined);
 }
 
 export async function member(userId: string): Promise<Member | null> {
@@ -80,8 +83,11 @@ export async function claimPlacement(user: PilotUser) {
 /** 按邀请码加入 Household（仅学员，四人上限）。必须在 pilotTransaction 内调用。 */
 export async function joinByCode(code: string, userId: string, name: string): Promise<{ household: string } | { error: string; status: number }> {
   const db = await pilotDb();
+  await db.prepare('UPDATE users SET id=id WHERE id=?').run(userId);
+  // Lock the household before counting seats so simultaneous invites cannot overfill it.
+  await db.prepare('UPDATE households SET code=code WHERE code=?').run(code);
   const h = await db.prepare('SELECT id FROM households WHERE code=?').get(code) as Row | undefined;
-  if (!h) return { error: '没有找到这个邀请码，请核对后再试，或先留空提交。', status: 400 };
+  if (!h) return { error: '没有找到这个邀请码，请核对后再试。', status: 400 };
   if (await member(userId)) return { error: '你已经在一个 Household 里了。', status: 409 };
   if (count(await db.prepare("SELECT COUNT(*) AS n FROM memberships WHERE household_id=? AND role='learner'").get(h.id)) >= 4) return { error: '这个 Household 已经有四位学员了。', status: 409 };
   await db.prepare(insertMembership).run(...membershipRow(String(h.id), userId, 'learner', name));
@@ -114,12 +120,12 @@ export const insertSession = "INSERT INTO sessions (id,household_id,title,descri
 export const insertNotification = 'INSERT INTO notifications (id,user_id,session,kind,due,read) VALUES (?,?,?,?,?,0) ON CONFLICT DO NOTHING';
 
 /** 建一个四周 Pilot 小组：沿用现有 households / terms / memberships 结构。 */
-export async function createHousehold(name: string, hostId: string, topic: string, people: { userId: string; role: 'learner' | 'host'; name: string }[]) {
+export async function createHousehold(name: string, hostId: string, topic: string, people: { userId: string; role: 'learner' | 'host'; name: string }[], organizationId=defaultOrganizationId) {
   const d = await pilotDb(), id = randomUUID(), termId = randomUUID(), now = new Date(), iso = now.toISOString();
   const day = (n: number) => new Date(now.getTime() + n * 86400000).toISOString().slice(0, 10);
   await pilotTransaction(async () => {
     await d.prepare('INSERT INTO terms (id,name,starts_on,ends_on,version,created_at,updated_at) VALUES (?,?,?,?,1,?,?)').run(termId, `${name} · 四周 Pilot`, day(0), day(28), iso, iso);
-    await d.prepare("INSERT INTO households (id,organization_id,name,term_id,host_id,timezone,capacity,theme,version,created_at,updated_at,code,week,duration) VALUES (?,?,?,?,?,'Asia/Shanghai',4,?,1,?,?,?,1,4)").run(id, defaultOrganizationId, name, termId, hostId, topic, iso, iso, randomUUID().replaceAll('-', ''));
+    await d.prepare("INSERT INTO households (id,organization_id,name,term_id,host_id,timezone,capacity,theme,version,created_at,updated_at,code,week,duration) VALUES (?,?,?,?,?,'Asia/Shanghai',4,?,1,?,?,?,1,4)").run(id, organizationId, name, termId, hostId, topic, iso, iso, randomUUID().replaceAll('-', ''));
     for (const p of people) await d.prepare(insertMembership).run(...membershipRow(id, p.userId, p.role, p.name));
   });
   return id;
