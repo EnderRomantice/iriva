@@ -1,6 +1,7 @@
 import {DomainError} from '../../../domain/commands';
 import {auditedOperation,canManage} from '../../../server/services/organization-access';
 import { workspaceRepository } from '../../../server/container';
+import { learnerPayment, paymentUrl } from '../../../server/services/pilot-payments';
 import { randomUUID } from 'node:crypto';
 import { isStandardTimezone } from '../../../lib/timezones';
 import { householdAvatarUrl, memberAvatarUrl, parseAvatar } from '../../../domain/household-avatar';
@@ -42,7 +43,15 @@ export async function GET() {
     const messages = recent.map(x => ({ ...x, reactions: reactions.get(String(x.id)) ?? [] }));
     const languages=[...new Set((people as Row[]).filter(p=>p.role==='learner'&&p.language).map(p=>String(p.language)))];
     const members: Row[] = (people as Row[]).map(({ avatar_updated: updated, ...p }) => ({ ...p, avatar: memberAvatarUrl(p.user, updated) }));
-    return reply({ user: { name: m.name, role: m.role, id: u.userId, avatar: members.find(p => p.user === u.userId)?.avatar ?? null }, household: { ...household, avatar: householdAvatarUrl(avatar_updated,(await currentWorkspace(u))!.organization.id), languages, capacity: Number(h.capacity), week: Number(h.week), duration: Number(h.duration), ...(m.role === 'host' ? { code } : {}) }, people: members, messages, sessions: events });
+    let payment: { status: string; url?: string } | null = null;
+    if (m.role === 'learner') {
+      // A missing pilot_payments table (migration not applied yet) must not break the learner space.
+      try {
+        const p = await learnerPayment(await workspaceRepository(), m.household, u.userId);
+        payment = p.status === 'unpaid' && p.membership ? { status: p.status, url: paymentUrl(p.membership, u.email) } : { status: p.status };
+      } catch (e) { console.error('payment status unavailable', e); }
+    }
+    return reply({ user: { name: m.name, role: m.role, id: u.userId, avatar: members.find(p => p.user === u.userId)?.avatar ?? null }, household: { ...household, avatar: householdAvatarUrl(avatar_updated,(await currentWorkspace(u))!.organization.id), languages, capacity: Number(h.capacity), week: Number(h.week), duration: Number(h.duration), ...(m.role === 'host' ? { code } : {}) }, people: members, messages, sessions: events, payment });
   } catch (e) { if(e instanceof DomainError)return Response.json({error:e.message},{status:e.status});console.error(e); return reply({ error: '暂时无法读取你的 Household，请稍后重试。' }, 503); }
 }
 

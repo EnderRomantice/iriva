@@ -1,0 +1,2 @@
+CREATE TABLE pilot_payments (household TEXT NOT NULL, user_id TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('paid','refunded')), amount_minor INTEGER NOT NULL DEFAULT 0, refunded_minor INTEGER NOT NULL DEFAULT 0, currency TEXT NOT NULL DEFAULT '', source TEXT NOT NULL CHECK(source IN ('stripe','manual')), stripe_session TEXT, payment_intent TEXT, updated TEXT NOT NULL, PRIMARY KEY (household, user_id));
+CREATE INDEX pilot_payments_intent ON pilot_payments(payment_intent);

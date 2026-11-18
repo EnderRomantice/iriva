@@ -2,6 +2,7 @@ import {workspaceOrganizations} from '../../../server/services/workspace-access'
 import {randomUUID} from 'node:crypto';
 import { auditOperation, auditedOperation, canManage, saveOrganizationMember, removeOrganizationMember } from '../../../server/services/organization-access';
 import { addPilotHost } from '../../../server/services/pilot-hosts';
+import { setManualPayment } from '../../../server/services/pilot-payments';
 import { DomainError } from '../../../domain/commands';
 import { errorResponse } from '../../../server/http';
 import { currentUser, pilotDb, pilotTransaction, reply as out, sameOrigin, currentTeamContext, text, createHousehold } from '../../../server/pilot';
@@ -18,7 +19,7 @@ export async function GET() {
   try {
     const db = await pilotDb();
     const organizations=await workspaceOrganizations(await workspaceRepository(),u);
-    const [applications, households, tasks, staff, placements, pairs, feedback, hosts] = await Promise.all([
+    const [applications, households, tasks, staff, placements, pairs, feedback, hosts, payments] = await Promise.all([
       role==='admin'?db.prepare('SELECT * FROM member_applications WHERE organization_id=? ORDER BY created DESC LIMIT 500').all(organizationId):Promise.resolve([]),
       db.prepare('SELECT id,name,week,theme AS topic,duration FROM households WHERE organization_id=? OR organization_id IN (SELECT id FROM organizations WHERE parent_id=?) ORDER BY name LIMIT 500').all(organizationId,organizationId),
       db.prepare('SELECT * FROM team_tasks WHERE organization_id=? ORDER BY done ASC,created DESC LIMIT 200').all(organizationId),
@@ -27,10 +28,11 @@ export async function GET() {
       role==='admin'?db.prepare("SELECT p.id,p.household,p.url,COALESCE(NULLIF(a.display_name,''),ua.name) AS \"firstName\",COALESCE(NULLIF(b.display_name,''),ub.name) AS \"secondName\" FROM practice_pairs p JOIN memberships a ON a.user_id=p.first AND a.household_id=p.household JOIN users ua ON ua.id=a.user_id JOIN memberships b ON b.user_id=p.second AND b.household_id=p.household JOIN users ub ON ub.id=b.user_id JOIN households h ON h.id=p.household WHERE h.organization_id=? OR h.organization_id IN (SELECT id FROM organizations WHERE parent_id=?) LIMIT 1000").all(organizationId,organizationId):Promise.resolve([]),
       role==='admin'?db.prepare('SELECT * FROM suggestions WHERE organization_id=? ORDER BY created DESC LIMIT 200').all(organizationId):Promise.resolve([]),
       role==='admin'?db.prepare("SELECT h.email,h.name,u.id AS user_id,COALESCE(p.household,(SELECT m.household_id FROM memberships m WHERE m.user_id=u.id AND m.role='host' AND m.household_id IN (SELECT id FROM households WHERE organization_id=h.organization_id OR organization_id IN (SELECT id FROM organizations WHERE parent_id=h.organization_id)) ORDER BY m.created_at ASC LIMIT 1)) AS household FROM organization_hosts h LEFT JOIN users u ON lower(u.email)=h.email LEFT JOIN placements p ON p.email=h.email AND p.role='host' AND p.household IN (SELECT id FROM households WHERE organization_id=h.organization_id OR organization_id IN (SELECT id FROM organizations WHERE parent_id=h.organization_id)) WHERE h.organization_id=? ORDER BY h.created DESC LIMIT 2000").all(organizationId):Promise.resolve([]),
+      role==='admin'?db.prepare('SELECT p.household,p.user_id,p.status,p.amount_minor,p.refunded_minor,p.currency,p.source,p.updated FROM pilot_payments p JOIN households h ON h.id=p.household WHERE h.organization_id=? OR h.organization_id IN (SELECT id FROM organizations WHERE parent_id=?) LIMIT 2000').all(organizationId,organizationId):Promise.resolve([]),
     ]);
     const num = (rows: unknown[]) => (rows as Row[]).map(r => ({ ...r, ...('revision' in r ? { revision: Number(r.revision) } : {}), ...('done' in r ? { done: Number(r.done) } : {}), ...('week' in r ? { week: Number(r.week), duration: Number(r.duration) } : {}) }));
     await auditOperation(await workspaceRepository(),ctx,'team.view');
-    return out({ organization:ctx.organization,organizations,hosts, feedback, pairs, role, applications: num(applications), households: num(households), tasks: num(tasks), staff, placements });
+    return out({ organization:ctx.organization,organizations,hosts, feedback, payments: (payments as Row[]).map(p => ({ ...p, amount_minor: Number(p.amount_minor), refunded_minor: Number(p.refunded_minor) })), pairs, role, applications: num(applications), households: num(households), tasks: num(tasks), staff, placements });
   } catch (e) { console.error(e); return out({ error: '暂时无法读取运营工作台。' }, 503); }
 }
 
@@ -55,6 +57,11 @@ export async function POST(req: Request) {
       if (oralLevel && !['beginner', 'intermediate', 'advanced'].includes(oralLevel)) return out({ error: '无效的口语确认结果。' }, 400);
       const r = await db.prepare('UPDATE member_applications SET status=?,notes=?,oral_level=?,oral_notes=? WHERE id=? AND revision=? AND household IS NULL AND organization_id=?').run(status, val('notes', 3000), oralLevel, val('oral_notes', 1500), id, b.revision, organizationId);
       if (!r.changes) return out({ error: '申请已分组或不存在，不能更改状态。' }, 409);
+    } else if (action === 'payment') {
+      const status = val('status', 20), household = val('household', 100), user = val('user', 100);
+      if (!['unpaid', 'paid', 'refunded'].includes(status)) return out({ error: '无效付款状态。' }, 400);
+      if (!await db.prepare('SELECT 1 FROM households WHERE id=? AND (organization_id=? OR organization_id IN (SELECT id FROM organizations WHERE parent_id=?))').get(household, organizationId, organizationId)) return out({ error: 'Household 不存在。' }, 404);
+      if (!await setManualPayment(await workspaceRepository(), household, user, status as 'unpaid' | 'paid' | 'refunded')) return out({ error: '这位学员不在该 Household。' }, 404);
     } else if (action === 'feedbackReview') {
       const status = val('status', 20);
       if (!['new', 'reviewed'].includes(status)) return out({ error: '无效建议状态。' }, 400);
