@@ -62,3 +62,15 @@ test('Host switcher names match the selected household, including renames; team 
  await repo.db.prepare("INSERT INTO organization_access VALUES (?,?,'admin',?)").run(second,ids.host,now);
  assert.equal((await workspaceAccess(repo,{...host,authMethod:'password'},second,true)).organization.name,'Second organization');
 });
+
+test('Host organization avatars track their own household and never leak to team identities',async t=>{
+ const {repo,ids,second,house,host,now}=await fixture();t.after(()=>repo.db.close());
+ await repo.db.prepare('INSERT INTO household_avatars (household_id,data_url,updated_at) VALUES (?,?,?)').run(house,'data:image/png;base64,aW1hZ2U=',now);
+ const access=await workspaceAccess(repo,host,second,true);
+ assert.equal(access.organization.avatar,`/api/household/avatar?v=${Date.parse(now)}&org=${second}`);
+ assert.equal(access.organizations.find(o=>o.id===defaultOrganizationId)?.avatar,null);
+ await repo.db.prepare("INSERT INTO organization_access VALUES (?,?,'admin',?)").run(second,ids.host,now);
+ assert.equal((await workspaceAccess(repo,{...host,authMethod:'password'},second,true)).organization.avatar,undefined);
+ await repo.db.prepare('DELETE FROM household_avatars WHERE household_id=?').run(house);
+ assert.equal((await workspaceAccess(repo,host,second,true)).organization.avatar,null);
+});

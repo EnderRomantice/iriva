@@ -103,7 +103,7 @@ export async function POST(req: Request) {
       for (const x of candidates) { const user = await userByEmail(repo, String(x.email)); if (!user || user.id !== x.user_id) return out({ error: `${x.name} 的账号与资料邮箱不一致，请人工核对。` }, 409); }
       // Invite-only email identity: no password or session is created here.
       if(!hostUser){const now=new Date().toISOString();hostUser={id:randomUUID(),name:hostName,email:hostEmail,timezone:'+08:00',avatar:'',version:1,createdAt:now,updatedAt:now};await repo.saveUser(hostUser)}
-      const house = await createHousehold(name, hostUser?.id ?? u.userId, 'A story behind my name', [
+      const house = await createHousehold(name, hostUser?.id ?? u.userId, '', [
         ...candidates.map(x => ({ userId: String(x.user_id), role: 'learner' as const, name: String(x.name) })),
         ...(hostUser ? [{ userId: hostUser.id, role: 'host' as const, name: hostName }] : []),
       ],organizationId);
