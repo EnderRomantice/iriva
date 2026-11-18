@@ -32,7 +32,7 @@ async function main(){
         await admin.unsafe(`GRANT iriva_runtime TO ${role}`);
         dbUrl.username=role;dbUrl.password='';
         const exit=await new Promise<number|null>((resolve,reject)=>{
-          const args=browser?['node_modules/playwright/cli.js','test',...(invites?['tests/e2e/application-invite.spec.ts']:hosts?['tests/e2e/pilot-hosts.spec.ts']:reviews?['tests/e2e/activity-reviews.spec.ts']:[])]:load?['--import','tsx','scripts/load-test.ts']:['--import','tsx','--test',`tests/${file}`];
+          const args=browser?['node_modules/playwright/cli.js','test',...(invites?['tests/e2e/application-invite.spec.ts']:hosts?['tests/e2e/pilot-hosts.spec.ts']:reviews?['tests/e2e/activity-reviews.spec.ts']:[...process.argv.filter(arg=>arg.endsWith('.spec.ts'))])]:load?['--import','tsx','scripts/load-test.ts']:['--import','tsx','--test',`tests/${file}`];
           const child=spawn(process.execPath,args,{stdio:'inherit',env:{...process.env,DATABASE_URL:dbUrl.toString(),PG_LOCAL_TEST:'1',NODE_ENV:browser?'production':'test'}});
           child.once('error',reject);child.once('exit',resolve);
         });

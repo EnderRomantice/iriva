@@ -1,11 +1,12 @@
+import {DomainError} from '../../../domain/commands';
 import {auditOperation,auditedOperation,canManage} from '../../../server/services/organization-access';
-import { currentUser, currentTeamContext, sameOrigin, reply } from '../../../server/pilot';
+import { currentUser, currentWorkspace, currentTeamContext, sameOrigin, reply } from '../../../server/pilot';
 import { workspaceRepository } from '../../../server/container';
 import { ActivityReviews, ReviewError } from '../../../server/services/activity-reviews';
 export const dynamic='force-dynamic';
 export const runtime='nodejs';
-async function context(){const u=await currentUser();if(!u)return null;const ctx=u.authMethod==='password'?await currentTeamContext():null;return {userId:u.userId,team:!!ctx&&canManage(ctx.organization.role),organizationId:ctx?.organization.id,ctx};}
-function failure(error:unknown){if(error instanceof ReviewError)return reply({error:error.message},error.status);console.error(error);return reply({error:'暂时无法处理复盘，请稍后重试。'},503);}
+async function context(){const u=await currentUser();if(!u)return null;const ctx=u.authMethod==='password'?await currentTeamContext():null;return {userId:u.userId,team:!!ctx&&canManage(ctx.organization.role),organizationId:(await currentWorkspace(u))?.organization.id,ctx};}
+function failure(error:unknown){if(error instanceof ReviewError||error instanceof DomainError)return reply({error:error.message},error.status);console.error(error);return reply({error:'暂时无法处理复盘，请稍后重试。'},503);}
 export async function GET(req:Request){
  try{const actor=await context();if(!actor)return reply({error:'请先登录。'},401);
  const p=new URL(req.url).searchParams,page=Number(p.get('page')||0),status=p.get('status')||'all',learner=p.get('learner')||undefined,session=p.get('session')||undefined;

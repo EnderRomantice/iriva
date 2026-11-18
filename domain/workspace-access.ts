@@ -17,3 +17,11 @@ export function workspaceHomeHref(role:Role,organizationId?:string) {
   if(organizationId) query.set('org',organizationId);
   return `/${role}${query.size ? `?${query}` : ''}`;
 }
+
+import type {AccessRole} from './models';
+export type WorkspaceRole = AccessRole | 'host' | 'learner';
+export type WorkspaceOrganization = {id:string;name:string;role:WorkspaceRole};
+export type WorkspaceAccess = {organization:WorkspaceOrganization;organizations:WorkspaceOrganization[];canSwitch:boolean};
+export const ORGANIZATION_COOKIE='iriva_organization';
+export const ORGANIZATION_HEADER='x-iriva-organization';
+export const isTeamRole=(role:WorkspaceRole)=>role==='owner'||role==='admin'||role==='partner';

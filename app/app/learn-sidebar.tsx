@@ -1,4 +1,5 @@
 'use client';
+import type {ReactNode} from 'react';
 import {Bell,BookOpen,CalendarDays,Check,Home,MessageCircle} from 'lucide-react';
 import WorkspaceSidebar from '../../components/workspace/sidebar';
 import Bluebird from './bluebird';
@@ -12,8 +13,8 @@ export const rememberLearnSidebar=(s:LearnSidebarState)=>{last=s};
 export const lastLearnSidebar=()=>last;
 
 /** The learner sidebar shared by /learn, /about and their loading skeletons. */
-export default function LearnSidebar({state,active,onSelect,teamAccess=false}:{state:LearnSidebarState;active:string;onSelect:(id:string)=>void;teamAccess?:boolean}){
- return <WorkspaceSidebar kind="learn" identityId={state.household?'Household':undefined} avatar={state.avatar} title={state.title} subtitle={state.subtitle} active={active} onSelect={onSelect} teamAccess={teamAccess} sections={[
+export default function LearnSidebar({state,active,onSelect,teamAccess=false,identity,organizationId}:{state:LearnSidebarState;active:string;onSelect:(id:string)=>void;teamAccess?:boolean;identity?:ReactNode;organizationId?:string}){
+ return <WorkspaceSidebar organizationId={organizationId} kind="learn" identity={identity} identityId={state.household?'Household':undefined} avatar={state.avatar} title={state.title} subtitle={state.subtitle} active={active} onSelect={onSelect} teamAccess={teamAccess} sections={[
   {items:[{id:'Notifications',label:'通知',icon:Bell,badge:state.badge}]},
   {label:'我的小组',items:[{id:'Home',label:'我的家',icon:Home},{id:'Conversations',label:'小组交流',icon:MessageCircle},{id:'Schedule',label:'相见日程',icon:CalendarDays}]},
   {label:'练习与成长',items:[{id:'Partner practice',label:'伙伴练习',icon:BookOpen},{id:'My coach',label:'AI 准备 · Beta',icon:Bluebird},{id:'Reviews',label:state.host?'活动观察':'活动复盘',icon:Check}]}]}/>;

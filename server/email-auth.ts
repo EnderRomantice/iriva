@@ -1,3 +1,5 @@
+import {workspaceOrganizations} from './services/workspace-access';
+import {defaultOrganizationId} from '../domain/workspace';
 import { teamIdentity } from './services/organization-access';
 import { one, userByEmail, exists } from './repositories/queries';
 import { activateHostGrants, ensurePersonalWorkspace } from './services/owned-workspaces';
@@ -56,7 +58,11 @@ export async function verifyEmailSignIn(input: unknown, organizationId: string, 
       await repo.saveUser(user);
       await repo.saveOrganizationMembership({...meta(),organizationId,userId:user.id,role:'learn'});
     }
-    if (!await exists(repo,'SELECT 1 FROM organization_memberships WHERE organization_id=? AND user_id=?',[organizationId,user.id])) return {error:'这个账号没有访问该工作区的权限。'};
+    if (!await exists(repo,'SELECT 1 FROM organization_memberships WHERE organization_id=? AND user_id=?',[organizationId,user.id])) {
+      // The shared sign-in also admits invited Hosts assigned before their first login.
+      const organizations=await workspaceOrganizations(repo,{userId:user.id,email:user.email,displayName:user.name,authMethod:'email'});
+      if(!organizations.some(org=>org.id===organizationId)&&!(organizationId===defaultOrganizationId&&organizations.length))return {error:'这个账号没有访问该工作区的权限。'};
+    }
     await ensurePersonalWorkspace(repo,user,organizationId);
     await activateHostGrants(repo,user);
     await repo.db.prepare('UPDATE email_challenges SET consumed=1 WHERE email=?').run(challenge.email);

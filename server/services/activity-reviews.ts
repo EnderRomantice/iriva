@@ -19,7 +19,9 @@ export class ActivityReviews {
   return await this.repo.db.prepare("SELECT 1 FROM memberships WHERE user_id=? AND role='host'").get(actor.userId)?'host':'learner';
  }
  private scope(actor:Actor,role:ReviewPayload['role']){
-  return role==='team'?{sql:actor.organizationId?' AND (h.organization_id=? OR h.organization_id IN (SELECT id FROM organizations WHERE parent_id=?))':'',args:actor.organizationId?[actor.organizationId,actor.organizationId]:[] as string[]}:role==='host'?{sql:" AND h.host_id=? AND EXISTS(SELECT 1 FROM memberships hm WHERE hm.household_id=h.id AND hm.user_id=? AND hm.role='host')",args:[actor.userId,actor.userId]}:{sql:' AND m.user_id=?',args:[actor.userId]};
+  const scope=role==='team'?{sql:'',args:[] as string[]}:role==='host'?{sql:" AND h.host_id=? AND EXISTS(SELECT 1 FROM memberships hm WHERE hm.household_id=h.id AND hm.user_id=? AND hm.role='host')",args:[actor.userId,actor.userId]}:{sql:' AND m.user_id=?',args:[actor.userId]};
+  if(actor.organizationId){scope.sql+=' AND (h.organization_id=? OR h.organization_id IN (SELECT id FROM organizations WHERE parent_id=?))';scope.args.push(actor.organizationId,actor.organizationId)}
+  return scope;
  }
  async list(actor:Actor,options:{page?:number;status?:string;learner?:string;session?:string}={}):Promise<ReviewPayload>{
   const role=await this.role(actor),scope=this.scope(actor,role),now=new Date().toISOString(),page=options.page||0;

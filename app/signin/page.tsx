@@ -13,6 +13,6 @@ export const metadata = { title: '青鸟 IRIVA · 登录' };
 export default async function Page({ searchParams }: { searchParams: Promise<{ return_to?: string }> }) {
   const returnTo = safeReturnTo((await searchParams).return_to);
   const user=await currentUser();
-  if(user){const team=await teamIdentity(await workspaceRepository(),user.email);if(!team||user.authMethod==='password')redirect(team?'/team':returnTo);}
+  if(user){const team=await teamIdentity(await workspaceRepository(),user.email);if(!team||user.authMethod==='password')redirect(returnTo);}
   return <LocaleProvider initialLocale={normalizeLocale((await cookies()).get(LOCALE_COOKIE)?.value)}><SignInForm returnTo={returnTo} /></LocaleProvider>;
 }

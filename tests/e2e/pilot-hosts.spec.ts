@@ -32,10 +32,10 @@ test('team adds Host, first email verification enters Host waiting page, matchin
     await hostPage.goto(`${origin}/learn`);
     await expect(hostPage.getByRole('heading', { name: '等待团队安排 Household' })).toBeVisible();
     await expect(hostPage.getByRole('link', { name: '填写加入资料' })).toHaveCount(0);
-    expect((await host.request.post(`${origin}/api/team`, { headers, data: { action: 'host', email: 'other@example.test', name: 'Other' } })).status()).toBe(403);
+    expect((await host.request.post(`${origin}/api/team`, { headers, data: { action: 'host', email: 'other@example.test', name: 'Other' } })).status()).toBe(401);
     expect((await host.request.post(`${origin}/api/apply`, { headers, data: {} })).status()).toBe(409);
     await hostPage.goto(`${origin}/apply`);
-    await expect(hostPage).toHaveURL(`${origin}/learn`);
+    await expect(hostPage).toHaveURL(`${origin}/app?org=${defaultOrganizationId}`);
     // Create four eligible learner applications, then exercise the real team matching action.
     const ids: string[] = [];
     for (let i = 0; i < 4; i++) {
