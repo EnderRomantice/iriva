@@ -1,10 +1,13 @@
 'use client';
+import {workspaceFetch as fetch} from '../../lib/workspace-fetch';
+import type {WorkspaceAccess} from '../../domain/workspace-access';
+import OrganizationSwitcher from '../team/organization-switcher';
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
 import {FormEvent,useState} from 'react';
 import {ArrowUpRight,Check} from 'lucide-react';
 import AccountMenu from '../app/account-menu';
-import LearnSidebar,{lastLearnSidebar} from '../app/learn-sidebar';
+import LearnSidebar from '../app/learn-sidebar';
 import AvatarUpload,{postAvatar} from '../../components/workspace/avatar-upload';
 import {standardTimezones,timezoneLabel} from '../../lib/timezones';
 
@@ -12,20 +15,20 @@ type Profile={name:string;location:string;age_band:string;life_stage:string;mbti
 const mbtis=['INTJ','INTP','ENTJ','ENTP','INFJ','INFP','ENFJ','ENFP','ISTJ','ISFJ','ESTJ','ESFJ','ISTP','ISFP','ESTP','ESFP'];
 const statusText:Record<string,string>={new:'资料已收到，团队会跟进',interest:'意向已登记',contacted:'正在了解你的学习需要',shortlist:'正在为你安排伙伴',hold:'正在协调后续安排',declined:'本期暂无合适安排',assigned:'已加入小组'};
 
-export default function AboutProfile({avatar=null,email,teamAccess,role,household,profile,hasApplication,status}:{avatar?:string|null;email:string;teamAccess:boolean;role:string|null;household:{name:string;timezone:string;avatar?:string|null}|null;profile:Profile;hasApplication:boolean;status:string|null}){
-  const router=useRouter();
+export default function AboutProfile({access,avatar=null,email,teamAccess,role,household,profile,hasApplication,status}:{access?:WorkspaceAccess;avatar?:string|null;email:string;teamAccess:boolean;role:string|null;household:{name:string;timezone:string;avatar?:string|null}|null;profile:Profile;hasApplication:boolean;status:string|null}){
+  const router=useRouter();const home='/app?org='+encodeURIComponent(access?.organization.id||'');
   const [f,setF]=useState(profile),[timezone,setTimezone]=useState(()=>standardTimezones.find(z=>`UTC${z.value}`===timezoneLabel(household?.timezone||''))?.value||''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[saved,setSaved]=useState(false);
   const edit=(k:keyof Profile,v:string)=>{setF(p=>({...p,[k]:v}));setSaved(false)};
   async function submit(e:FormEvent){e.preventDefault();setBusy(true);setError('');setSaved(false);
     try{const r=await fetch('/api/profile',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({...f,timezone})});const d=await r.json() as {error?:string};if(!r.ok)throw new Error(d.error);setSaved(true);router.refresh()}
     catch(e){setError((e as Error).message)}finally{setBusy(false)}}
-  // Same sidebar as 学习空间: reuse what it last showed so switching pages doesn't reshuffle it.
-  const sidebar={...(lastLearnSidebar()||{subtitle:household?'我的小组':'从认识彼此开始',household:!!household,host:role==='host',badge:0}),title:household?.name||'我的 Household',avatar:household?.avatar||null};
+  const sidebar={subtitle:household?'我的小组':'从认识彼此开始',household:!!household,host:role==='host',badge:0,title:household?.name||'我的 Household',avatar:household?.avatar||null};
   const subtitle=role==='host'?'Host':household?'Learner':'New here';
+  async function switchOrganization(organizationId:string){setBusy(true);try{const r=await fetch('/api/organizations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({organizationId})});const d=await r.json();if(!r.ok)throw new Error(d.error);location.assign('/app?org='+encodeURIComponent(organizationId))}catch(e){setError((e as Error).message);setBusy(false)}}
   return <div className="portal workspace-ui">
-    <LearnSidebar state={sidebar} active="about" onSelect={id=>router.push(id==='Home'?'/learn':`/learn?tab=${encodeURIComponent(id)}`)} teamAccess={teamAccess}/>
+    <LearnSidebar organizationId={access?.organization.id} identity={access?.canSwitch?<OrganizationSwitcher current={access.organization} organizations={access.organizations} busy={busy} onSwitch={switchOrganization} settingsAvailable={!!household} onSettings={()=>router.push(home+'&tab=Household')}/>:undefined} state={sidebar} active="about" onSelect={id=>router.push(home+(id==='Home'?'':'&tab='+encodeURIComponent(id)))} teamAccess={teamAccess}/>
 
-    <div className="p-work"><div className="p-top"><nav className="p-crumb" aria-label="当前位置"><a href="/learn">{household?.name||'我的 Household'}</a><span aria-hidden="true">/</span><b aria-current="page">个人信息</b></nav><div><AccountMenu avatar={avatar} name={f.name} subtitle={subtitle} teamAccess={teamAccess} current="about"/></div></div>
+    <div className="p-work"><div className="p-top"><nav className="p-crumb" aria-label="当前位置"><a href={home}>{household?.name||'我的 Household'}</a><span aria-hidden="true">/</span><b aria-current="page">个人信息</b></nav><div><AccountMenu organizationId={access?.organization.id} avatar={avatar} name={f.name} subtitle={subtitle} teamAccess={teamAccess} current="about"/></div></div>
       <div className="p-panel"><main className="p-main p-about">
         <div className="p-welcome"><div><h1>个人信息</h1><p>伙伴看到的称呼、你的时区和联系方式，都可以在这里更新。</p></div></div>
         <form onSubmit={submit}>

@@ -1,5 +1,6 @@
+import {DomainError} from '../../../domain/commands';
 import { randomUUID } from 'node:crypto';
-import { currentUser, member, pilotDb, pilotTransaction, reply as out, sameOrigin, text, reminderDue, sessionEnd, insertSession, insertNotification } from '../../../server/pilot';
+import { currentUser, currentMember, pilotDb, pilotTransaction, reply as out, sameOrigin, text, reminderDue, sessionEnd, insertSession, insertNotification } from '../../../server/pilot';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 type Row = Record<string, unknown>;
@@ -8,13 +9,13 @@ const memberName = (alias: string, user: string) => `COALESCE(NULLIF(${alias}.di
 export async function GET() {
   const u = await currentUser(); if (!u) return out({ error: '请先登录。' }, 401);
   try {
-    const db = await pilotDb(), m = await member(u.userId);
+    const db = await pilotDb(), m = await currentMember(u.userId);
     if (!m) return out({ items: [], pending: 0 });
     const host = m.role === 'host';
     const list = await db.prepare(`SELECT i.*,${memberName('a', 'i.sender')} AS "senderName",${memberName('b', 'i.recipient')} AS "recipientName" FROM practice_invites i JOIN practice_pairs p ON p.id=i.pair AND p.household=i.household JOIN memberships a ON a.user_id=i.sender AND a.household_id=i.household JOIN memberships b ON b.user_id=i.recipient AND b.household_id=i.household WHERE i.household=? AND ${host ? '1=1' : '(i.sender=? OR i.recipient=?)'} ORDER BY i.updated DESC LIMIT 100`).all(...(host ? [m.household] : [m.household, u.userId, u.userId])) as Row[];
     const items = list.map(i => ({ ...i, version: Number(i.version) }) as Row);
     return out({ items, pending: items.filter(i => i.status === 'pending' && i.recipient === u.userId && Date.parse(String(i.at)) > Date.now()).length });
-  } catch (e) { console.error(e); return out({ error: '暂时无法读取练习邀约。' }, 503); }
+  } catch (e) { if(e instanceof DomainError)return Response.json({error:e.message},{status:e.status});console.error(e); return out({ error: '暂时无法读取练习邀约。' }, 503); }
 }
 
 export async function POST(req: Request) {
@@ -23,7 +24,7 @@ export async function POST(req: Request) {
   try {
     const raw = await req.text(); if (raw.length > 6000) return out({ error: '内容过长。' }, 413);
     const b = JSON.parse(raw) as Row, val = (k: string, n: number) => text(b, k, n), db = await pilotDb(), action = val('action', 20);
-    const m = await member(u.userId);
+    const m = await currentMember(u.userId);
     if (!m || m.role !== 'learner') return out({ error: '只有配对中的学习者可以发起或回应邀约。' }, 403);
     const now = new Date(), iso = now.toISOString();
     if (action === 'propose') {
@@ -75,5 +76,5 @@ export async function POST(req: Request) {
       return out({ ok: true, session });
     } else return out({ error: '无效操作。' }, 400);
     return out({ ok: true });
-  } catch (e) { console.error(e); return out({ error: '操作未完成，请刷新后重试。' }, 503); }
+  } catch (e) { if(e instanceof DomainError)return Response.json({error:e.message},{status:e.status});console.error(e); return out({ error: '操作未完成，请刷新后重试。' }, 503); }
 }

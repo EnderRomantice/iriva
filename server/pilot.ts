@@ -1,4 +1,6 @@
-import { cookies } from 'next/headers';
+import {ORGANIZATION_COOKIE,ORGANIZATION_HEADER,isTeamRole} from '../domain/workspace-access';
+import {workspaceAccess,workspaceMembership} from './services/workspace-access';
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { randomUUID } from 'node:crypto';
 import { workspaceRepository } from './container';
@@ -41,8 +43,8 @@ export async function requireUser(returnTo: string): Promise<PilotUser> {
 }
 export function signInPath(returnTo: string) { return `/signin?return_to=${encodeURIComponent(safeReturnTo(returnTo))}`; }
 export function safeReturnTo(value: string | null | undefined) {
-  if (!value || !value.startsWith('/') || value.startsWith('//')) return '/learn';
-  try { const url = new URL(value, 'https://app.local'); return url.origin === 'https://app.local' && url.pathname !== '/signin' ? `${url.pathname}${url.search}${url.hash}` : '/learn'; } catch { return '/learn'; }
+  if (!value || !value.startsWith('/') || value.startsWith('//')) return '/app';
+  try { const url = new URL(value, 'https://app.local'); return url.origin === 'https://app.local' && url.pathname !== '/signin' ? `${url.pathname}${url.search}${url.hash}` : '/app'; } catch { return '/app'; }
 }
 
 /** Team roles are organization-scoped; business roles never grant administrative access. */
@@ -51,12 +53,22 @@ export async function teamRole(user: PilotUser | null): Promise<'admin' | 'staff
   const organizations=await teamOrganizations(await workspaceRepository(),user.userId);
   return organizations.some(o=>o.role==='owner'||o.role==='admin')?'admin':organizations.length?'staff':null;
 }
+export async function currentWorkspace(user?:PilotUser,requested?:string) {
+  const u=user||await currentUser();if(!u)return null;
+  const incoming=requested||(await headers()).get(ORGANIZATION_HEADER)||undefined;
+  const jar=await cookies();
+  return workspaceAccess(await workspaceRepository(),u,incoming||jar.get(ORGANIZATION_COOKIE)?.value||jar.get('iriva_team')?.value,!!incoming);
+}
 export async function currentTeamContext() {
-  const user=await currentUser();
-  if(!user || user.authMethod!=='password') return null;
-  const selected=(await cookies()).get('iriva_team')?.value;
-  const repo=await workspaceRepository(),organizations=await teamOrganizations(repo,user.userId);
-  return teamContext(repo,user,organizations.some(o=>o.id===selected)?selected:undefined);
+  const user=await currentUser();if(!user||user.authMethod!=='password')return null;
+  const access=await currentWorkspace(user);
+  if(!access||!isTeamRole(access.organization.role))return null;
+  return teamContext(await workspaceRepository(),user,access.organization.id);
+}
+export async function currentMember(userId:string,requested?:string):Promise<Member|null> {
+  const user=await currentUser();if(!user||user.userId!==userId)return null;
+  const access=await currentWorkspace(user,requested);
+  return access?workspaceMembership(await workspaceRepository(),user,access.organization.id):null;
 }
 
 export async function member(userId: string): Promise<Member | null> {
@@ -74,7 +86,8 @@ export const insertMembership = 'INSERT INTO memberships (id,household_id,user_i
 export async function claimPlacement(user: PilotUser) {
   const db = await pilotDb();
   const p = await db.prepare('SELECT * FROM placements WHERE email=?').get(user.email.toLowerCase()) as Row | undefined;
-  if (!p || await member(user.userId)) return;
+  if (!p) return;
+  if(p.role==='host'){if(await db.prepare('SELECT 1 FROM memberships WHERE user_id=? AND household_id=?').get(user.userId,p.household))return;}else if(await member(user.userId))return;
   const role = p.role === 'host' ? 'host' : 'learner';
   await db.prepare(insertMembership).run(...membershipRow(String(p.household), user.userId, role, String(p.name)));
   if (role === 'host') await db.prepare('UPDATE households SET host_id=? WHERE id=?').run(user.userId, p.household);

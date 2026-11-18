@@ -20,14 +20,14 @@ export default function SignInForm({ returnTo }: { returnTo: string }) {const {t
     if(!d.challengeId)throw new Error(tr('暂时无法发送验证码。'));
     setChallenge(d.challengeId);setStep('code');
     setNote(d.delivery==='console'?tr('本地开发：验证码已打印在服务器日志里，也可以直接填 000000。'):tr('验证码已发到 {email}，10 分钟内有效。',{email}));
-   }else if(step==='password'){await call({email,password},'/api/auth/password');location.assign('/team');}
+   }else if(step==='password'){await call({email,password},'/api/auth/password');location.assign('/app');}
    else{await call({action:'verify',challengeId:challenge,code});location.assign(returnTo);}
   }catch(e){setError((e as Error).message)}finally{setBusy(false)}
  }
  function reset(){setStep('email');setPassword('');setCode('');setChallenge('');setError('');setNote('');}
  return <main className="apply-page signin-page">
   <a className="apply-brand" href={locale==='en'?'/en':'/'}>iriva <span>{tr("青鸟")}</span></a>
-  <LocaleSwitcher/><div className="apply-heading"><h1>{step==='password'?tr('登录管理空间。'):tr('进入学习空间。')}</h1>{step==='password'&&<p>{tr("输入账号密码以继续。")}</p>}</div>
+  <LocaleSwitcher/><div className="apply-heading"><h1>{tr('进入我的空间。')}</h1>{step==='password'&&<p>{tr("输入账号密码以继续。")}</p>}</div>
   <form onSubmit={submit}>
    <label>{tr("邮箱")}<input type="email" required autoComplete="username" readOnly={step!=='email'} value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com"/></label>
    {step==='password'&&<label>{tr("密码")}<input key="password" autoFocus type="password" autoComplete="current-password" required value={password} onChange={e=>setPassword(e.target.value)}/></label>}

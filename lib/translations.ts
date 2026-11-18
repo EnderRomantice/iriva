@@ -1,4 +1,8 @@
 export const english: Record<string, string> = {
+  '我的空间':'My space',
+  '进入我的空间。':'Welcome to your space.',
+  '小组设置':'Group settings',
+
   "组织切换与设置": "Switch organization and settings",
   "组织设置": "Organization settings",
   "18 岁以下": "Under 18",

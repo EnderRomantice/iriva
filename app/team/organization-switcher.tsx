@@ -2,14 +2,15 @@
 import {useEffect,useId,useRef,useState,type KeyboardEvent} from 'react';
 import {Check,ChevronsUpDown,Building2,Settings} from 'lucide-react';
 import {useLocale} from '../../components/locale-provider';
-import type {TeamOrganization} from '../../server/services/organization-access';
+import type {WorkspaceOrganization} from '../../domain/workspace-access';
+import './organization-switcher.css';
 
-export default function OrganizationSwitcher({current,organizations,busy,onSwitch,onSettings}:{current?:TeamOrganization;organizations:TeamOrganization[];busy:boolean;onSwitch:(id:string)=>Promise<void>;onSettings:()=>void}) {
+export default function OrganizationSwitcher({current,organizations,busy,onSwitch,onSettings,settingsAvailable=true}:{current?:WorkspaceOrganization;organizations:WorkspaceOrganization[];busy:boolean;onSwitch:(id:string)=>Promise<void>;onSettings:()=>void;settingsAvailable?:boolean}) {
  const {t}=useLocale();
  const [state,setState]=useState<'closed'|'open'|'closing'>('closed');
  const root=useRef<HTMLDivElement>(null),trigger=useRef<HTMLButtonElement>(null),menu=useRef<HTMLDivElement>(null);
  const id=useId(),open=state==='open';
- const role=(value:string)=>t(value==='owner'?'组织所有者':value==='admin'?'管理员':'协作成员');
+ const role=(value:string)=>t(value==='owner'?'组织所有者':value==='admin'?'管理员':value==='host'?'Host':'协作成员');
  function close(restoreFocus=false){setState('closing');if(restoreFocus)trigger.current?.focus();}
  useEffect(()=>{
   if(state!=='closing')return;
@@ -38,9 +39,9 @@ export default function OrganizationSwitcher({current,organizations,busy,onSwitc
   <div ref={menu} id={id} role="menu" aria-label={t('组织切换与设置')} aria-hidden={!open} inert={!open} className={`team-organization-menu t-dropdown${open?' is-open':state==='closing'?' is-closing':''}`} data-origin="top-left" onKeyDown={keyboard}>
    <p>{t('切换组织')}</p>
    {organizations.map(org=><button key={org.id} type="button" role="menuitemradio" aria-checked={org.id===current?.id} disabled={busy} onClick={()=>{close(true);if(org.id!==current?.id)void onSwitch(org.id);}}><span><b>{org.name}</b><small>{role(org.role)}</small></span>{org.id===current?.id&&<Check size={16} aria-hidden="true"/>}</button>)}
-   {current&&(current.role==='owner'||current.role==='admin')&&<>
+   {current&&settingsAvailable&&(current.role==='owner'||current.role==='admin'||current.role==='host')&&<>
     <div className="team-organization-divider" role="separator"/>
-    <button type="button" role="menuitem" className="team-organization-settings" disabled={busy} onClick={()=>{close(true);onSettings();}}><Settings size={16} aria-hidden="true"/><span>{t('组织设置')}</span></button>
+    <button type="button" role="menuitem" className="team-organization-settings" disabled={busy} onClick={()=>{close(true);onSettings();}}><Settings size={16} aria-hidden="true"/><span>{t(current.role==='host'?'小组设置':'组织设置')}</span></button>
    </>}
   </div>
  </div>;

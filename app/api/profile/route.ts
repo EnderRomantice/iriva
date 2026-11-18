@@ -1,5 +1,6 @@
+import {DomainError} from '../../../domain/commands';
 import { isStandardTimezone } from '../../../lib/timezones';
-import { currentUser, member, pilotDb, pilotTransaction, reply, sameOrigin, text } from '../../../server/pilot';
+import { currentUser, currentMember, pilotDb, pilotTransaction, reply, sameOrigin, text } from '../../../server/pilot';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 type Row = Record<string, unknown>;
@@ -16,7 +17,7 @@ export async function PATCH(req: Request) {
     let b: Row; try { b = JSON.parse(raw); } catch { return reply({ error: '资料格式不正确。' }, 400); }
     if (!b || typeof b !== 'object') return reply({ error: '资料格式不正确。' }, 400);
     const name = text(b, 'name', 50); if (!name) return reply({ error: '请填写你希望伙伴怎么称呼你。' }, 400);
-    const d = await pilotDb(), m = await member(u.userId);
+    const d = await pilotDb(), m = await currentMember(u.userId);
     const app = await d.prepare('SELECT id FROM member_applications WHERE user_id=?').get(u.userId) as Row | undefined;
     const timezone = text(b, 'timezone', 20);
     if (m && timezone && !isStandardTimezone(timezone)) return reply({ error: '请选择有效的 UTC 时区。' }, 400);
@@ -36,5 +37,5 @@ export async function PATCH(req: Request) {
       if (!app && !m) await d.prepare('UPDATE users SET name=? WHERE id=?').run(name, u.userId);
     });
     return reply({ ok: true });
-  } catch (e) { console.error(e); return reply({ error: '没能保存，请稍后重试。' }, 503); }
+  } catch (e) { if(e instanceof DomainError)return Response.json({error:e.message},{status:e.status});console.error(e); return reply({ error: '没能保存，请稍后重试。' }, 503); }
 }

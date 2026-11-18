@@ -1,10 +1,11 @@
-import { pilotHost } from '../../../server/services/pilot-hosts';
+import {DomainError} from '../../../domain/commands';
+import {auditedOperation,canManage} from '../../../server/services/organization-access';
 import { workspaceRepository } from '../../../server/container';
 import { randomUUID } from 'node:crypto';
 import { isStandardTimezone } from '../../../lib/timezones';
 import { householdAvatarUrl, memberAvatarUrl, parseAvatar } from '../../../domain/household-avatar';
 import { canonicalEmoji, groupReactions, isReactionEmoji, maxReactionKinds } from '../../../domain/household-reactions';
-import { currentUser, claimPlacement, member, pilotDb, pilotTransaction, reply, sameOrigin, teamRole, text, count, visibleSession, visibilityArgs, sessionColumns, reminderDue, sessionEnd, insertSession, insertNotification, insertMembership, membershipRow, createHousehold } from '../../../server/pilot';
+import { currentUser, currentWorkspace, claimPlacement, currentMember, pilotDb, pilotTransaction, reply, sameOrigin, currentTeamContext, text, count, visibleSession, visibilityArgs, sessionColumns, reminderDue, sessionEnd, insertSession, insertNotification, insertMembership, membershipRow, createHousehold } from '../../../server/pilot';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 type Row = Record<string, unknown>;
@@ -21,9 +22,10 @@ export async function GET() {
   const u = await currentUser(); if (!u) return reply({ error: '请先登录。' }, 401);
   try {
     await claimPlacement(u);
-    const d = await pilotDb(), m = await member(u.userId);
+    const d = await pilotDb(), m = await currentMember(u.userId);
     if (!m) {
-      const host = await pilotHost(await workspaceRepository(), u.email);
+      const access=await currentWorkspace(u);
+      const host = access?.organization.role==='host'?await d.prepare('SELECT name FROM organization_hosts WHERE organization_id=? AND email=?').get(access.organization.id,u.email.toLowerCase())||{name:u.displayName}:null;
       if (host) return reply({ user: { name: host.name, role: 'host', id: u.userId }, household: null, application: null, people: [], messages: [], sessions: [] });
       const application = await d.prepare('SELECT name,status,household FROM member_applications WHERE user_id=?').get(u.userId);
       return reply({ user: { name: (application as Row | undefined)?.name || u.displayName }, household: null, application: application || null });
@@ -39,8 +41,8 @@ export async function GET() {
     const recent = (msgs as Row[]).reverse(), reactions = await reactionsFor(d, String(h.id), recent.map(x => String(x.id)));
     const messages = recent.map(x => ({ ...x, reactions: reactions.get(String(x.id)) ?? [] }));
     const members: Row[] = (people as Row[]).map(({ avatar_updated: updated, ...p }) => ({ ...p, avatar: memberAvatarUrl(p.user, updated) }));
-    return reply({ user: { name: m.name, role: m.role, id: u.userId, avatar: members.find(p => p.user === u.userId)?.avatar ?? null }, household: { ...household, avatar: householdAvatarUrl(avatar_updated), week: Number(h.week), duration: Number(h.duration), ...(m.role === 'host' ? { code } : {}) }, people: members, messages, sessions: events });
-  } catch (e) { console.error(e); return reply({ error: '暂时无法读取你的 Household，请稍后重试。' }, 503); }
+    return reply({ user: { name: m.name, role: m.role, id: u.userId, avatar: members.find(p => p.user === u.userId)?.avatar ?? null }, household: { ...household, avatar: householdAvatarUrl(avatar_updated)?householdAvatarUrl(avatar_updated)+'&org='+encodeURIComponent((await currentWorkspace(u))!.organization.id):null, week: Number(h.week), duration: Number(h.duration), ...(m.role === 'host' ? { code } : {}) }, people: members, messages, sessions: events });
+  } catch (e) { if(e instanceof DomainError)return Response.json({error:e.message},{status:e.status});console.error(e); return reply({ error: '暂时无法读取你的 Household，请稍后重试。' }, 503); }
 }
 
 export async function POST(req: Request) {
@@ -48,16 +50,15 @@ export async function POST(req: Request) {
   if (!sameOrigin(req)) return reply({ error: '请求来源不正确。' }, 403);
   try {
     const b = await req.json() as Row, action = text(b, 'action', 20), d = await pilotDb();
-    const m = await member(u.userId);
+    const m = await currentMember(u.userId);
     // 邀请码通过 /api/apply/join 使用，必须先提交加入资料。
     if (action === 'join') return reply({ error: '请先提交加入资料，再在完成页填写邀请码。' }, 400);
     if (action === 'create') {
       if (m) return reply({ error: '你已经在一个 Household 里了。' }, 409);
       const name = text(b, 'name', 50); if (!name) return reply({ error: '请填写你的显示名称。' }, 400);
-      if (!await teamRole(u)) return reply({ error: 'Household 由青鸟团队安排，请先提交加入资料。' }, 403);
+      const ctx=await currentTeamContext();if(!ctx)return reply({error:'Household 由青鸟团队安排。'},403);
       const title = text(b, 'title', 70); if (!title) return reply({ error: '请为 Household 命名。' }, 400);
-      await createHousehold(title, u.userId, 'A meal that tastes like home', [{ userId: u.userId, role: 'host', name }]);
-      return reply({ ok: true });
+      return await auditedOperation(await workspaceRepository(),ctx,'household.create',title,async current=>{if(!canManage(current.organization.role))return reply({error:'只有管理员可以创建 Household。'},403);await createHousehold(title,u.userId,'A meal that tastes like home',[{userId:u.userId,role:'host',name}],current.organization.id);return reply({ok:true});});
     }
     if (!m) return reply({ error: '请先加入 Household。' }, 403);
     if (action === 'timezone') {
@@ -130,6 +131,6 @@ export async function POST(req: Request) {
       });
     } else return reply({ error: '无效操作。' }, 400);
     return reply({ ok: true });
-  } catch (e) { console.error(e); return reply({ error: '没能保存，请稍后重试。' }, 400); }
+  } catch (e) { if(e instanceof DomainError)return Response.json({error:e.message},{status:e.status});console.error(e); return reply({ error: '没能保存，请稍后重试。' }, 400); }
 }
 

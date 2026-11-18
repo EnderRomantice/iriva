@@ -1,5 +1,6 @@
+import {DomainError} from '../../../domain/commands';
 import { randomUUID } from 'node:crypto';
-import { currentUser, member, pilotDb, reply, sameOrigin, text, count } from '../../../server/pilot';
+import { currentUser, currentMember, pilotDb, reply, sameOrigin, text, count } from '../../../server/pilot';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -13,10 +14,10 @@ const instructions = `You are IRIVA's private English preparation coach. Help th
 export async function GET() {
   const u = await currentUser(); if (!u) return reply({ error: '请先登录。' }, 401);
   try {
-    const m = await member(u.userId); if (!m) return reply({ error: '请先加入 Household。' }, 403);
+    const m = await currentMember(u.userId); if (!m) return reply({ error: '请先加入 Household。' }, 403);
     const drafts = await (await pilotDb()).prepare('SELECT * FROM coach_drafts WHERE owner=? AND household=? ORDER BY updated DESC LIMIT 30').all(u.userId, m.household);
     return reply({ available: available(), drafts });
-  } catch (e) { console.error(e); return reply({ error: '暂时无法读取你的私人草稿。' }, 503); }
+  } catch (e) { if(e instanceof DomainError)return Response.json({error:e.message},{status:e.status});console.error(e); return reply({ error: '暂时无法读取你的私人草稿。' }, 503); }
 }
 
 export async function POST(req: Request) {
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
   try {
     const raw = await req.text(); if (raw.length > 40000) return reply({ error: '草稿太长了。' }, 413);
     const b = JSON.parse(raw) as Row, db = await pilotDb();
-    const m = await member(u.userId); if (!m) return reply({ error: '请先加入 Household。' }, 403);
+    const m = await currentMember(u.userId); if (!m) return reply({ error: '请先加入 Household。' }, 403);
     const str = (k: string, n: number) => text(b, k, n), action = str('action', 20), id = str('id', 100), now = new Date().toISOString();
     if (action === 'delete') {
       if (!id) return reply({ error: '请选择草稿。' }, 400);
@@ -65,5 +66,5 @@ export async function POST(req: Request) {
       return reply({ text: answer });
     }
     return reply({ error: '无效操作。' }, 400);
-  } catch (e) { console.error(e); return reply({ error: '这次没能完成，已保存的草稿没有改动。' }, 503); }
+  } catch (e) { if(e instanceof DomainError)return Response.json({error:e.message},{status:e.status});console.error(e); return reply({ error: '这次没能完成，已保存的草稿没有改动。' }, 503); }
 }

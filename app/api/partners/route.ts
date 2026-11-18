@@ -1,5 +1,6 @@
+import {DomainError} from '../../../domain/commands';
 import { randomUUID } from 'node:crypto';
-import { currentUser, member, pilotDb, pilotTransaction, reply as out, sameOrigin } from '../../../server/pilot';
+import { currentUser, currentMember, pilotDb, pilotTransaction, reply as out, sameOrigin } from '../../../server/pilot';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 type Row = Record<string, unknown>;
@@ -8,20 +9,20 @@ type Pair = { first: string; second: string; url: string };
 export async function GET() {
   const u = await currentUser(); if (!u) return out({ error: '请先登录。' }, 401);
   try {
-    const db = await pilotDb(), m = await member(u.userId);
+    const db = await pilotDb(), m = await currentMember(u.userId);
     if (!m) return out({ error: '请先加入 Household。' }, 403);
     const pairs = m.role === 'host'
       ? await db.prepare('SELECT * FROM practice_pairs WHERE household=? ORDER BY slot').all(m.household)
       : await db.prepare('SELECT * FROM practice_pairs WHERE household=? AND (first=? OR second=?) ORDER BY slot').all(m.household, u.userId, u.userId);
     return out({ pairs: (pairs as Row[]).map(p => ({ ...p, slot: Number(p.slot) })) });
-  } catch (e) { console.error(e); return out({ error: '暂时无法读取指定伙伴。' }, 503); }
+  } catch (e) { if(e instanceof DomainError)return Response.json({error:e.message},{status:e.status});console.error(e); return out({ error: '暂时无法读取指定伙伴。' }, 503); }
 }
 
 export async function POST(req: Request) {
   const u = await currentUser(); if (!u) return out({ error: '请先登录。' }, 401);
   if (!sameOrigin(req)) return out({ error: '请求来源不正确。' }, 403);
   try {
-    const db = await pilotDb(), m = await member(u.userId);
+    const db = await pilotDb(), m = await currentMember(u.userId);
     if (m?.role !== 'host') return out({ error: '仅本 Household 的 Host 可以指定练习对象。' }, 403);
     const raw = await req.text(); if (raw.length > 8000) return out({ error: '资料过长。' }, 413);
     const b = JSON.parse(raw) as { pairs?: Pair[] };
@@ -55,5 +56,5 @@ export async function POST(req: Request) {
       }
     });
     return out({ ok: true });
-  } catch (e) { console.error(e); return out({ error: '配对未能保存，请重试。' }, 503); }
+  } catch (e) { if(e instanceof DomainError)return Response.json({error:e.message},{status:e.status});console.error(e); return out({ error: '配对未能保存，请重试。' }, 503); }
 }

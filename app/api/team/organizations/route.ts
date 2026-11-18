@@ -14,7 +14,7 @@ export async function POST(req:Request){
    if(b.action==='switch'){
     const next=await teamContext(repo,current.user,String(b.organizationId||''));
     await auditOperation(repo,next,'organization.enter',current.organization.id);
-    return Response.json({ok:true},{headers:{'Set-Cookie':`iriva_team=${next.organization.id}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000${process.env.NODE_ENV==='production'?'; Secure':''}`,'Cache-Control':'no-store'}});
+    const headers=new Headers({'Cache-Control':'no-store'});for(const name of ['iriva_team','iriva_organization'])headers.append('Set-Cookie',`${name}=${next.organization.id}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000${process.env.NODE_ENV==='production'?'; Secure':''}`);return Response.json({ok:true},{headers});
    }
    if(b.action==='create'){
     const organization=await createTeamOrganization(repo,current,b.name||'');

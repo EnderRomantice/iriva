@@ -1,4 +1,6 @@
-import { auditOperation, auditedOperation, canManage, teamOrganizations, saveOrganizationMember, removeOrganizationMember } from '../../../server/services/organization-access';
+import {workspaceOrganizations} from '../../../server/services/workspace-access';
+import {randomUUID} from 'node:crypto';
+import { auditOperation, auditedOperation, canManage, saveOrganizationMember, removeOrganizationMember } from '../../../server/services/organization-access';
 import { addPilotHost } from '../../../server/services/pilot-hosts';
 import { DomainError } from '../../../domain/commands';
 import { errorResponse } from '../../../server/http';
@@ -15,7 +17,7 @@ export async function GET() {
   const organizationId=ctx.organization.id, role=canManage(ctx.organization.role)?'admin':'staff';
   try {
     const db = await pilotDb();
-    const organizations=await teamOrganizations(await workspaceRepository(),u.userId);
+    const organizations=await workspaceOrganizations(await workspaceRepository(),u);
     const [applications, households, tasks, staff, placements, pairs, feedback, hosts] = await Promise.all([
       role==='admin'?db.prepare('SELECT * FROM member_applications WHERE organization_id=? ORDER BY created DESC LIMIT 500').all(organizationId):Promise.resolve([]),
       db.prepare('SELECT id,name,week,theme AS topic,duration FROM households WHERE organization_id=? OR organization_id IN (SELECT id FROM organizations WHERE parent_id=?) ORDER BY name LIMIT 500').all(organizationId,organizationId),
@@ -91,15 +93,16 @@ export async function POST(req: Request) {
       if (candidates.length !== 4) return out({ error: '所有学员必须在候选名单中，且尚未分组。' }, 409);
       if (candidates.some(x => String(x.email).toLowerCase() === hostEmail)) return out({ error: 'Host 不能同时是这组的学员。' }, 409);
       if (await db.prepare(`SELECT 1 FROM pilot_hosts WHERE email IN (${candidates.map(() => '?').join(',')})`).get(...candidates.map(x => String(x.email).toLowerCase()))) return out({ error: '候选学员中有已授权的 Host，请重新选择。' }, 409);
-      const repo = await workspaceRepository(), hostUser = await userByEmail(repo, hostEmail);
-      const accounts = [...candidates.map(x => String(x.user_id)), ...(hostUser ? [hostUser.id] : [])];
+      const repo = await workspaceRepository();let hostUser = await userByEmail(repo, hostEmail);
+      const accounts = candidates.map(x => String(x.user_id));
       if (await db.prepare(`SELECT user_id FROM memberships WHERE user_id IN (${accounts.map(() => '?').join(',')}) LIMIT 1`).get(...accounts)) return out({ error: '有成员或 Host 已在其他 Household，需先人工协调。' }, 409);
-      if (await db.prepare("SELECT 1 FROM placements WHERE email=? AND household IS NOT NULL").get(hostEmail)) return out({ error: '这位 Host 已被安排到其他 Household，需先人工协调。' }, 409);
+      if ((hostUser&&await db.prepare("SELECT 1 FROM memberships m JOIN households h ON h.id=m.household_id WHERE m.user_id=? AND (m.role='learner' OR h.organization_id=? OR h.organization_id IN (SELECT id FROM organizations WHERE parent_id=?))").get(hostUser.id,organizationId,organizationId))||await db.prepare("SELECT 1 FROM placements p JOIN households h ON h.id=p.household WHERE p.email=? AND (p.role='learner' OR h.organization_id=? OR h.organization_id IN (SELECT id FROM organizations WHERE parent_id=?))").get(hostEmail,organizationId,organizationId)) return out({ error: '这位 Host 已被安排到其他 Household，需先人工协调。' }, 409);
       const revisions = Array.isArray(b.revisions) ? b.revisions as { id: string; revision: number }[] : [];
       if (revisions.length !== 4 || new Set(revisions.map(x => x.id)).size !== 4 || candidates.some(x => !revisions.some(r => r.id === x.id && r.revision === Number(x.revision)))) return out({ error: '资料已有更新，请重新查看最新资料和口语确认后再分组。' }, 409);
       // 账号都来自邮箱登录，user_id 一定存在；仍以邮箱再核对一次，防止资料被改绑。
       for (const x of candidates) { const user = await userByEmail(repo, String(x.email)); if (!user || user.id !== x.user_id) return out({ error: `${x.name} 的账号与资料邮箱不一致，请人工核对。` }, 409); }
-      // Until a Host without an account signs in, the household is owned by the team member who formed it.
+      // Invite-only email identity: no password or session is created here.
+      if(!hostUser){const now=new Date().toISOString();hostUser={id:randomUUID(),name:hostName,email:hostEmail,timezone:'+08:00',avatar:'',version:1,createdAt:now,updatedAt:now};await repo.saveUser(hostUser)}
       const house = await createHousehold(name, hostUser?.id ?? u.userId, 'A story behind my name', [
         ...candidates.map(x => ({ userId: String(x.user_id), role: 'learner' as const, name: String(x.name) })),
         ...(hostUser ? [{ userId: hostUser.id, role: 'host' as const, name: hostName }] : []),
@@ -112,8 +115,8 @@ export async function POST(req: Request) {
         }
         await db.prepare('INSERT INTO pilot_hosts (email,name,created) VALUES (?,?,?) ON CONFLICT(email) DO NOTHING').run(hostEmail, hostName, new Date().toISOString());
         await db.prepare('INSERT INTO organization_hosts VALUES (?,?,?,?) ON CONFLICT(organization_id,email) DO UPDATE SET name=excluded.name').run(organizationId,hostEmail,hostName,new Date().toISOString());
-        await db.prepare(place).run(hostEmail, house, 'host', hostName);
-        await db.prepare("UPDATE member_applications SET household=?,status='assigned' WHERE lower(email)=? AND role='host' AND household IS NULL").run(house, hostEmail);
+        // Host membership is already saved; legacy placements are only needed for old invitations.
+        await db.prepare("UPDATE member_applications SET household=?,status='assigned' WHERE lower(email)=? AND role='host' AND household IS NULL AND organization_id=?").run(house, hostEmail,organizationId);
       });
       return out({ ok: true, household: house, hostJoined: !!hostUser });
     } else return out({ error: '无效操作。' }, 400);
