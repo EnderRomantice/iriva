@@ -47,3 +47,18 @@ test('Host reviews stay in the selected organization even when the same Host lea
  const other=await reviews.list({userId:host.userId,team:false,organizationId:second});
  assert.ok(JSON.stringify(other).includes(session));assert.ok(!JSON.stringify(other).includes(ids.session));
 });
+
+test('Host switcher names match the selected household, including renames; team names remain organization names',async t=>{
+ const {repo,ids,second,house,host,now}=await fixture();t.after(()=>repo.db.close());
+ const first=await workspaceAccess(repo,host,defaultOrganizationId,true);
+ assert.equal(first.organization.name,'Sage Household');
+ assert.deepEqual(first.organizations.map(o=>o.name).sort(),['Sage Household','Second Household']);
+ const current=await workspaceAccess(repo,host,second,true);
+ assert.equal(current.organization.name,'Second Household');
+ assert.equal((await workspaceMembership(repo,host,current.organization.id))?.household,house);
+ await repo.db.prepare('UPDATE households SET name=? WHERE id=?').run('Renamed Host space',house);
+ assert.equal((await workspaceAccess(repo,host,second,true)).organization.name,'Renamed Host space');
+ assert.equal((await repo.db.prepare('SELECT name FROM organizations WHERE id=?').get(second)).name,'Second organization');
+ await repo.db.prepare("INSERT INTO organization_access VALUES (?,?,'admin',?)").run(second,ids.host,now);
+ assert.equal((await workspaceAccess(repo,{...host,authMethod:'password'},second,true)).organization.name,'Second organization');
+});

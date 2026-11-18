@@ -8,12 +8,17 @@ type User=TeamActor&{authMethod?:'email'|'password'};
 /** Platform organizations are shared by operators, hosts, and their learners. */
 export async function workspaceOrganizations(repo:DatabaseRepository,user:User):Promise<WorkspaceOrganization[]> {
  const teams=user.authMethod==='password'?await teamOrganizations(repo,user.userId):[];
- const hosts:WorkspaceOrganization[]=await repo.db.prepare(`SELECT DISTINCT o.id,o.name,'host' AS role FROM organizations o WHERE o.kind='platform' AND (
+ // A Host enters the household they maintain. Use the same membership ordering
+ // as workspaceMembership so the switcher label always matches the loaded space.
+ const hosts:WorkspaceOrganization[]=await repo.db.prepare(`SELECT o.id,COALESCE((
+ SELECT h.name FROM memberships m JOIN households h ON h.id=m.household_id JOIN organizations ho ON ho.id=h.organization_id
+ WHERE m.user_id=? AND m.role='host' AND (ho.id=o.id OR ho.parent_id=o.id) ORDER BY m.created_at,m.id LIMIT 1
+ ),o.name) AS name,'host' AS role FROM organizations o WHERE o.kind='platform' AND (
  EXISTS(SELECT 1 FROM organization_hosts h WHERE h.organization_id=o.id AND h.email=?) OR
  EXISTS(SELECT 1 FROM memberships m JOIN households h ON h.id=m.household_id JOIN organizations ho ON ho.id=h.organization_id WHERE m.user_id=? AND m.role='host' AND (ho.id=o.id OR ho.parent_id=o.id)) OR
  EXISTS(SELECT 1 FROM organization_memberships m WHERE m.user_id=? AND m.role='host' AND (m.organization_id=o.id OR m.organization_id IN (SELECT id FROM organizations WHERE parent_id=o.id))) OR
  EXISTS(SELECT 1 FROM host_grants g WHERE g.platform_id=o.id AND g.email=?)
- ) ORDER BY o.name,o.id`).all(user.email.toLowerCase(),user.userId,user.userId,user.email.toLowerCase());
+ ) ORDER BY o.name,o.id`).all(user.userId,user.email.toLowerCase(),user.userId,user.userId,user.email.toLowerCase());
  const options=new Map<string,WorkspaceOrganization>();for(const org of [...hosts,...teams])options.set(org.id,org);
  return [...options.values()].sort((a,b)=>a.name.localeCompare(b.name)||a.id.localeCompare(b.id));
 }

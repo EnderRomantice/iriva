@@ -34,12 +34,14 @@ test('one space: Host manages two organizations, tab writes remain isolated, stu
   const page=await host.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(origin+'/app?org='+defaultOrganizationId);
   await expect(page.getByRole('button',{name:'组织切换与设置',exact:true})).toBeVisible();
   await expect(page.locator('.p-crumb')).toContainText('Host household 1');
+  await expect(page.getByRole('button',{name:'组织切换与设置',exact:true})).toContainText('Host household 1');
   await expect(page.getByRole('link',{name:/进入学习空间|团队工作台/})).toHaveCount(0);
   const other=await host.newPage();await other.goto(origin+'/app?org='+defaultOrganizationId);
   await other.getByRole('button',{name:'组织切换与设置',exact:true}).click();
-  await other.getByRole('menuitemradio',{name:'Host second organization Host'}).click();
+  await other.getByRole('menuitemradio',{name:'Host household 2 Host'}).click();
   await expect(other).toHaveURL(origin+'/app?org='+second);
   await expect(other.locator('.p-crumb')).toContainText('Host household 2');
+  await expect(other.getByRole('button',{name:'组织切换与设置',exact:true})).toContainText('Host household 2');
   // The other tab changed the cookie; the first tab must still write to organization 1.
   await page.getByRole('button',{name:'更新本周话题 ↗',exact:true}).click();
   await page.getByLabel('Conversation topic').fill('Only organization one');await page.getByRole('button',{name:'Save',exact:true}).click();
@@ -50,9 +52,9 @@ test('one space: Host manages two organizations, tab writes remain isolated, stu
   await other.getByRole('button',{name:'组织切换与设置',exact:true}).click();await other.getByRole('menuitem',{name:'小组设置',exact:true}).click();
   await expect(other.getByRole('heading',{name:'Host household 2',exact:true})).toBeVisible();
   await other.getByRole('link',{name:'个人信息',exact:true}).first().click();
-  await expect(other.getByRole('button',{name:'组织切换与设置',exact:true})).toContainText('Host second organization');
+  await expect(other.getByRole('button',{name:'组织切换与设置',exact:true})).toContainText('Host household 2');
   await other.setViewportSize({width:390,height:844});await other.getByRole('button',{name:'组织切换与设置',exact:true}).click();
-  await expect(other.getByRole('menuitemradio',{name:'Host second organization Host'})).toBeVisible();
+  await expect(other.getByRole('menuitemradio',{name:'Host household 2 Host'})).toBeVisible();
   await expect(other.getByRole('menuitem',{name:'小组设置',exact:true})).toBeVisible();
   await other.getByRole('menuitem',{name:'小组设置',exact:true}).click({trial:true});
   await other.screenshot({path:'test-results/host-organizations-mobile.png',fullPage:true});
