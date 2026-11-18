@@ -24,10 +24,19 @@ test('home language persists through sign-in and team tabs; switching preserves 
     await page.goto(`${origin}/team`);
     await expect(page.getByRole('heading', { name: 'Activity reviews', exact: true })).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-    for (const label of ['Applications', 'Create a household', 'Households', 'Feedback', 'Team tasks', 'Organization & members', 'Audit log', 'Host management']) {
+    for (const label of ['Applications', 'Create a household', 'Households', 'Feedback', 'Team tasks', 'Audit log', 'Host management']) {
       await page.getByRole('button', { name: label, exact: true }).click();
       await expect(page.getByRole('heading', { name: label, exact: true })).toBeVisible();
     }
+    await page.getByRole('button',{name:'Switch organization and settings',exact:true}).click();
+    await page.keyboard.press('End');
+    await expect(page.getByRole('menuitem',{name:'Organization settings',exact:true})).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading',{name:'Organization & members',exact:true})).toBeVisible();
+    await expect(page.getByRole('button',{name:'Switch organization and settings',exact:true})).toHaveAttribute('aria-expanded','false');
+    await expect(page.getByText('一起照顾每一个小组',{exact:true})).toHaveCount(0);
+    await expect(page.getByText('Care for every group together',{exact:true})).toHaveCount(0);
+    await page.getByRole('button',{name:'Host management',exact:true}).click();
     await page.getByLabel('Host name', { exact: true }).fill('保留原文 Emma');
     await page.getByRole('button',{name:'Choose language',exact:true}).click();
     await page.getByRole('button',{name:'简体中文',exact:true}).click();
@@ -52,7 +61,7 @@ test('home language persists through sign-in and team tabs; switching preserves 
     const created=await context.request.post(`${origin}/api/team/organizations`,{headers:{origin},data:{action:'create',name:'Second team'}});
     expect(created.ok()).toBe(true);
     await page.reload();
-    const switcher=page.getByRole('button',{name:'Switch organization',exact:true});
+    const switcher=page.getByRole('button',{name:'Switch organization and settings',exact:true});
     await switcher.click();
     await expect(page.getByRole('menu')).toBeVisible();
     await page.keyboard.press('Escape');

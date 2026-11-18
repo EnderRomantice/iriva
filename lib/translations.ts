@@ -1,4 +1,6 @@
 export const english: Record<string, string> = {
+  "组织切换与设置": "Switch organization and settings",
+  "组织设置": "Organization settings",
   "18 岁以下": "Under 18",
   "18–24 岁": "18–24",
   "25–34 岁": "25–34",
@@ -163,7 +165,6 @@ export const english: Record<string, string> = {
   "认识与匹配": "People & matching",
   "团队协作": "Team collaboration",
   "青鸟团队": "iriva team",
-  "一起照顾每一个小组": "Care for every group together",
   "设置": "Settings",
   "手动添加 Host": "Add a host manually",
   "Host 姓名": "Host name",

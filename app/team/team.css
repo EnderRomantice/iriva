@@ -106,3 +106,6 @@
 @media (prefers-reduced-motion: reduce) {
   .t-dropdown { transition: none !important; }
 }
+
+.team-organization-divider{height:1px;background:var(--line);margin:6px 2px}
+.team-organization-menu .team-organization-settings{justify-content:flex-start;font-size:13px}
