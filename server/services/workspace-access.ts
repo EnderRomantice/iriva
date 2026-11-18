@@ -1,4 +1,5 @@
 import type {DatabaseRepository} from '../repositories/database-repository';
+import {householdAvatarUrl} from '../../domain/household-avatar';
 import {DomainError} from '../../domain/commands';
 import {defaultOrganizationId} from '../../domain/workspace';
 import {isTeamRole,type WorkspaceAccess,type WorkspaceOrganization} from '../../domain/workspace-access';
@@ -10,15 +11,16 @@ export async function workspaceOrganizations(repo:DatabaseRepository,user:User):
  const teams=user.authMethod==='password'?await teamOrganizations(repo,user.userId):[];
  // A Host enters the household they maintain. Use the same membership ordering
  // as workspaceMembership so the switcher label always matches the loaded space.
- const hosts:WorkspaceOrganization[]=await repo.db.prepare(`SELECT o.id,COALESCE((
- SELECT h.name FROM memberships m JOIN households h ON h.id=m.household_id JOIN organizations ho ON ho.id=h.organization_id
+ const rows=await repo.db.prepare(`SELECT o.id,COALESCE(h.name,o.name) AS name,'host' AS role,av.updated_at AS avatar_updated FROM organizations o LEFT JOIN households h ON h.id=(
+ SELECT h.id FROM memberships m JOIN households h ON h.id=m.household_id JOIN organizations ho ON ho.id=h.organization_id
  WHERE m.user_id=? AND m.role='host' AND (ho.id=o.id OR ho.parent_id=o.id) ORDER BY m.created_at,m.id LIMIT 1
- ),o.name) AS name,'host' AS role FROM organizations o WHERE o.kind='platform' AND (
+ ) LEFT JOIN household_avatars av ON av.household_id=h.id WHERE o.kind='platform' AND (
  EXISTS(SELECT 1 FROM organization_hosts h WHERE h.organization_id=o.id AND h.email=?) OR
  EXISTS(SELECT 1 FROM memberships m JOIN households h ON h.id=m.household_id JOIN organizations ho ON ho.id=h.organization_id WHERE m.user_id=? AND m.role='host' AND (ho.id=o.id OR ho.parent_id=o.id)) OR
  EXISTS(SELECT 1 FROM organization_memberships m WHERE m.user_id=? AND m.role='host' AND (m.organization_id=o.id OR m.organization_id IN (SELECT id FROM organizations WHERE parent_id=o.id))) OR
  EXISTS(SELECT 1 FROM host_grants g WHERE g.platform_id=o.id AND g.email=?)
  ) ORDER BY o.name,o.id`).all(user.userId,user.email.toLowerCase(),user.userId,user.userId,user.email.toLowerCase());
+ const hosts:WorkspaceOrganization[]=rows.map(row=>({id:String(row.id),name:String(row.name),role:'host',avatar:householdAvatarUrl(row.avatar_updated,String(row.id))}));
  const options=new Map<string,WorkspaceOrganization>();for(const org of [...hosts,...teams])options.set(org.id,org);
  return [...options.values()].sort((a,b)=>a.name.localeCompare(b.name)||a.id.localeCompare(b.id));
 }

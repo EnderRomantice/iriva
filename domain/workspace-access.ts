@@ -20,7 +20,7 @@ export function workspaceHomeHref(role:Role,organizationId?:string) {
 
 import type {AccessRole} from './models';
 export type WorkspaceRole = AccessRole | 'host' | 'learner';
-export type WorkspaceOrganization = {id:string;name:string;role:WorkspaceRole};
+export type WorkspaceOrganization = {id:string;name:string;role:WorkspaceRole;avatar?:string|null};
 export type WorkspaceAccess = {organization:WorkspaceOrganization;organizations:WorkspaceOrganization[];canSwitch:boolean};
 export const ORGANIZATION_COOKIE='iriva_organization';
 export const ORGANIZATION_HEADER='x-iriva-organization';

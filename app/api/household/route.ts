@@ -30,18 +30,19 @@ export async function GET() {
       const application = await d.prepare('SELECT name,status,household FROM member_applications WHERE user_id=?').get(u.userId);
       return reply({ user: { name: (application as Row | undefined)?.name || u.displayName }, household: null, application: application || null });
     }
-    const h = await d.prepare('SELECT h.id,h.name,h.theme AS topic,h.week,h.duration,h.code,a.updated_at AS avatar_updated FROM households h LEFT JOIN household_avatars a ON a.household_id=h.id WHERE h.id=?').get(m.household) as Row | undefined;
+    const h = await d.prepare('SELECT h.id,h.name,h.theme AS topic,h.week,h.duration,h.capacity,h.code,a.updated_at AS avatar_updated FROM households h LEFT JOIN household_avatars a ON a.household_id=h.id WHERE h.id=?').get(m.household) as Row | undefined;
     if (!h) return reply({ error: '暂时找不到你的 Household。' }, 404);
     const [people, msgs, events] = await Promise.all([
-      d.prepare("SELECT COALESCE(NULLIF(m.display_name,''),u.name) AS name,m.role,m.user_id AS \"user\",COALESCE(NULLIF(m.timezone,''),NULLIF(a.timezone,''),CASE WHEN m.role='learner' THEN '+08:00' ELSE '' END) AS timezone,av.updated_at AS avatar_updated FROM memberships m JOIN users u ON u.id=m.user_id LEFT JOIN member_applications a ON a.user_id=m.user_id LEFT JOIN member_avatars av ON av.user_id=m.user_id WHERE m.household_id=? ORDER BY m.role DESC, m.created_at ASC").all(h.id),
+      d.prepare("SELECT COALESCE(NULLIF(m.display_name,''),u.name) AS name,m.role,m.user_id AS \"user\",COALESCE(NULLIF(m.timezone,''),NULLIF(a.timezone,''),'') AS timezone,a.language,av.updated_at AS avatar_updated FROM memberships m JOIN users u ON u.id=m.user_id LEFT JOIN member_applications a ON a.user_id=m.user_id LEFT JOIN member_avatars av ON av.user_id=m.user_id WHERE m.household_id=? ORDER BY m.role DESC, m.created_at ASC").all(h.id),
       d.prepare('SELECT id,author_id AS author,name,body,created_at AS created FROM household_messages WHERE household_id=? ORDER BY created_at DESC LIMIT 100').all(h.id),
       d.prepare(`SELECT ${sessionColumns()} FROM sessions s WHERE ${visibleSession()} ORDER BY s.starts_at ASC LIMIT 100`).all(...visibilityArgs(m.household, m.role, u.userId)),
     ]);
     const { code, avatar_updated, ...household } = h;
     const recent = (msgs as Row[]).reverse(), reactions = await reactionsFor(d, String(h.id), recent.map(x => String(x.id)));
     const messages = recent.map(x => ({ ...x, reactions: reactions.get(String(x.id)) ?? [] }));
+    const languages=[...new Set((people as Row[]).filter(p=>p.role==='learner'&&p.language).map(p=>String(p.language)))];
     const members: Row[] = (people as Row[]).map(({ avatar_updated: updated, ...p }) => ({ ...p, avatar: memberAvatarUrl(p.user, updated) }));
-    return reply({ user: { name: m.name, role: m.role, id: u.userId, avatar: members.find(p => p.user === u.userId)?.avatar ?? null }, household: { ...household, avatar: householdAvatarUrl(avatar_updated)?householdAvatarUrl(avatar_updated)+'&org='+encodeURIComponent((await currentWorkspace(u))!.organization.id):null, week: Number(h.week), duration: Number(h.duration), ...(m.role === 'host' ? { code } : {}) }, people: members, messages, sessions: events });
+    return reply({ user: { name: m.name, role: m.role, id: u.userId, avatar: members.find(p => p.user === u.userId)?.avatar ?? null }, household: { ...household, avatar: householdAvatarUrl(avatar_updated,(await currentWorkspace(u))!.organization.id), languages, capacity: Number(h.capacity), week: Number(h.week), duration: Number(h.duration), ...(m.role === 'host' ? { code } : {}) }, people: members, messages, sessions: events });
   } catch (e) { if(e instanceof DomainError)return Response.json({error:e.message},{status:e.status});console.error(e); return reply({ error: '暂时无法读取你的 Household，请稍后重试。' }, 503); }
 }
 
@@ -58,7 +59,7 @@ export async function POST(req: Request) {
       const name = text(b, 'name', 50); if (!name) return reply({ error: '请填写你的显示名称。' }, 400);
       const ctx=await currentTeamContext();if(!ctx)return reply({error:'Household 由青鸟团队安排。'},403);
       const title = text(b, 'title', 70); if (!title) return reply({ error: '请为 Household 命名。' }, 400);
-      return await auditedOperation(await workspaceRepository(),ctx,'household.create',title,async current=>{if(!canManage(current.organization.role))return reply({error:'只有管理员可以创建 Household。'},403);await createHousehold(title,u.userId,'A meal that tastes like home',[{userId:u.userId,role:'host',name}],current.organization.id);return reply({ok:true});});
+      return await auditedOperation(await workspaceRepository(),ctx,'household.create',title,async current=>{if(!canManage(current.organization.role))return reply({error:'只有管理员可以创建 Household。'},403);await createHousehold(title,u.userId,'',[{userId:u.userId,role:'host',name}],current.organization.id);return reply({ok:true});});
     }
     if (!m) return reply({ error: '请先加入 Household。' }, 403);
     if (action === 'timezone') {

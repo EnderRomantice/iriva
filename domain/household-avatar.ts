@@ -17,5 +17,5 @@ export function parseAvatar(value: unknown): { type: string; bytes: Buffer } | n
 }
 
 /** Versioned URLs so avatars can be cached privately and refresh after a change. */
-export const householdAvatarUrl = (updated: unknown) => updated ? `/api/household/avatar?v=${Date.parse(String(updated))}` : null;
+export const householdAvatarUrl = (updated: unknown, organizationId?: string) => updated ? `/api/household/avatar?v=${Date.parse(String(updated))}${organizationId ? `&org=${encodeURIComponent(organizationId)}` : ''}` : null;
 export const memberAvatarUrl = (userId: unknown, updated: unknown) => updated ? `/api/profile/avatar?u=${encodeURIComponent(String(userId))}&v=${Date.parse(String(updated))}` : null;

@@ -4,13 +4,7 @@ import {Bell,BookOpen,CalendarDays,Check,Home,MessageCircle} from 'lucide-react'
 import WorkspaceSidebar from '../../components/workspace/sidebar';
 import Bluebird from './bluebird';
 
-/** What the learner sidebar last showed. Kept in memory across client-side navigation
- *  (学习空间 ⇄ 个人信息) so the skeleton and the other page draw the same sidebar instead of
- *  reshuffling while data loads. A full page load starts empty. */
 export type LearnSidebarState={title:string;subtitle:string;avatar:string|null;household:boolean;host:boolean;badge:number};
-let last:LearnSidebarState|null=null;
-export const rememberLearnSidebar=(s:LearnSidebarState)=>{last=s};
-export const lastLearnSidebar=()=>last;
 
 /** The learner sidebar shared by /learn, /about and their loading skeletons. */
 export default function LearnSidebar({state,active,onSelect,teamAccess=false,identity,organizationId}:{state:LearnSidebarState;active:string;onSelect:(id:string)=>void;teamAccess?:boolean;identity?:ReactNode;organizationId?:string}){
