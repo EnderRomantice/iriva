@@ -47,8 +47,7 @@ export default function AboutProfile({access,avatar=null,email,teamAccess,role,h
             </>}
           </section>
           {hasApplication&&<section className="p-card"><h2>联系方式</h2><p>团队跟进安排时使用，不会展示给其他成员。</p>
-            <label>希望团队怎样联系你<select value={f.contact_preference} onChange={e=>edit('contact_preference',e.target.value)}><option value="email">登录邮箱</option><option value="wechat">微信</option><option value="other">其他方式</option></select></label>
-            {f.contact_preference!=='email'&&<label>{f.contact_preference==='wechat'?'微信号':'联系方式'}<input required maxLength={200} value={f.contact} onChange={e=>edit('contact',e.target.value)}/></label>}
+            <label>微信号（必填）<input required maxLength={200} value={f.contact_preference==='wechat'?f.contact:''} onChange={e=>{setF(p=>({...p,contact_preference:'wechat',contact:e.target.value}));setSaved(false)}} aria-describedby="profile-wechat-help"/><small id="profile-wechat-help">方便客服人员添加，确保服务质量。</small></label>
           </section>}
           {error&&<div className="p-error" role="alert">{error}</div>}
           {saved&&<div className="p-notice" role="status"><Check size={15}/>已保存。</div>}
