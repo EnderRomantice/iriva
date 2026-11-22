@@ -61,8 +61,8 @@ export async function POST(req: Request) {
   try {
     const b = await req.json() as Row, action = text(b, 'action', 20), d = await pilotDb();
     const m = await currentMember(u.userId);
-    // 邀请码通过 /api/apply/join 使用，必须先提交加入资料。
-    if (action === 'join') return reply({ error: '请先提交加入资料，再在完成页填写邀请码。' }, 400);
+    // 学员由团队分配 Host 和小组，暂不支持邀请码。
+    if (action === 'join') return reply({ error: '暂不支持邀请码加入，请等待团队分配 Host 和小组。' }, 403);
     if (action === 'create') {
       if (m) return reply({ error: '你已经在一个 Household 里了。' }, 409);
       const name = text(b, 'name', 50); if (!name) return reply({ error: '请填写你的显示名称。' }, 400);

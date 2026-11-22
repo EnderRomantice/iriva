@@ -27,8 +27,8 @@ export async function PATCH(req: Request) {
       if (!location) return reply({ error: '请填写所在国家或地区。' }, 400);
       if (!['under18', '18-24', '25-34', '35-44', '45-54', '55plus', 'private'].includes(ageBand) || !['school', 'university', 'working', 'entrepreneur', 'other', 'private'].includes(lifeStage)) return reply({ error: '请选择年龄段与学习或工作阶段。' }, 400);
       if (mbti && !/^[EI][NS][TF][JP]$/.test(mbti)) return reply({ error: '请选择有效的 MBTI，或留空。' }, 400);
-      if (!['email', 'wechat', 'other'].includes(pref) || (pref !== 'email' && !contact)) return reply({ error: '请填写首选联系方式。' }, 400);
-      fields = [location, ageBand, lifeStage, mbti, pref, pref === 'email' ? '' : contact];
+      if (pref !== 'wechat' || !contact) return reply({ error: '请填写微信号，方便客服人员添加，确保服务质量。' }, 400);
+      fields = [location, ageBand, lifeStage, mbti, pref, contact];
     }
     await pilotTransaction(async () => {
       if (app) await d.prepare('UPDATE member_applications SET name=?,location=?,age_band=?,life_stage=?,mbti=?,contact_preference=?,contact=?,updated=?,revision=revision+1 WHERE user_id=?').run(name, ...fields, new Date().toISOString(), u.userId);
