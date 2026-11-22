@@ -10,6 +10,8 @@ const repo=enabled?new PostgresRepository(process.env.DATABASE_URL!):undefined;
 after(async()=>{await repo?.db.close();});
 test('SQL binding preserves literals and scopes table references',()=>{
   assert.equal(postgresQuery("SELECT '?' AS sample FROM messages WHERE body=? AND id=?"),"SELECT '?' AS sample FROM iriva.messages WHERE body=$1 AND id=$2");
+  assert.equal(postgresQuery('SELECT status FROM pilot_payments WHERE user_id=?'), 'SELECT status FROM iriva.pilot_payments WHERE user_id=$1');
+  assert.equal(postgresQuery('INSERT INTO pilot_payments (household,user_id,status) VALUES (?,?,?)'), 'INSERT INTO iriva.pilot_payments (household,user_id,status) VALUES ($1,$2,$3)');
 });
 test('PostgreSQL runtime role cannot alter schema or read migration metadata',{skip:!enabled},async()=>{
   await assert.rejects(repo!.sql`SELECT * FROM iriva._imports`,{code:'42501'});
