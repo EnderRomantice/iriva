@@ -1,3 +1,4 @@
+import {paidApplicationSql,hasApplicationPayment,syncApplicationPayment} from '../../../server/services/application-payments';
 import {workspaceOrganizations} from '../../../server/services/workspace-access';
 import {randomUUID} from 'node:crypto';
 import { auditOperation, auditedOperation, canManage, saveOrganizationMember, removeOrganizationMember } from '../../../server/services/organization-access';
@@ -20,7 +21,7 @@ export async function GET() {
     const db = await pilotDb();
     const organizations=await workspaceOrganizations(await workspaceRepository(),u);
     const [applications, households, tasks, staff, placements, pairs, feedback, hosts, payments] = await Promise.all([
-      role==='admin'?db.prepare('SELECT * FROM member_applications WHERE organization_id=? ORDER BY created DESC LIMIT 500').all(organizationId):Promise.resolve([]),
+      role==='admin'?db.prepare(`SELECT a.* FROM member_applications a WHERE a.organization_id=? AND (a.household IS NOT NULL OR a.role='host' OR ${paidApplicationSql}) ORDER BY a.created DESC LIMIT 500`).all(organizationId):Promise.resolve([]),
       db.prepare('SELECT id,name,week,theme AS topic,duration FROM households WHERE organization_id=? OR organization_id IN (SELECT id FROM organizations WHERE parent_id=?) ORDER BY name LIMIT 500').all(organizationId,organizationId),
       db.prepare('SELECT * FROM team_tasks WHERE organization_id=? ORDER BY done ASC,created DESC LIMIT 200').all(organizationId),
       role === 'admin' ? db.prepare('SELECT u.id,u.email,u.name,a.role FROM organization_access a JOIN users u ON u.id=a.user_id WHERE a.organization_id=? ORDER BY u.name LIMIT 200').all(organizationId) : Promise.resolve([]),
@@ -51,17 +52,19 @@ export async function POST(req: Request) {
       try { await addPilotHost(await workspaceRepository(), b,organizationId); } catch (e) { return errorResponse(e); }
     } else if (action === 'review') {
       const status = val('status', 20);
-      if (!['new', 'contacted', 'shortlist', 'hold', 'declined', 'interest'].includes(status)) return out({ error: '无效状态。' }, 400);
+      if (!['pending', 'new', 'contacted', 'shortlist', 'hold', 'declined', 'interest'].includes(status)) return out({ error: '无效状态。' }, 400);
       if (!Number.isInteger(b.revision) || (b.revision as number) < 0) return out({ error: '请刷新后读取最新资料。' }, 409);
       const oralLevel = val('oral_level', 20);
       if (oralLevel && !['beginner', 'intermediate', 'advanced'].includes(oralLevel)) return out({ error: '无效的口语确认结果。' }, 400);
+      await db.prepare('UPDATE member_applications SET id=id WHERE id=? AND organization_id=?').run(id,organizationId);
+      if (!await hasApplicationPayment(await workspaceRepository(),id)) return out({ error: '学员需先完成套餐付款，才能进入待匹配队列。' },409);
       const r = await db.prepare('UPDATE member_applications SET status=?,notes=?,oral_level=?,oral_notes=? WHERE id=? AND revision=? AND household IS NULL AND organization_id=?').run(status, val('notes', 3000), oralLevel, val('oral_notes', 1500), id, b.revision, organizationId);
       if (!r.changes) return out({ error: '申请已分组或不存在，不能更改状态。' }, 409);
     } else if (action === 'payment') {
       const status = val('status', 20), household = val('household', 100), user = val('user', 100);
       if (!['unpaid', 'paid', 'refunded'].includes(status)) return out({ error: '无效付款状态。' }, 400);
       if (!await db.prepare('SELECT 1 FROM households WHERE id=? AND (organization_id=? OR organization_id IN (SELECT id FROM organizations WHERE parent_id=?))').get(household, organizationId, organizationId)) return out({ error: 'Household 不存在。' }, 404);
-      if (!await setManualPayment(await workspaceRepository(), household, user, status as 'unpaid' | 'paid' | 'refunded')) return out({ error: '这位学员不在该 Household。' }, 404);
+      if (!await setManualPayment(await workspaceRepository(), household, user, status as 'unpaid' | 'paid' | 'refunded')) return out({ error: '无法手动修改：学员不在此小组，或付款来自报名订单，请通过 Stripe 处理退款。' }, 404);
     } else if (action === 'feedbackReview') {
       const status = val('status', 20);
       if (!['new', 'reviewed'].includes(status)) return out({ error: '无效建议状态。' }, 400);
@@ -96,8 +99,9 @@ export async function POST(req: Request) {
       const ids = Array.isArray(b.ids) ? [...new Set((b.ids as unknown[]).filter((x): x is string => typeof x === 'string'))] : [];
       if (ids.length !== 4 || !name || !hostEmail || !hostName) return out({ error: '选择四位学员，填写 Host 的邮箱和名字，并为 Household 命名。' }, 400);
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(hostEmail)) return out({ error: 'Host 邮箱格式不正确。' }, 400);
-      const candidates = await db.prepare(`SELECT * FROM member_applications WHERE id IN (${ids.map(() => '?').join(',')}) AND role='learner' AND plan='native' AND language='English' AND status='shortlist' AND household IS NULL AND organization_id=?`).all(...ids,organizationId) as Row[];
-      if (candidates.length !== 4) return out({ error: '所有学员必须在候选名单中，且尚未分组。' }, 409);
+      await db.prepare(`UPDATE member_applications SET id=id WHERE id IN (${ids.map(() => '?').join(',')}) AND organization_id=?`).run(...ids,organizationId);
+      const candidates = await db.prepare(`SELECT a.* FROM member_applications a WHERE a.id IN (${ids.map(() => '?').join(',')}) AND role='learner' AND plan='native' AND language='English' AND status='shortlist' AND household IS NULL AND organization_id=? AND ${paidApplicationSql}`).all(...ids,organizationId) as Row[];
+      if (candidates.length !== 4) return out({ error: '所有学员必须已付款、在候选名单中，且尚未分组。' }, 409);
       if (candidates.some(x => String(x.email).toLowerCase() === hostEmail)) return out({ error: 'Host 不能同时是这组的学员。' }, 409);
       if (await db.prepare(`SELECT 1 FROM pilot_hosts WHERE email IN (${candidates.map(() => '?').join(',')})`).get(...candidates.map(x => String(x.email).toLowerCase()))) return out({ error: '候选学员中有已授权的 Host，请重新选择。' }, 409);
       const repo = await workspaceRepository();let hostUser = await userByEmail(repo, hostEmail);
@@ -119,6 +123,7 @@ export async function POST(req: Request) {
         for (const x of candidates) {
           await db.prepare(place).run(x.email, house, 'learner', x.name);
           await db.prepare("UPDATE member_applications SET household=?,status='assigned' WHERE id=?").run(house, x.id);
+          await syncApplicationPayment(await workspaceRepository(),String(x.id));
         }
         await db.prepare('INSERT INTO pilot_hosts (email,name,created) VALUES (?,?,?) ON CONFLICT(email) DO NOTHING').run(hostEmail, hostName, new Date().toISOString());
         await db.prepare('INSERT INTO organization_hosts VALUES (?,?,?,?) ON CONFLICT(organization_id,email) DO UPDATE SET name=excluded.name').run(organizationId,hostEmail,hostName,new Date().toISOString());

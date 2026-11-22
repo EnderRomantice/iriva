@@ -1,3 +1,4 @@
+import {hasApplicationPayment} from './services/application-payments';
 import {ORGANIZATION_COOKIE,ORGANIZATION_HEADER,isTeamRole} from '../domain/workspace-access';
 import {workspaceAccess,workspaceMembership} from './services/workspace-access';
 import { cookies, headers } from 'next/headers';
@@ -23,7 +24,7 @@ export async function pilotTransaction<T>(work: () => Promise<T>) { return (awai
 export const ownApplicationFields = 'id,name,role,plan,language,goal,level,timezone,availability,availability_slots,interests,contact,contact_preference,age_band,life_stage,location,mbti,partner_preferences,suggestion,status,household,revision,updated';
 export async function ownApplication(userId: string): Promise<(Row & { revision: number; household: string | null; status: string }) | null> {
   const a = await (await pilotDb()).prepare(`SELECT ${ownApplicationFields} FROM member_applications WHERE user_id=?`).get(userId) as Row | undefined;
-  return a ? { ...a, revision: Number(a.revision), household: a.household ? String(a.household) : null, status: String(a.status) } : null;
+  return a ? { ...a, paymentConfirmed: await hasApplicationPayment(await workspaceRepository(),String(a.id)), revision: Number(a.revision), household: a.household ? String(a.household) : null, status: String(a.status) } : null;
 }
 
 async function userForToken(token: string | undefined): Promise<PilotUser | null> {

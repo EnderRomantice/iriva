@@ -13,7 +13,7 @@ import {standardTimezones,timezoneLabel} from '../../lib/timezones';
 
 type Profile={name:string;location:string;age_band:string;life_stage:string;mbti:string;contact_preference:string;contact:string};
 const mbtis=['INTJ','INTP','ENTJ','ENTP','INFJ','INFP','ENFJ','ENFP','ISTJ','ISFJ','ESTJ','ESFJ','ISTP','ISFP','ESTP','ESFP'];
-const statusText:Record<string,string>={new:'资料已收到，团队会跟进',interest:'意向已登记',contacted:'正在了解你的学习需要',shortlist:'正在为你安排伙伴',hold:'正在协调后续安排',declined:'本期暂无合适安排',assigned:'已加入小组'};
+const statusText:Record<string,string>={awaiting_payment:'资料已保存，请选择套餐并付款',pending:'已付款，正在等待匹配',new:'资料已收到，团队会跟进',interest:'意向已登记',contacted:'正在了解你的学习需要',shortlist:'正在为你安排伙伴',hold:'正在协调后续安排',declined:'本期暂无合适安排',assigned:'已加入小组'};
 
 export default function AboutProfile({access,avatar=null,email,teamAccess,role,household,profile,hasApplication,status}:{access?:WorkspaceAccess;avatar?:string|null;email:string;teamAccess:boolean;role:string|null;household:{name:string;timezone:string;avatar?:string|null}|null;profile:Profile;hasApplication:boolean;status:string|null}){
   const router=useRouter();const home='/app?org='+encodeURIComponent(access?.organization.id||'');

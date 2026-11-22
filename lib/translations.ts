@@ -61,6 +61,8 @@ export const english: Record<string, string> = {
   "把需要跟进的小事留在这里。": "Keep track of the small things that need follow-up.",
   "授权后，工作人员可以查看申请、分组和处理待办。请只邀请可信任的同事。": "Authorized staff can review applications, create groups, and manage tasks. Invite trusted colleagues only.",
   "待初次了解": "Awaiting first contact",
+  "待匹配队列": "Matching queue",
+  "已付款 · 待匹配": "Paid · awaiting match",
   "等待合适伙伴": "Waiting for suitable partners",
   "已找到 Household": "Household found",
   "搜索申请": "Search applications",

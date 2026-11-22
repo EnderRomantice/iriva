@@ -1,3 +1,4 @@
+import { hasApplicationPayment } from '../../../server/services/application-payments';
 import { pilotHost } from '../../../server/services/pilot-hosts';
 import { workspaceRepository } from '../../../server/container';
 import { randomUUID } from 'node:crypto';
@@ -34,7 +35,7 @@ async function save(req: Request, editing: boolean) {
     if (ageBand === 'under18' && b.guardian_consent !== true) return out({ error: '未成年资料需由监护人填写并确认。' }, 400);
     if (contactPreference !== 'wechat' || !val('contact', 200)) return out({ error: '请填写微信号，方便客服人员添加，确保服务质量。' }, 400);
     if (val('invite_code', 100)) return out({ error: '暂不支持邀请码加入，请等待团队分配 Host 和小组。' }, 403);
-    const slots = JSON.stringify(b.availability_slots), availability = availabilityText(b.availability_slots, val('availability_note', 600)), now = new Date().toISOString(), status = plan === 'native' && language === 'English' ? 'new' : 'interest', db = await pilotDb();
+    const slots = JSON.stringify(b.availability_slots), availability = availabilityText(b.availability_slots, val('availability_note', 600)), now = new Date().toISOString(), status = 'awaiting_payment', db = await pilotDb();
     const existing = await db.prepare('SELECT id,household,revision,plan,role,language FROM member_applications WHERE user_id=?').get(u.userId) as Row | undefined;
     if (editing) {
       if (!existing) return out({ error: '还没有提交过资料。' }, 404);
@@ -43,13 +44,14 @@ async function save(req: Request, editing: boolean) {
       const revision = Number(b.revision);
       if (!Number.isInteger(revision) || revision !== Number(existing.revision)) return out({ error: '资料已更新，请重新打开页面再修改。' }, 409);
       const result = await pilotTransaction(async () => {
-        const nextStatus = status;
+        await db.prepare('UPDATE member_applications SET id=id WHERE user_id=?').run(u.userId);
+        const nextStatus = await hasApplicationPayment(await workspaceRepository(),String(existing.id)) ? 'pending' : status;
         const r = await db.prepare("UPDATE member_applications SET name=?,goal=?,level=?,timezone=?,availability=?,interests=?,contact=?,age_band=?,life_stage=?,location=?,mbti=?,partner_preferences=?,suggestion=?,availability_slots=?,contact_preference=?,updated=?,revision=revision+1,status=?,oral_level='',household=? WHERE user_id=? AND revision=? AND household IS NULL").run(name, goal, level, timezone, availability, val('interests', 1000), val('contact', 200), ageBand, lifeStage, location, mbti, val('partner_preferences', 800), val('suggestion', 1000), slots, contactPreference, now, nextStatus, null, u.userId, revision);
         if (!r.changes) throw new Conflict();
         return { status: nextStatus, household: null };
       }).catch(e => { if (e instanceof Conflict) return { error: '资料或分组已变化，请刷新后查看。', status: 409 }; throw e; });
       if ('error' in result) return out({ error: result.error }, result.status);
-      return out({ ok: true, revision: revision + 1, status: result.status, household: result.household });
+      return out({ ok: true, revision: revision + 1, status: result.status, paymentConfirmed: result.status === 'pending', household: result.household });
     }
     if (existing) return out({ error: '你已提交过资料，请刷新后查看或补充。' }, 409);
     const result = await pilotTransaction(async () => {
@@ -57,7 +59,7 @@ async function save(req: Request, editing: boolean) {
       await db.prepare('INSERT INTO member_applications (id,user_id,email,name,role,language,goal,level,timezone,availability,interests,contact,plan,status,notes,created,age_band,life_stage,location,mbti,partner_preferences,suggestion,availability_slots,contact_preference,updated,household) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(randomUUID(), u.userId, u.email.toLowerCase(), name, role, language, goal, level, timezone, availability, val('interests', 1000), val('contact', 200), plan, nextStatus, '', now, ageBand, lifeStage, location, mbti, val('partner_preferences', 800), val('suggestion', 1000), slots, contactPreference, now, null);
       return { status: nextStatus, household: null };
     });
-    return out({ ok: true, revision: 0, status: result.status, household: result.household });
+    return out({ ok: true, revision: 0, status: result.status, paymentConfirmed: result.status === 'pending', household: result.household });
   } catch (e) { console.error(e); return out({ error: '资料未能保存，请稍后重试。' }, 503); }
 }
 export async function POST(req: Request) { return save(req, false); }

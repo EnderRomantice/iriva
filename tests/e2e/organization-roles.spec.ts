@@ -1,3 +1,4 @@
+import {seedPaidApplication} from './payment-helpers';
 import {test,expect} from '@playwright/test';
 import {createHash,randomBytes,randomUUID} from 'node:crypto';
 import postgres from 'postgres';
@@ -23,6 +24,7 @@ test('one space: Host manages two organizations, tab writes remain isolated, stu
     const user=randomUUID(),id=randomUUID(),now=new Date().toISOString();ids.push(id);students.push(user);
     await db`INSERT INTO iriva.users (id,name,email,timezone,avatar,version,created_at,updated_at) VALUES (${user},${`Learner ${index}-${i}`},${user+'@example.test'},'UTC','',1,${now},${now})`;
     await db`INSERT INTO iriva.member_applications (id,user_id,email,name,role,language,goal,level,timezone,availability,interests,contact,status,created,organization_id) VALUES (${id},${user},${user+'@example.test'},${`Learner ${index}-${i}`},'learner','English','Speaking','intermediate','+08:00','Saturday','Books','','shortlist',${now},${org})`;
+      await seedPaidApplication(db,id);
    }
    const matched=await admin.request.post(origin+'/api/team',{headers:headers(org),data:{action:'match',ids,hostEmail:email,hostName:'Multi Host',name:`Host household ${index+1}`,revisions:ids.map(id=>({id,revision:0}))}});
    expect(matched.status(),await matched.text()).toBe(200);groups.push((await matched.json()).household);

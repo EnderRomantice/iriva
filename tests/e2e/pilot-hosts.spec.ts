@@ -1,3 +1,4 @@
+import {seedPaidApplication} from './payment-helpers';
 import { test, expect } from '@playwright/test';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import postgres from 'postgres';
@@ -42,6 +43,7 @@ test('team adds Host, first email verification enters Host waiting page, matchin
       const id = randomUUID(), user = randomUUID(), learnerEmail = `${user}@example.test`, now = new Date().toISOString(); ids.push(id);
       await db`INSERT INTO iriva.users (id,name,email,timezone,avatar,version,created_at,updated_at) VALUES (${user},${`Learner ${i}`},${learnerEmail},'UTC','',1,${now},${now})`;
       await db`INSERT INTO iriva.member_applications (id,user_id,email,name,role,language,goal,level,timezone,availability,interests,contact,status,created) VALUES (${id},${user},${learnerEmail},${`Learner ${i}`},'learner','English','Speaking','intermediate','+08:00','Saturday','Books','','shortlist',${now})`;
+      await seedPaidApplication(db,id);
     }
     const matched = await team.request.post(`${origin}/api/team`, { headers, data: { action: 'match', ids, hostEmail: email, hostName: 'Emma', name: 'Host flow Household', revisions: ids.map(id => ({ id, revision: 0 })) } });
     expect(matched.status(), await matched.text()).toBe(200);
