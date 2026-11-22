@@ -14,7 +14,7 @@ export async function POST(req: Request) {
   try { event = JSON.parse(payload); } catch { return Response.json({ error: 'invalid payload' }, { status: 400 }); }
   try {
     const result = await handleStripeEvent(await workspaceRepository(), event);
-    if (result === 'unmatched') console.warn(`Stripe ${event.type} ${event.id} did not match a learner payment`);
+    if (result === 'unmatched' || result === 'payment-mismatch') console.warn(`Stripe ${event.type} ${event.id} did not match a learner payment`);
     return Response.json({ received: true, result });
   } catch (e) {
     console.error(e);
