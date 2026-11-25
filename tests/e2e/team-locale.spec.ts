@@ -6,7 +6,7 @@ import { seedId } from '../../server/db/seed';
 test('home language persists through sign-in and team tabs; switching preserves edits', async ({ browser }) => {
   if (process.env.PG_LOCAL_TEST !== '1' || !process.env.DATABASE_URL) throw new Error('Use the disposable PostgreSQL harness.');
   const db = postgres(process.env.DATABASE_URL, { max: 1, ssl: false });
-  const context = await browser.newContext();
+  const context = await browser.newContext({locale:'zh-CN'});
   const origin = 'http://127.0.0.1:3117';
   const page = await context.newPage();
   const errors: string[] = [];

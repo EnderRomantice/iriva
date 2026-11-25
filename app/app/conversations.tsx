@@ -1,4 +1,6 @@
 'use client';
+import {translate,type Locale} from '../../lib/locale';
+import {useLocale} from '../../components/locale-provider';
 import {workspaceFetch as fetch} from '../../lib/workspace-fetch';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent } from 'react';
 import { ArrowDown, ArrowUp, Bold, Code, Hash, Italic, Leaf, Link2, List, LockKeyhole, MessageSquare, Search, SmilePlus, Smile, Strikethrough, Users, X } from 'lucide-react';
@@ -15,47 +17,47 @@ type Person={user:string;name:string;role:string;timezone:string;avatar?:string|
 type Props={household:{id:string;name:string;topic:string;week:number};user:{id?:string;name:string};people:Person[];messages:GroupMessage[];onSent:()=>void};
 type Picker={kind:'compose'}|{kind:'react';message:string;anchor:HTMLElement};
 const LIMIT=2000;
-const day=(date:string)=>beijingTime(date,{year:'numeric',month:'long',day:'numeric'});
-const clock=(date:string)=>beijingTime(date,{hour:'2-digit',minute:'2-digit'});
+const day=(date:string,locale:Locale)=>beijingTime(date,{year:'numeric',month:'long',day:'numeric'},locale);
+const clock=(date:string,locale:Locale)=>beijingTime(date,{hour:'2-digit',minute:'2-digit'},locale);
 
 /** "你、Alex 和 Sophie" — Slack-style list of who reacted. */
-function whoReacted(users:string[],me:string|undefined,names:Map<string,string>){
- const list=[...users].sort((a,b)=>a===me?-1:b===me?1:0).map(u=>u===me?'你':names.get(u)||'一位成员');
- if(list.length>6)return `${list.slice(0,5).join('、')} 等 ${list.length} 人`;
- return list.length<2?list[0]:`${list.slice(0,-1).join('、')}和${list.at(-1)}`;
+function whoReacted(users:string[],me:string|undefined,names:Map<string,string>,locale:Locale){
+ const list=[...users].sort((a,b)=>a===me?-1:b===me?1:0).map(u=>u===me?translate(locale,'你'):names.get(u)||translate(locale,'一位成员'));
+ if(list.length>6)return translate(locale,'{names} 等 {count} 人',{names:list.slice(0,5).join(locale==='en'?', ':'、'),count:list.length});
+ return list.length<2?list[0]:new Intl.ListFormat(locale==='en'?'en':'zh',{style:'long',type:'conjunction'}).format(list);
 }
 const label=(emoji:string)=>{const info=emojiInfo(emoji);return info?.codes[0]?`:${info.codes[0]}:`:info?.zh||emoji;};
 
 type RowProps={m:GroupMessage;compact:boolean;newDay:boolean;host:boolean;tone:number;avatar?:string|null;search:string;me?:string;names:Map<string,string>;reactions:MessageReaction[];quick:string[];picking:boolean;touched:boolean;onToggle:(m:string,emoji:string)=>void;onPick:(m:string,anchor:HTMLElement)=>void;onTouch:(m:string)=>void};
 
 /** One message: Markdown body, hover action bar, reaction pills. */
-const MessageRow=memo(function MessageRow({m,compact,newDay,host,tone,avatar,search,me,names,reactions,quick,picking,touched,onToggle,onPick,onTouch}:RowProps){
+const MessageRow=memo(function MessageRow({m,compact,newDay,host,tone,avatar,search,me,names,reactions,quick,picking,touched,onToggle,onPick,onTouch}:RowProps){const {t:tr,locale}=useLocale();
  const touch=(e:MouseEvent)=>{if(window.matchMedia('(hover: none)').matches&&!(e.target as HTMLElement).closest('a,button'))onTouch(m.id);};
  return <div>
-  {newDay&&<div className="chat-date"><span>{day(m.created)}</span></div>}
+  {newDay&&<div className="chat-date"><span>{day(m.created,locale)}</span></div>}
   <article className={`chat-message${compact?' continued':''}${picking?' is-picking':''}${touched?' is-touched':''}`} onClick={touch}>
-   {compact?<div className="chat-message-avatar" aria-hidden="true"><small>{clock(m.created)}</small></div>:<Avatar name={m.name} src={avatar} className={`chat-message-avatar chat-tone-${tone}`} size={35}/>}
+   {compact?<div className="chat-message-avatar" aria-hidden="true"><small>{clock(m.created,locale)}</small></div>:<Avatar name={m.name} src={avatar} className={`chat-message-avatar chat-tone-${tone}`} size={35}/>}
    <div className="chat-message-content">
-    {!compact&&<div className="chat-message-meta"><b>{m.name}</b>{host&&<em>Host</em>}<time dateTime={m.created} title={`${day(m.created)} · 北京时间`}>{clock(m.created)}</time></div>}
+    {!compact&&<div className="chat-message-meta"><b>{m.name}</b>{host&&<em>Host</em>}<time dateTime={m.created} title={tr("{date} · 北京时间",{date:day(m.created,locale)})}>{clock(m.created,locale)}</time></div>}
     <MessageMarkdown text={m.body} highlight={search}/>
     {reactions.length>0&&<div className="chat-reactions">
-     {reactions.map(r=>{const on=!!me&&r.users.includes(me),who=whoReacted(r.users,me,names);return <button type="button" key={r.emoji} className={`chat-reaction${on?' is-mine':''}`} aria-pressed={on} aria-label={`${r.emoji} ${r.users.length}，${who} 回应了。${on?'点击取消你的回应':'点击一起回应'}`} onClick={()=>onToggle(m.id,r.emoji)}>
+     {reactions.map(r=>{const on=!!me&&r.users.includes(me),who=whoReacted(r.users,me,names,locale);return <button type="button" key={r.emoji} className={`chat-reaction${on?' is-mine':''}`} aria-pressed={on} aria-label={tr("{emoji} {count}，{names} 回应了。{action}",{emoji:r.emoji,count:r.users.length,names:who,action:on?tr("点击取消你的回应"):tr("点击一起回应")})} onClick={()=>onToggle(m.id,r.emoji)}>
       <span className="chat-reaction-emoji">{r.emoji}</span><span className="chat-reaction-count">{r.users.length}</span>
-      <span className="chat-tip" role="tooltip"><span className="chat-tip-emoji">{r.emoji}</span><span>{who} 回应了 <b>{label(r.emoji)}</b></span></span>
+      <span className="chat-tip" role="tooltip"><span className="chat-tip-emoji">{r.emoji}</span><span>{who} {tr(" 回应了 ")}<b>{label(r.emoji)}</b></span></span>
      </button>;})}
-     <button type="button" className="chat-reaction chat-reaction-add" aria-label="添加表情回应" title="添加表情回应" onClick={e=>onPick(m.id,e.currentTarget)}><SmilePlus size={15}/></button>
+     <button type="button" className="chat-reaction chat-reaction-add" aria-label={tr("添加表情回应")} title={tr("添加表情回应")} onClick={e=>onPick(m.id,e.currentTarget)}><SmilePlus size={15}/></button>
     </div>}
    </div>
-   <div className="chat-actions" role="toolbar" aria-label="消息操作">
-    {quick.map(emoji=><button type="button" key={emoji} aria-label={`用 ${emoji} 回应`} title={`用 ${label(emoji)} 回应`} onClick={()=>onToggle(m.id,emoji)}>{emoji}</button>)}
+   <div className="chat-actions" role="toolbar" aria-label={tr("消息操作")}>
+    {quick.map(emoji=><button type="button" key={emoji} aria-label={tr("用 {emoji} 回应",{emoji})} title={tr("用 {emoji} 回应",{emoji:label(emoji)})} onClick={()=>onToggle(m.id,emoji)}>{emoji}</button>)}
     <span aria-hidden="true"/>
-    <button type="button" aria-label="添加表情回应" title="添加表情回应" aria-expanded={picking} onClick={e=>onPick(m.id,e.currentTarget)}><SmilePlus size={17}/></button>
+    <button type="button" aria-label={tr("添加表情回应")} title={tr("添加表情回应")} aria-expanded={picking} onClick={e=>onPick(m.id,e.currentTarget)}><SmilePlus size={17}/></button>
    </div>
   </article>
  </div>;
 });
 
-export default function Conversations({household,user,people,messages,onSent}:Props){
+export default function Conversations({household,user,people,messages,onSent}:Props){const {t:tr,locale}=useLocale();
  const storageKey=`iriva:group-draft:v1:${user.id}:${household.id}`;
  const [draft,setDraft]=useState(''),[ready,setReady]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[storageError,setStorageError]=useState(false),[query,setQuery]=useState(''),[membersOpen,setMembersOpen]=useState(false),[fresh,setFresh]=useState(false),[delivered,setDelivered]=useState<GroupMessage[]>([]);
  const [picker,setPicker]=useState<Picker|null>(null),[local,setLocal]=useState<Record<string,MessageReaction[]>>({}),[touched,setTouched]=useState(''),[recentVersion,setRecentVersion]=useState(0),[reactError,setReactError]=useState('');
@@ -114,56 +116,56 @@ export default function Conversations({household,user,people,messages,onSent}:Pr
   requestAnimationFrame(()=>{el.focus();const [a,b]=select?[start+select[0],start+select[1]]:[start+text.length,start+text.length];el.setSelectionRange(a,b);});
  }
  const wrap=(marker:string,placeholder:string)=>replaceSelection(s=>{const body=s||placeholder;return {text:`${marker}${body}${marker}`,select:[marker.length,marker.length+body.length]};});
- const link=()=>replaceSelection(s=>{const textPart=s||'链接文字',url='https://';return {text:`[${textPart}](${url})`,select:[textPart.length+3,textPart.length+3+url.length]};});
- const list=()=>replaceSelection(s=>{const body=(s||'列表项').split('\n').map(line=>line.startsWith('- ')?line:`- ${line}`).join('\n');return {text:body,select:[0,body.length]};});
+ const link=()=>replaceSelection(s=>{const textPart=s||tr("链接文字"),url='https://';return {text:`[${textPart}](${url})`,select:[textPart.length+3,textPart.length+3+url.length]};});
+ const list=()=>replaceSelection(s=>{const body=(s||tr("列表项")).split('\n').map(line=>line.startsWith('- ')?line:`- ${line}`).join('\n');return {text:body,select:[0,body.length]};});
  function insertEmoji(emoji:string){replaceSelection(()=>({text:emoji}));setPicker(null);}
  function keys(e:ReactKeyboardEvent<HTMLTextAreaElement>){
   const mod=e.metaKey||e.ctrlKey,k=e.key.toLowerCase();
-  if(mod&&!e.shiftKey&&k==='b'){e.preventDefault();wrap('**','粗体');return;}
-  if(mod&&!e.shiftKey&&k==='i'){e.preventDefault();wrap('*','斜体');return;}
-  if(mod&&e.shiftKey&&k==='x'){e.preventDefault();wrap('~~','删除线');return;}
-  if(mod&&e.shiftKey&&k==='c'){e.preventDefault();wrap('`','代码');return;}
+  if(mod&&!e.shiftKey&&k==='b'){e.preventDefault();wrap('**',tr("粗体"));return;}
+  if(mod&&!e.shiftKey&&k==='i'){e.preventDefault();wrap('*',tr("斜体"));return;}
+  if(mod&&e.shiftKey&&k==='x'){e.preventDefault();wrap('~~',tr("删除线"));return;}
+  if(mod&&e.shiftKey&&k==='c'){e.preventDefault();wrap('`',tr("代码"));return;}
   if(mod&&e.shiftKey&&k==='u'){e.preventDefault();link();return;}
   if(e.key==='Enter'&&!e.shiftKey&&!composing.current&&!e.nativeEvent.isComposing&&e.nativeEvent.keyCode!==229){e.preventDefault();void send();}
  }
  function bottom(){const el=scroller.current;if(el)el.scrollTop=el.scrollHeight;nearBottom.current=true;setFresh(false);}
  const remaining=LIMIT-draft.length,canSend=ready&&!busy&&!!draft.trim();
- const tools:[string,string,typeof Bold,()=>void][]=[['粗体','⌘B',Bold,()=>wrap('**','粗体')],['斜体','⌘I',Italic,()=>wrap('*','斜体')],['删除线','⌘⇧X',Strikethrough,()=>wrap('~~','删除线')],['代码','⌘⇧C',Code,()=>wrap('`','代码')],['链接','⌘⇧U',Link2,link],['列表','',List,list]];
+ const tools:[string,string,typeof Bold,()=>void][]=[[tr("粗体"),'⌘B',Bold,()=>wrap('**',tr("粗体"))],[tr("斜体"),'⌘I',Italic,()=>wrap('*',tr("斜体"))],[tr("删除线"),'⌘⇧X',Strikethrough,()=>wrap('~~',tr("删除线"))],[tr("代码"),'⌘⇧C',Code,()=>wrap('`',tr("代码"))],[tr("链接"),'⌘⇧U',Link2,link],[tr("列表"),'',List,list]];
 
- return <section className={`group-chat${membersOpen?' has-members':''}`} aria-label="小组交流">
-  <div className="chat-main"><div className="chat-heading"><div><h1><Hash size={20}/>小组客厅</h1><p>{household.name} · 第 {household.week} 周<span className="chat-private"><LockKeyhole size={11}/> 仅本组成员可见</span></p></div><div className="chat-heading-tools"><label className="chat-search"><Search size={15}/><input type="search" aria-label="搜索小组消息" placeholder="搜索最近 100 条消息" value={query} onChange={e=>setQuery(e.target.value)}/></label><button className="chat-members-toggle" aria-expanded={membersOpen} aria-controls="chat-member-panel" onClick={()=>setMembersOpen(v=>!v)}><span className="chat-mini-avatars">{people.slice(0,3).map((p,i)=><Avatar key={p.user} name={p.name} src={p.avatar} className={`chat-tone-${i%4}`} size={24}/>)}</span><Users size={15}/><span>{people.length}</span><span className="p-sr">小组成员</span></button></div></div>
-   <div className="chat-message-region"><div className="chat-stream" ref={scroller} role="log" aria-label="小组消息" aria-live="polite" aria-relevant="additions" onScroll={()=>{const el=scroller.current;if(el){nearBottom.current=el.scrollHeight-el.scrollTop-el.clientHeight<70;if(nearBottom.current)setFresh(false);}if(picker?.kind==='react')setPicker(null);}}>
-    {!search&&<div className="chat-channel-intro"><span><Hash size={28}/></span><h2>欢迎来到小组客厅</h2><p>分享一件小事，接着上次的话题，或留一个下次想问的问题。</p><div><Leaf size={14}/><b>本周话题</b><span>{household.topic}</span></div></div>}
-    {search&&<p className="chat-search-result">找到 {shown.length} 条消息 · 仅搜索已加载的最近 100 条</p>}
-    {search&&!shown.length&&<div className="chat-empty"><MessageSquare size={24}/><h3>还没有找到这条消息</h3><p>换个词试试，或清除搜索回到对话。</p><button onClick={()=>setQuery('')}>清除搜索</button></div>}
-    {shown.map((m,i)=>{const previous=shown[i-1],newDay=!previous||day(previous.created)!==day(m.created),compact=!search&&!newDay&&previous.author===m.author&&Date.parse(m.created)-Date.parse(previous.created)<300000,person=people.find(p=>p.user===m.author);
+ return <section className={`group-chat${membersOpen?' has-members':''}`} aria-label={tr("小组交流")}>
+  <div className="chat-main"><div className="chat-heading"><div><h1><Hash size={20}/>{tr("小组客厅")}</h1><p>{tr("{name} · 第 {week} 周",{name:household.name,week:household.week})}<span className="chat-private"><LockKeyhole size={11}/> {tr(" 仅本组成员可见")}</span></p></div><div className="chat-heading-tools"><label className="chat-search"><Search size={15}/><input type="search" aria-label={tr("搜索小组消息")} placeholder={tr("搜索最近 100 条消息")} value={query} onChange={e=>setQuery(e.target.value)}/></label><button className="chat-members-toggle" aria-expanded={membersOpen} aria-controls="chat-member-panel" onClick={()=>setMembersOpen(v=>!v)}><span className="chat-mini-avatars">{people.slice(0,3).map((p,i)=><Avatar key={p.user} name={p.name} src={p.avatar} className={`chat-tone-${i%4}`} size={24}/>)}</span><Users size={15}/><span>{people.length}</span><span className="p-sr">{tr("小组成员")}</span></button></div></div>
+   <div className="chat-message-region"><div className="chat-stream" ref={scroller} role="log" aria-label={tr("小组消息")} aria-live="polite" aria-relevant="additions" onScroll={()=>{const el=scroller.current;if(el){nearBottom.current=el.scrollHeight-el.scrollTop-el.clientHeight<70;if(nearBottom.current)setFresh(false);}if(picker?.kind==='react')setPicker(null);}}>
+    {!search&&<div className="chat-channel-intro"><span><Hash size={28}/></span><h2>{tr("欢迎来到小组客厅")}</h2><p>{tr("分享一件小事，接着上次的话题，或留一个下次想问的问题。")}</p><div><Leaf size={14}/><b>{tr("本周话题")}</b><span>{household.topic}</span></div></div>}
+    {search&&<p className="chat-search-result">{tr("找到 {count} 条消息 · 仅搜索已加载的最近 100 条",{count:shown.length})}</p>}
+    {search&&!shown.length&&<div className="chat-empty"><MessageSquare size={24}/><h3>{tr("还没有找到这条消息")}</h3><p>{tr("换个词试试，或清除搜索回到对话。")}</p><button onClick={()=>setQuery('')}>{tr("清除搜索")}</button></div>}
+    {shown.map((m,i)=>{const previous=shown[i-1],newDay=!previous||day(previous.created,locale)!==day(m.created,locale),compact=!search&&!newDay&&previous.author===m.author&&Date.parse(m.created)-Date.parse(previous.created)<300000,person=people.find(p=>p.user===m.author);
      return <MessageRow key={m.id} m={m} compact={compact} newDay={newDay} host={person?.role==='host'} avatar={person?.avatar} tone={Math.max(0,people.findIndex(p=>p.user===m.author))%4} search={search} me={user.id} names={names} reactions={reactionsOf(m)} quick={quick} picking={picker?.kind==='react'&&picker.message===m.id} touched={touched===m.id} onToggle={toggle} onPick={pickFor} onTouch={touch}/>;})}
    </div>
-   {fresh&&!search&&<button className="chat-new-messages" onClick={bottom}><ArrowDown size={14}/> 有新消息 · 回到底部</button>}
-   {reactError&&<p className="chat-toast" role="alert">{reactError}</p>}
+   {fresh&&!search&&<button className="chat-new-messages" onClick={bottom}><ArrowDown size={14}/> {tr(" 有新消息 · 回到底部")}</button>}
+   {reactError&&<p className="chat-toast" role="alert">{tr(reactError)}</p>}
    </div>
    <form className="chat-compose" onSubmit={send}>
     <div className={`chat-editor${busy?' is-busy':''}`} onClick={e=>{if(e.target===e.currentTarget)input.current?.focus();}}>
-     <label className="p-sr" htmlFor="household-message">发消息到小组客厅</label>
-     <textarea id="household-message" ref={input} readOnly={busy||!ready} value={draft} maxLength={LIMIT} rows={1} placeholder="发消息到 #小组客厅" onChange={e=>setDraft(e.target.value)} onCompositionStart={()=>{composing.current=true;}} onCompositionEnd={()=>{composing.current=false;}} onKeyDown={keys}/>
-     {(error||storageError)&&<p className="chat-editor-note" role="alert">{error?`${error} 文字已保留，可以再次发送。`:'本次无法暂存草稿，请保持页面打开。'}</p>}
+     <label className="p-sr" htmlFor="household-message">{tr("发消息到小组客厅")}</label>
+     <textarea id="household-message" ref={input} readOnly={busy||!ready} value={draft} maxLength={LIMIT} rows={1} placeholder={tr("发消息到 #小组客厅")} onChange={e=>setDraft(e.target.value)} onCompositionStart={()=>{composing.current=true;}} onCompositionEnd={()=>{composing.current=false;}} onKeyDown={keys}/>
+     {(error||storageError)&&<p className="chat-editor-note" role="alert">{error?tr("{error} 文字已保留，可以再次发送。",{error:tr(error)}):tr("本次无法暂存草稿，请保持页面打开。")}</p>}
      <div className="chat-compose-tools">
-      <div className="chat-format" role="toolbar" aria-label="文本格式">
+      <div className="chat-format" role="toolbar" aria-label={tr("文本格式")}>
        {tools.map(([name,shortcut,Icon,run])=><button type="button" key={name} aria-label={name} title={shortcut?`${name}（${shortcut}）`:name} onMouseDown={e=>e.preventDefault()} onClick={run}><Icon size={15}/></button>)}
        <span aria-hidden="true"/>
-       <button type="button" ref={emojiButton} aria-label="插入表情" title="插入表情" aria-expanded={picker?.kind==='compose'} onMouseDown={e=>e.preventDefault()} onClick={()=>setPicker(p=>p?.kind==='compose'?null:{kind:'compose'})}><Smile size={16}/></button>
+       <button type="button" ref={emojiButton} aria-label={tr("插入表情")} title={tr("插入表情")} aria-expanded={picker?.kind==='compose'} onMouseDown={e=>e.preventDefault()} onClick={()=>setPicker(p=>p?.kind==='compose'?null:{kind:'compose'})}><Smile size={16}/></button>
       </div>
       <div className="chat-send-group">
        {remaining<=200&&<span className={`chat-count${remaining<0?' is-over':''}`}>{remaining}</span>}
-       {draft&&<span className="chat-hint"><kbd>Shift</kbd>+<kbd>Enter</kbd> 换行</span>}
-       <button className="chat-send" type="submit" disabled={!canSend} aria-label={error?'重试发送消息':'发送消息'} title="发送（Enter）"><ArrowUp size={16} strokeWidth={2.4}/></button>
+       {draft&&<span className="chat-hint"><kbd>Shift</kbd>+<kbd>Enter</kbd> {tr(" 换行")}</span>}
+       <button className="chat-send" type="submit" disabled={!canSend} aria-label={error?tr("重试发送消息"):tr("发送消息")} title={tr("发送（Enter）")}><ArrowUp size={16} strokeWidth={2.4}/></button>
       </div>
      </div>
     </div>
    </form>
   </div>
-  {picker?.kind==='compose'&&<EmojiPicker anchor={emojiButton.current} label="插入表情" onSelect={insertEmoji} onClose={()=>setPicker(null)}/>}
-  {picker?.kind==='react'&&<EmojiPicker anchor={picker.anchor} align="end" label="添加表情回应" onSelect={emoji=>void toggle(picker.message,emoji)} onClose={()=>setPicker(null)}/>}
-  {membersOpen&&<aside id="chat-member-panel" className="chat-members"><div className="chat-member-heading"><h2>小组成员 <span>{people.length}</span></h2><button aria-label="关闭成员列表" onClick={()=>setMembersOpen(false)}><X size={18}/></button></div><p>在这里认识彼此，把交流留在小组里。</p>{people.map((p,i)=><div className="chat-person" key={p.user}><Avatar name={p.name} src={p.avatar} className={`chat-person-avatar chat-tone-${i%4}`} size={34}/><div><b>{p.name}{p.user===user.id?'（你）':''}</b><small>{p.role==='host'?'Host':'学习伙伴'} · {p.timezone?timezoneLabel(p.timezone):'时区待确认'}</small></div></div>)}<div className="chat-member-note"><LockKeyhole size={16}/><p>本页不展示私人联系方式。安排与反馈通过平台处理。</p></div></aside>}
+  {picker?.kind==='compose'&&<EmojiPicker anchor={emojiButton.current} label={tr("插入表情")} onSelect={insertEmoji} onClose={()=>setPicker(null)}/>}
+  {picker?.kind==='react'&&<EmojiPicker anchor={picker.anchor} align="end" label={tr("添加表情回应")} onSelect={emoji=>void toggle(picker.message,emoji)} onClose={()=>setPicker(null)}/>}
+  {membersOpen&&<aside id="chat-member-panel" className="chat-members"><div className="chat-member-heading"><h2>{tr("小组成员 ")}<span>{people.length}</span></h2><button aria-label={tr("关闭成员列表")} onClick={()=>setMembersOpen(false)}><X size={18}/></button></div><p>{tr("在这里认识彼此，把交流留在小组里。")}</p>{people.map((p,i)=><div className="chat-person" key={p.user}><Avatar name={p.name} src={p.avatar} className={`chat-person-avatar chat-tone-${i%4}`} size={34}/><div><b>{p.name}{p.user===user.id?tr("（你）"):''}</b><small>{p.role==='host'?'Host':tr("学习伙伴")} · {p.timezone?timezoneLabel(p.timezone):tr("时区待确认")}</small></div></div>)}<div className="chat-member-note"><LockKeyhole size={16}/><p>{tr("本页不展示私人联系方式。安排与反馈通过平台处理。")}</p></div></aside>}
  </section>;
 }

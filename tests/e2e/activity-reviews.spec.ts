@@ -22,7 +22,7 @@ const team=pages.team;await team.goto('http://127.0.0.1:3117/team');await team.l
 await team.getByLabel('今天我注意到').fill('你主动追问了伙伴，让故事继续了下去。');await team.getByLabel('值得留下的表达',{exact:true}).fill('What led you to that decision?');await team.getByLabel('下次可以试试').fill('分享一个你自己遇到类似情况的例子。');
 await team.screenshot({path:testInfo.outputPath('team-desktop.png'),fullPage:true});
 await team.getByRole('button',{name:'审核并发布',exact:true}).click();await team.getByText('回顾卡已发布，学员将收到站内通知。',{exact:true}).waitFor();
-await learner.getByRole('button',{name:'Refresh Household'}).click();await learner.getByRole('button',{name:'相见通知',exact:true}).click();await learner.getByRole('button',{name:'查看活动回顾'}).click();await learner.getByText('这一次，值得记得。',{exact:true}).waitFor();
+await learner.getByRole('button',{name:'刷新'}).click();await learner.getByRole('button',{name:'相见通知',exact:true}).click();await learner.getByRole('button',{name:'查看活动回顾'}).click();await learner.getByText('这一次，值得记得。',{exact:true}).waitFor();
 await learner.getByLabel('你的感受').selectOption('yes');await learner.getByLabel('你愿意参加下一次活动吗').selectOption('yes');await learner.getByRole('button',{name:'告诉青鸟',exact:true}).click();await learner.getByText('已保存。',{exact:true}).waitFor();
 await learner.screenshot({path:testInfo.outputPath('learner-desktop.png'),fullPage:true});
 await learner.getByRole('button',{name:'AI 准备 · Beta',exact:true}).click();await learner.getByText('你给自己的小目标',{exact:true}).waitFor();await learner.getByText('分享一个你自己遇到类似情况的例子。',{exact:false}).waitFor();

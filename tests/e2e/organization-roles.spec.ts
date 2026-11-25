@@ -46,7 +46,7 @@ test('one space: Host manages two organizations, tab writes remain isolated, stu
   await expect(other.getByRole('button',{name:'组织切换与设置',exact:true})).toContainText('Host household 2');
   // The other tab changed the cookie; the first tab must still write to organization 1.
   await page.getByRole('button',{name:'更新本周话题 ↗',exact:true}).click();
-  await page.getByLabel('Conversation topic').fill('Only organization one');await page.getByRole('button',{name:'Save',exact:true}).click();
+  await page.getByLabel('交流话题').fill('Only organization one');await page.getByRole('button',{name:'保存',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Only organization one',exact:true})).toBeVisible();
   const first=await (await host.request.get(origin+'/api/household',{headers:headers(defaultOrganizationId)})).json();
   const two=await (await host.request.get(origin+'/api/household',{headers:headers(second)})).json();
@@ -58,7 +58,7 @@ test('one space: Host manages two organizations, tab writes remain isolated, stu
   await db`INSERT INTO iriva.memberships (id,household_id,user_id,role,version,created_at,updated_at) VALUES (${randomUUID()},${groups[1]},${seedId(5)},'host',1,${new Date().toISOString()},${new Date().toISOString()})`;
   await db`UPDATE iriva.member_applications SET language='Chinese',timezone='' WHERE user_id=${students[4]}`;
   await db`UPDATE iriva.memberships SET timezone='' WHERE household_id=${groups[1]} AND user_id=${students[4]}`;
-  await other.getByRole('button',{name:'Refresh Household',exact:true}).click();
+  await other.getByRole('button',{name:'刷新',exact:true}).click();
   await expect(other.locator('.p-people .p-section-title')).toContainText('4 / 6 位学员 · 2 位 Host');
   await expect(other.locator('.p-space-head')).toContainText('Chinese');
   await expect(other.locator('.p-members > div').filter({hasText:'Learner 1-0'})).toContainText('时区待确认');

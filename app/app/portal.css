@@ -121,3 +121,10 @@ html:has(.portal){overscroll-behavior-y:none}
 .portal .p-space-topic b{display:block;font-size:16px;font-weight:600;margin-top:2px}
 .portal .p-space-topic .p-outline{margin:0;flex-shrink:0}
 @media(max-width:760px){.portal .p-space-head{gap:14px}.portal .p-space-head .p-space-mark{width:52px;height:52px;font-size:22px}.portal .p-space-head h1{font-size:22px}.portal .p-space-topic{flex-wrap:wrap}}
+
+/* Keep the shared language control and account actions usable at both widths. */
+.p-top .lang-page-nav{display:flex;align-items:center;gap:14px}
+.p-top .lang-trigger{color:inherit}
+.p-top .lang-stage{min-width:0}
+.p-top .lang-options{gap:14px}
+@media(max-width:760px){.p-top>div:has(.lang-nav){max-width:none;flex-shrink:0}.p-top .lang-page-nav{gap:6px}.p-top .lang-page-nav>button:not(.p-bell){display:none}.p-top .lang-nav{gap:6px}.p-top .p-crumb{min-width:0}}

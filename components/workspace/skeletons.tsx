@@ -1,3 +1,5 @@
+'use client';
+import {useLocale} from '../locale-provider';
 /**
  * Layout-matched loading placeholders for the signed-in workspaces.
  * They fade in after a short delay (see .ws-skeleton in workspace-theme.css),
@@ -8,9 +10,9 @@ import type { CSSProperties } from 'react';
 const bar = (width: CSSProperties['width'], height: number, extra?: CSSProperties) => ({ width, height, ...extra });
 
 /** Group chat: header, a few message rows, composer. */
-export function ChatSkeleton() {
+export function ChatSkeleton() {const {t:tr}=useLocale();
   const widths = ['62%', '38%', '74%', '46%', '58%'];
-  return <div className="ws-skeleton ws-sk-chat" aria-busy="true" aria-label="正在加载小组交流">
+  return <div className="ws-skeleton ws-sk-chat" aria-busy="true" aria-label={tr("正在加载小组交流")}>
     <div className="ws-sk-chat-head">
       <div><div className="sk" style={bar(120, 20)}/><div className="sk" style={bar(220, 12, { marginTop: 8 })}/></div>
       <div className="sk" style={bar(240, 32)}/>
@@ -26,8 +28,8 @@ export function ChatSkeleton() {
 }
 
 /** Activity reviews: stats strip, toolbar, grouped queue + detail. */
-export function QueueSkeleton({label='正在加载活动记录'}:{label?:string}={}) {
-  return <div className="ws-skeleton" aria-busy="true" aria-label={label}>
+export function QueueSkeleton({label='正在加载活动记录'}:{label?:string}={}) {const {t:tr}=useLocale();
+  return <div className="ws-skeleton" aria-busy="true" aria-label={tr(label)}>
     <div className="sk" style={bar('100%', 64, { borderRadius: 12 })}/>
     <div className="ws-sk-toolbar"><div className="sk" style={bar(220, 34)}/><div className="sk" style={bar(80, 34)}/></div>
     <div className="ws-sk-split">
@@ -48,8 +50,8 @@ export function QueueSkeleton({label='正在加载活动记录'}:{label?:string}
 }
 
 /** Generic list page: filter row and list rows. */
-export function ListSkeleton({ rows = 5, label='正在加载' }: { rows?: number; label?:string }) {
-  return <div className="ws-skeleton" aria-busy="true" aria-label={label}>
+export function ListSkeleton({ rows = 5, label='正在加载' }: { rows?: number; label?:string }) {const {t:tr}=useLocale();
+  return <div className="ws-skeleton" aria-busy="true" aria-label={tr(label)}>
     <div className="ws-sk-toolbar"><div className="sk" style={bar('100%', 38)}/></div>
     {Array.from({ length: rows }, (_, i) => <div className="ws-sk-card" key={i}>
       <div><div className="sk" style={bar(90, 10)}/><div className="sk" style={bar(160, 16, { marginTop: 10 })}/><div className="sk" style={bar('60%', 12, { marginTop: 10 })}/></div>
