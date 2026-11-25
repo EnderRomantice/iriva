@@ -1,4 +1,5 @@
 'use client';
+import {useLocale} from '../locale-provider';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Search } from 'lucide-react';
 import { emojiGroups, frequentEmoji, loadEmoji, rememberEmoji, type EmojiItem } from './emoji-data';
@@ -11,7 +12,7 @@ type Section = { id: string; label: string; items: { u: string; item?: EmojiItem
  * frequently used row, arrow-key navigation and a preview footer. Positioned against an anchor.
  */
 export default function EmojiPicker({ anchor, align = 'start', label = '选择表情', onSelect, onClose }:
-  { anchor: HTMLElement | null; align?: 'start' | 'end'; label?: string; onSelect: (emoji: string) => void; onClose: () => void }) {
+  { anchor: HTMLElement | null; align?: 'start' | 'end'; label?: string; onSelect: (emoji: string) => void; onClose: () => void }) {const {t:tr,locale}=useLocale();
   const [items, setItems] = useState<EmojiItem[] | null>(null), [failed, setFailed] = useState(false), [query, setQuery] = useState('');
   const [active, setActive] = useState(0), [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const root = useRef<HTMLDivElement>(null), grid = useRef<HTMLDivElement>(null), input = useRef<HTMLInputElement>(null);
@@ -72,28 +73,28 @@ export default function EmojiPicker({ anchor, align = 'start', label = '选择�
   function jump(id: string) { setQuery(''); requestAnimationFrame(() => grid.current?.querySelector<HTMLElement>(`[data-section="${id}"]`)?.scrollIntoView({ block: 'start' })); }
 
   let index = -1;
-  return <div ref={root} className="emoji-picker" role="dialog" aria-label={label} onKeyDown={move}
+  return <div ref={root} className="emoji-picker" role="dialog" aria-label={tr(label)} onKeyDown={move}
     style={position ? { top: position.top, left: position.left } : { visibility: 'hidden' }}>
     <div className="emoji-picker-search"><Search size={15} aria-hidden="true"/>
-      <input ref={input} value={query} onChange={e => setQuery(e.target.value)} placeholder="搜索表情，如 笑、heart、:tada:" aria-label="搜索表情"/>
+      <input ref={input} value={query} onChange={e => setQuery(e.target.value)} placeholder={tr("搜索表情，如 笑、heart、:tada:")} aria-label={tr("搜索表情")}/>
     </div>
-    {!query && <div className="emoji-picker-tabs" role="toolbar" aria-label="表情分类">
-      <button type="button" title="常用" onClick={() => jump('frequent')}>🕘</button>
-      {emojiGroups.map(g => <button type="button" key={g.id} title={g.label} onClick={() => jump(String(g.id))}>{g.icon}</button>)}
+    {!query && <div className="emoji-picker-tabs" role="toolbar" aria-label={tr("表情分类")}>
+      <button type="button" title={tr("常用")} onClick={() => jump('frequent')}>🕘</button>
+      {emojiGroups.map(g => <button type="button" key={g.id} title={tr(g.label)} onClick={() => jump(String(g.id))}>{g.icon}</button>)}
     </div>}
     <div className="emoji-picker-grid" ref={grid}>
-      {failed ? <p className="emoji-picker-empty">表情没能加载，请检查网络后重试。</p>
-        : !items ? <div className="emoji-picker-loading" aria-label="正在加载表情">{Array.from({ length: 36 }, (_, i) => <span key={i} className="sk"/>)}</div>
-        : !flat.length ? <p className="emoji-picker-empty">没有找到「{query}」相关的表情</p>
-        : sections.map(s => <section key={s.id} data-section={s.id} aria-label={s.label}>
-          <h4>{s.label}</h4>
+      {failed ? <p className="emoji-picker-empty">{tr("表情没能加载，请检查网络后重试。")}</p>
+        : !items ? <div className="emoji-picker-loading" aria-label={tr("正在加载表情")}>{Array.from({ length: 36 }, (_, i) => <span key={i} className="sk"/>)}</div>
+        : !flat.length ? <p className="emoji-picker-empty">{tr("没有找到「{query}」相关的表情",{query})}</p>
+        : sections.map(s => <section key={s.id} data-section={s.id} aria-label={tr(s.label)}>
+          <h4>{tr(s.label)}</h4>
           <div className="emoji-picker-cells">{s.items.map(({ u, item }) => { index++; const i = index; return <button type="button" key={`${s.id}-${u}`} data-index={i}
-            className={i === active ? 'is-active' : ''} aria-label={item?.zh || u} onMouseEnter={() => setActive(i)} onClick={() => choose(u)}>{u}</button>; })}</div>
+            className={i === active ? 'is-active' : ''} aria-label={(locale==='en'?item?.en:item?.zh)||u} onMouseEnter={() => setActive(i)} onClick={() => choose(u)}>{u}</button>; })}</div>
         </section>)}
     </div>
     <div className="emoji-picker-preview" aria-live="polite">
-      {current ? <><span className="emoji-picker-big">{current.u}</span><span><b>{current.item?.codes[0] ? `:${current.item.codes[0]}:` : current.item?.en || current.u}</b><small>{current.item?.zh}</small></span></>
-        : <span className="emoji-picker-hint">方向键选择 · Enter 确认 · Esc 关闭</span>}
+      {current ? <><span className="emoji-picker-big">{current.u}</span><span><b>{current.item?.codes[0] ? `:${current.item.codes[0]}:` : current.item?.en || current.u}</b><small>{locale==='en'?current.item?.en:current.item?.zh}</small></span></>
+        : <span className="emoji-picker-hint">{tr("方向键选择 · Enter 确认 · Esc 关闭")}</span>}
     </div>
   </div>;
 }

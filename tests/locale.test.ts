@@ -27,3 +27,31 @@ test('every literal UI translation in the team workspace has an English entry',(
   visit(source);
  }
 });
+
+test('shared Host and learner interface copy has English translations',()=>{
+ const paths=['app/app/portal.tsx','app/app/learn-sidebar.tsx','app/app/account-menu.tsx','app/app/partners.tsx','app/app/practice-invites.tsx','app/app/notifications.tsx','app/app/household-avatar.tsx','app/app/skeleton.tsx','app/app/conversations.tsx','app/app/coach.tsx','app/about/profile.tsx','components/workspace/avatar-upload.tsx','components/workspace/skeletons.tsx','components/household/invite-code.tsx','components/chat/emoji-picker.tsx'];
+ for(const path of paths){
+  const source=ts.createSourceFile(path,readFileSync(path,'utf8'),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
+  function visit(node:ts.Node){
+   if(ts.isCallExpression(node)&&node.expression.getText(source)==='tr'&&node.arguments[0]&&ts.isStringLiteral(node.arguments[0])){
+    const key=node.arguments[0].text;
+    if(/[\p{Script=Han}]/u.test(key))assert.doesNotMatch(translate('en',key),/[\p{Script=Han}]/u,`${path}: missing ${key}`);
+   }
+   ts.forEachChild(node,visit);
+  }
+  visit(source);
+ }
+ assert.equal(translate('en','账户菜单：{name}',{name:'青鸟 Emma'}),'Account menu: 青鸟 Emma');
+ assert.equal(translate('en','学习进度 · 第 {week} 周 / 共 {duration} 周',{week:2,duration:4}),'Progress · Week 2 of 4');
+});
+
+test('workspace dates and time zone options change language without changing time zones',async()=>{
+ const {beijingTime,timezoneOptions}=await import('../lib/timezones');
+ const date=new Date('2026-01-01T23:00:00Z');
+ assert.match(beijingTime(date.toISOString(),undefined,'en'),/Jan 2, 07:00/);
+ assert.match(beijingTime(date.toISOString()),/1月2日.*07:00/);
+ const zh=timezoneOptions(date,'zh'),en=timezoneOptions(date,'en');
+ assert.deepEqual(en.map(x=>x.value),zh.map(x=>x.value));
+ assert.match(en.find(x=>x.value==='+08:00')!.label,/Beijing/);
+ assert.ok(en.every(x=>!/[\p{Script=Han}]/u.test(x.label)));
+});

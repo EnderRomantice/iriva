@@ -16,12 +16,13 @@ const representativeCities:[string,string][]=[
  ['阿德莱德','Australia/Adelaide'],['达尔文','Australia/Darwin'],['珀斯','Australia/Perth'],['尤克拉','Australia/Eucla'],
  ['奥克兰','Pacific/Auckland'],['惠灵顿','Pacific/Auckland'],['查塔姆群岛','Pacific/Chatham']
 ];
-export function timezoneOptions(date=new Date()){
+const englishCities:Record<string,string>={"北京": "Beijing", "上海": "Shanghai", "新加坡": "Singapore", "东京": "Tokyo", "首尔": "Seoul", "曼谷": "Bangkok", "雅加达": "Jakarta", "孟买": "Mumbai", "新德里": "New Delhi", "加德满都": "Kathmandu", "达卡": "Dhaka", "迪拜": "Dubai", "喀布尔": "Kabul", "德黑兰": "Tehran", "利雅得": "Riyadh", "伦敦": "London", "里斯本": "Lisbon", "巴黎": "Paris", "柏林": "Berlin", "开罗": "Cairo", "约翰内斯堡": "Johannesburg", "内罗毕": "Nairobi", "纽约": "New York", "多伦多": "Toronto", "芝加哥": "Chicago", "墨西哥城": "Mexico City", "丹佛": "Denver", "洛杉矶": "Los Angeles", "温哥华": "Vancouver", "安克雷奇": "Anchorage", "檀香山": "Honolulu", "哈利法克斯": "Halifax", "圣约翰斯": "St. John’s", "圣保罗": "São Paulo", "布宜诺斯艾利斯": "Buenos Aires", "波哥大": "Bogotá", "悉尼": "Sydney", "墨尔本": "Melbourne", "布里斯班": "Brisbane", "阿德莱德": "Adelaide", "达尔文": "Darwin", "珀斯": "Perth", "尤克拉": "Eucla", "奥克兰": "Auckland", "惠灵顿": "Wellington", "查塔姆群岛": "Chatham Islands"};
+export function timezoneOptions(date=new Date(),locale:'zh'|'en'='zh'){
  const cities=new Map<string,string[]>();
  for(const [city,timeZone] of representativeCities){
   const part=new Intl.DateTimeFormat('en',{timeZone,timeZoneName:'longOffset'}).formatToParts(date).find(p=>p.type==='timeZoneName')?.value;
   const offset=part==='GMT'||part==='UTC'?'+00:00':part?.replace('GMT','');
-  if(!offset)continue;const names=cities.get(offset)||[];if(names.length<3)names.push(city);cities.set(offset,names);
+  if(!offset)continue;const names=cities.get(offset)||[];if(names.length<3)names.push(locale==='en'?englishCities[city]||city:city);cities.set(offset,names);
  }
  return offsets.map(n=>{const value=utcOffset(n),names=cities.get(value);return{value,label:`UTC${value}${names?.length?' · '+names.join('／'):''}`}});
 }
@@ -36,7 +37,7 @@ export function timezoneLabel(value:string,date=new Date()){
 
 export const PILOT_TIMEZONE='Asia/Shanghai';
 export const PILOT_TIME_LABEL='北京时间 · UTC+08:00';
-export function beijingTime(at:string,options:Intl.DateTimeFormatOptions={month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}){return new Intl.DateTimeFormat('zh-CN',{...options,timeZone:PILOT_TIMEZONE,hour12:false}).format(new Date(at))}
+export function beijingTime(at:string,options:Intl.DateTimeFormatOptions={month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'},locale:'zh'|'en'='zh'){return new Intl.DateTimeFormat(locale==='en'?'en-US':'zh-CN',{...options,timeZone:PILOT_TIMEZONE,hour12:false}).format(new Date(at))}
 /** Interpret datetime-local as Beijing time, independent of the device timezone. */
 export function beijingInputToUtc(value:string){
  if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value))throw new Error('请选择有效的北京时间。');

@@ -1,4 +1,5 @@
 'use client';
+import {useLocale} from '../locale-provider';
 import {workspaceFetch as fetch} from '../../lib/workspace-fetch';
 import { useRef, useState } from 'react';
 import { ImageUp, Trash2 } from 'lucide-react';
@@ -26,7 +27,7 @@ async function toSquare(file: File) {
  * Preview + 上传 / 更换 / 移除. `save` posts the cropped data URL (or null to remove) and throws on failure.
  */
 export default function AvatarUpload({ name, avatar, save, onSaved, previewClass = 'avatar-upload-preview', removeLabel = '移除头像' }:
-  { name: string; avatar: string | null; save: (image: string | null) => Promise<void>; onSaved?: () => void; previewClass?: string; removeLabel?: string }) {
+  { name: string; avatar: string | null; save: (image: string | null) => Promise<void>; onSaved?: () => void; previewClass?: string; removeLabel?: string }) {const {t:tr}=useLocale();
   const file = useRef<HTMLInputElement>(null), [busy, setBusy] = useState(false), [error, setError] = useState(''), [preview, setPreview] = useState<string | null | undefined>(undefined);
   async function run(image: string | null) {
     setBusy(true); setError('');
@@ -43,10 +44,10 @@ export default function AvatarUpload({ name, avatar, save, onSaved, previewClass
     <Avatar name={name} src={shown} className={`workspace-mark ${previewClass}`} size={56}/>
     <input ref={file} type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/heic,image/avif" hidden onChange={e => void choose(e.target.files?.[0])}/>
     <div className="avatar-upload-actions">
-      <button type="button" className="p-outline" disabled={busy} onClick={() => file.current?.click()}><ImageUp size={14}/> {busy ? '正在保存…' : shown ? '更换图片' : '上传图片'}</button>
-      {shown && <button type="button" className="p-outline" disabled={busy} onClick={() => { setPreview(null); void run(null); }} aria-label={removeLabel}><Trash2 size={14}/> 移除</button>}
+      <button type="button" className="p-outline" disabled={busy} onClick={() => file.current?.click()}><ImageUp size={14}/> {busy ? tr("正在保存…") : shown ? tr("更换图片") : tr("上传图片")}</button>
+      {shown && <button type="button" className="p-outline" disabled={busy} onClick={() => { setPreview(null); void run(null); }} aria-label={tr(removeLabel)}><Trash2 size={14}/> {tr(" 移除")}</button>}
     </div>
-    {error && <p className="avatar-upload-error" role="alert">{error}</p>}
+    {error && <p className="avatar-upload-error" role="alert">{tr(error)}</p>}
   </div>;
 }
 
