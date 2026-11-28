@@ -1,5 +1,7 @@
 import {DomainError} from '../../../domain/commands';
 import { isStandardTimezone } from '../../../lib/timezones';
+import { pilotHost } from '../../../server/services/pilot-hosts';
+import { workspaceRepository } from '../../../server/container';
 import { currentUser, currentMember, pilotDb, pilotTransaction, reply, sameOrigin, text } from '../../../server/pilot';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -18,7 +20,8 @@ export async function PATCH(req: Request) {
     if (!b || typeof b !== 'object') return reply({ error: '资料格式不正确。' }, 400);
     const name = text(b, 'name', 50); if (!name) return reply({ error: '请填写你希望伙伴怎么称呼你。' }, 400);
     const d = await pilotDb(), m = await currentMember(u.userId);
-    const app = await d.prepare('SELECT id FROM member_applications WHERE user_id=?').get(u.userId) as Row | undefined;
+    const host = await pilotHost(await workspaceRepository(), u.email);
+    const app = host ? undefined : await d.prepare('SELECT id FROM member_applications WHERE user_id=?').get(u.userId) as Row | undefined;
     const timezone = text(b, 'timezone', 20);
     if (m && timezone && !isStandardTimezone(timezone)) return reply({ error: '请选择有效的 UTC 时区。' }, 400);
     let fields: string[] = [];
@@ -31,6 +34,7 @@ export async function PATCH(req: Request) {
       fields = [location, ageBand, lifeStage, mbti, pref, contact];
     }
     await pilotTransaction(async () => {
+      if (host) await d.prepare('UPDATE pilot_hosts SET name=? WHERE email=?').run(name,u.email.toLowerCase());
       if (app) await d.prepare('UPDATE member_applications SET name=?,location=?,age_band=?,life_stage=?,mbti=?,contact_preference=?,contact=?,updated=?,revision=revision+1 WHERE user_id=?').run(name, ...fields, new Date().toISOString(), u.userId);
       if (m) await d.prepare('UPDATE memberships SET display_name=?,updated_at=? WHERE user_id=? AND household_id=?').run(name, new Date().toISOString(), u.userId, m.household);
       if (m && timezone) await d.prepare('UPDATE memberships SET timezone=? WHERE user_id=? AND household_id=?').run(timezone, u.userId, m.household);

@@ -47,3 +47,7 @@
  .workspace-ui.team-page .workspace-sidebar{overflow:visible;position:relative}
  .team-actions .lang-page-nav{gap:12px;font-size:12px}
 }
+
+.team-oral{padding:18px;margin:18px 0;border:1px solid var(--line,#d8d6cd);border-radius:12px}
+.team-oral audio{display:block;width:100%;max-width:100%}
+.team-oral small{display:block;overflow-wrap:anywhere}

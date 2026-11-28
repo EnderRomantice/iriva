@@ -16,11 +16,11 @@ const host={
 
 export function HostStandards({english=false}:{english?:boolean}){
  const criteria=english?[
- ['Clear communication','A native English-speaking Host with clear, natural expression.'],
+ ['Clear communication','A Host who is a native speaker of your learning language, with clear, natural expression.'],
  ['Respect and listening','Respect for different backgrounds and ways of expressing yourself.'],
  ['Consistent presence','Time and attention for the same group throughout four weeks.']
  ]:[
- ['专业沟通','英语母语背景，表达清晰、自然。'],
+ ['专业沟通','具备所学语言的母语背景，表达清晰、自然。'],
  ['尊重与倾听','尊重不同文化、表达节奏与个人边界。'],
  ['稳定同行','为四周交流持续投入时间与关注。']
  ];

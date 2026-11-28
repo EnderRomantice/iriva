@@ -1,4 +1,5 @@
-import { currentUser, pilotDb, reply, sameOrigin, teamRole } from '../../../../server/pilot';
+import {canManage} from '../../../../server/services/organization-access';
+import { currentUser, pilotDb, reply, sameOrigin, currentTeamContext } from '../../../../server/pilot';
 import { memberAvatarUrl, parseAvatar } from '../../../../domain/household-avatar';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -10,7 +11,9 @@ export const runtime = 'nodejs';
 export async function GET(req: Request) {
   const u = await currentUser(); if (!u) return reply({ error: '请先登录。' }, 401);
   const id = new URL(req.url).searchParams.get('u') || u.userId, d = await pilotDb();
-  if (id !== u.userId && !await teamRole(u)) {
+  let teamAccess=false;
+  if(id!==u.userId&&u.authMethod==='password'){const ctx=await currentTeamContext();if(ctx&&canManage(ctx.organization.role))teamAccess=!!await d.prepare('SELECT 1 FROM memberships m JOIN households h ON h.id=m.household_id WHERE m.user_id=? AND (h.organization_id=? OR h.organization_id IN (SELECT id FROM organizations WHERE parent_id=?))').get(id,ctx.organization.id,ctx.organization.id);}
+  if (id !== u.userId && !teamAccess) {
     const shared = await d.prepare('SELECT 1 FROM memberships a JOIN memberships b ON a.household_id=b.household_id WHERE a.user_id=? AND b.user_id=? LIMIT 1').get(u.userId, id);
     if (!shared) return new Response(null, { status: 404 });
   }

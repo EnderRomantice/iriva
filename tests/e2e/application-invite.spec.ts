@@ -36,6 +36,7 @@ test('learners wait outside the workspace, must supply WeChat, and enter only af
     expect((await api.post(`${origin}/api/apply`, { headers, data: { ...profile, contact_preference: 'email' } })).status()).toBe(400);
     expect((await api.post(`${origin}/api/apply`, { headers, data: { ...profile, invite_code: 'old-code' } })).status()).toBe(403);
     expect((await api.post(`${origin}/api/apply/join`, { headers, data: { code: 'old-code' } })).status()).toBe(403);
+    await page.getByLabel('想学习哪种语言？').selectOption(profile.language);
     await page.getByLabel('怎么称呼你？', { exact: true }).fill(profile.name);
     await page.getByRole('combobox', { name: /^年龄段/ }).selectOption('25-34');
     await page.getByRole('combobox', { name: /^学习或工作阶段/ }).selectOption('working');

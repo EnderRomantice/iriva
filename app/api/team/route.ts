@@ -1,3 +1,4 @@
+import { matchingLanguage } from '../../../lib/learning-language';
 import {paidApplicationSql,hasApplicationPayment,syncApplicationPayment} from '../../../server/services/application-payments';
 import {workspaceOrganizations} from '../../../server/services/workspace-access';
 import {randomUUID} from 'node:crypto';
@@ -58,8 +59,10 @@ export async function POST(req: Request) {
       if (oralLevel && !['beginner', 'intermediate', 'advanced'].includes(oralLevel)) return out({ error: '无效的口语确认结果。' }, 400);
       await db.prepare('UPDATE member_applications SET id=id WHERE id=? AND organization_id=?').run(id,organizationId);
       if (!await hasApplicationPayment(await workspaceRepository(),id)) return out({ error: '学员需先完成套餐付款，才能进入待匹配队列。' },409);
-      const r = await db.prepare('UPDATE member_applications SET status=?,notes=?,oral_level=?,oral_notes=? WHERE id=? AND revision=? AND household IS NULL AND organization_id=?').run(status, val('notes', 3000), oralLevel, val('oral_notes', 1500), id, b.revision, organizationId);
-      if (!r.changes) return out({ error: '申请已分组或不存在，不能更改状态。' }, 409);
+      const score=b.oral_score===undefined||b.oral_score===null?null:b.oral_score;
+      if(score!==null&&(!Number.isInteger(score)||Number(score)<0||Number(score)>100))return out({error:'口语评分须为 0–100 的整数。'},400);
+      const r = await db.prepare('UPDATE member_applications SET status=?,notes=?,oral_level=?,oral_notes=?,oral_score=?,oral_reviewed_at=?,oral_reviewer=?,revision=revision+1 WHERE id=? AND revision=? AND household IS NULL AND organization_id=?').run(status, val('notes', 3000), oralLevel, val('oral_notes', 1500), score, score!==null?new Date().toISOString():'',score!==null?u.email:'', id, b.revision, organizationId);
+      if (!r.changes) return out({ error: '资料或评分已更新，或申请已分组，请刷新后重试。' }, 409);
     } else if (action === 'payment') {
       const status = val('status', 20), household = val('household', 100), user = val('user', 100);
       if (!['unpaid', 'paid', 'refunded'].includes(status)) return out({ error: '无效付款状态。' }, 400);
@@ -100,8 +103,10 @@ export async function POST(req: Request) {
       if (ids.length !== 4 || !name || !hostEmail || !hostName) return out({ error: '选择四位学员，填写 Host 的邮箱和名字，并为 Household 命名。' }, 400);
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(hostEmail)) return out({ error: 'Host 邮箱格式不正确。' }, 400);
       await db.prepare(`UPDATE member_applications SET id=id WHERE id IN (${ids.map(() => '?').join(',')}) AND organization_id=?`).run(...ids,organizationId);
-      const candidates = await db.prepare(`SELECT a.* FROM member_applications a WHERE a.id IN (${ids.map(() => '?').join(',')}) AND role='learner' AND plan='native' AND language='English' AND status='shortlist' AND household IS NULL AND organization_id=? AND ${paidApplicationSql}`).all(...ids,organizationId) as Row[];
+      const candidates = await db.prepare(`SELECT a.* FROM member_applications a WHERE a.id IN (${ids.map(() => '?').join(',')}) AND role='learner' AND plan='native' AND status='shortlist' AND household IS NULL AND organization_id=? AND ${paidApplicationSql}`).all(...ids,organizationId) as Row[];
       if (candidates.length !== 4) return out({ error: '所有学员必须已付款、在候选名单中，且尚未分组。' }, 409);
+      const groupLanguage = matchingLanguage(candidates.map(x => ({language:x.language})));
+      if (!groupLanguage) return out({ error: '同一 Household 的学员必须学习同一种语言。' }, 409);
       if (candidates.some(x => String(x.email).toLowerCase() === hostEmail)) return out({ error: 'Host 不能同时是这组的学员。' }, 409);
       if (await db.prepare(`SELECT 1 FROM pilot_hosts WHERE email IN (${candidates.map(() => '?').join(',')})`).get(...candidates.map(x => String(x.email).toLowerCase()))) return out({ error: '候选学员中有已授权的 Host，请重新选择。' }, 409);
       const repo = await workspaceRepository();let hostUser = await userByEmail(repo, hostEmail);

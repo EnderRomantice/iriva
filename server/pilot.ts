@@ -21,10 +21,14 @@ type Row = Record<string, unknown>;
 export async function pilotDb() { return (await workspaceRepository()).db; }
 export async function pilotTransaction<T>(work: () => Promise<T>) { return (await workspaceRepository()).transaction(async () => work()); }
 /** 当前账号自己的加入资料（/apply 页面与 GET /api/apply 共用）。 */
-export const ownApplicationFields = 'id,name,role,plan,language,goal,level,timezone,availability,availability_slots,interests,contact,contact_preference,age_band,life_stage,location,mbti,partner_preferences,suggestion,status,household,revision,updated';
+export const ownApplicationFields = 'id,name,role,plan,language,goal,level,timezone,availability,availability_slots,interests,contact,contact_preference,age_band,life_stage,location,mbti,partner_preferences,suggestion,status,household,revision,updated,recording_updated';
 export async function ownApplication(userId: string): Promise<(Row & { revision: number; household: string | null; status: string }) | null> {
-  const a = await (await pilotDb()).prepare(`SELECT ${ownApplicationFields} FROM member_applications WHERE user_id=?`).get(userId) as Row | undefined;
-  return a ? { ...a, paymentConfirmed: await hasApplicationPayment(await workspaceRepository(),String(a.id)), revision: Number(a.revision), household: a.household ? String(a.household) : null, status: String(a.status) } : null;
+  // Optional recording columns may arrive after the app update. Read the row, then
+  // project only learner-visible fields so internal notes and scores stay private.
+  const row = await (await pilotDb()).prepare('SELECT * FROM member_applications WHERE user_id=?').get(userId) as Row | undefined;
+  if (!row) return null;
+  const a = Object.fromEntries(ownApplicationFields.split(',').map(field => [field, row[field] ?? (field === 'recording_updated' ? '' : null)]));
+  return { ...a, paymentConfirmed: await hasApplicationPayment(await workspaceRepository(),String(a.id)), revision: Number(a.revision), household: a.household ? String(a.household) : null, status: String(a.status) };
 }
 
 async function userForToken(token: string | undefined): Promise<PilotUser | null> {

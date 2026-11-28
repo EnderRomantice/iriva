@@ -17,6 +17,7 @@ export async function payApplication(request:APIRequestContext){
 /** Other feature tests start with already-paid applicants. */
 export async function seedPaidApplication(db:Sql,id:string){
  const order=randomUUID(),now=new Date().toISOString();
- await db`INSERT INTO iriva.application_orders (id,application_id,plan,language,amount_minor,currency,created) VALUES (${order},${id},'native','English',198000,'cny',${now})`;
+ const [application]=await db`SELECT language FROM iriva.member_applications WHERE id=${id}`;
+ await db`INSERT INTO iriva.application_orders (id,application_id,plan,language,amount_minor,currency,created) VALUES (${order},${id},'native',${application.language},198000,'cny',${now})`;
  await db`INSERT INTO iriva.application_payments (stripe_session,order_id,payment_intent,status,amount_minor,currency,updated) VALUES (${randomUUID()},${order},${randomUUID()},'paid',198000,'cny',${now})`;
 }

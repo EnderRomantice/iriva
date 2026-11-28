@@ -28,6 +28,16 @@ test('every literal UI translation in the team workspace has an English entry',(
  }
 });
 
+test('public locale respects explicit preference and browser quality order', async()=>{
+ const {resolveLocale}=await import('../lib/locale');
+ assert.equal(resolveLocale(undefined,'en-US,en;q=0.9,zh;q=0.8'),'en');
+ assert.equal(resolveLocale(undefined,'en;q=0.2,zh-CN;q=0.9'),'zh');
+ assert.equal(resolveLocale('zh','en-US'),'zh');
+ assert.equal(resolveLocale('en','zh-CN'),'en');
+ assert.equal(resolveLocale(undefined,'zh;q=0,en;q=1'),'en');
+ assert.equal(resolveLocale(undefined,'fr-FR'),'en');
+});
+
 test('shared Host and learner interface copy has English translations',()=>{
  const paths=['app/app/portal.tsx','app/app/learn-sidebar.tsx','app/app/account-menu.tsx','app/app/partners.tsx','app/app/practice-invites.tsx','app/app/notifications.tsx','app/app/household-avatar.tsx','app/app/skeleton.tsx','app/app/conversations.tsx','app/app/coach.tsx','app/about/profile.tsx','components/workspace/avatar-upload.tsx','components/workspace/skeletons.tsx','components/household/invite-code.tsx','components/chat/emoji-picker.tsx'];
  for(const path of paths){

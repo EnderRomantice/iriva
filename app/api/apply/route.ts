@@ -1,3 +1,5 @@
+import {parseRecording,saveRecording} from '../../../server/services/application-recordings';
+import { isLearningLanguage } from '../../../lib/learning-language';
 import { hasApplicationPayment } from '../../../server/services/application-payments';
 import { pilotHost } from '../../../server/services/pilot-hosts';
 import { workspaceRepository } from '../../../server/container';
@@ -22,12 +24,14 @@ async function save(req: Request, editing: boolean) {
   if (!sameOrigin(req)) return out({ error: '请求来源不正确。' }, 403);
   try {
     if (await pilotHost(await workspaceRepository(), u.email)) return out({ error: '你已是 Host，无需提交学员申请。请进入学习空间。' }, 409);
-    const raw = await req.text(); if (raw.length > 22000) return out({ error: '内容过长。' }, 413);
+    const raw = await req.text(); if (raw.length > 2_820_000) return out({ error: '内容过长。' }, 413);
     let b: Row; try { b = JSON.parse(raw); } catch { return out({ error: '资料格式不正确。' }, 400); }
     if (!b || typeof b !== 'object') return out({ error: '资料格式不正确。' }, 400);
+    const recording = b.recording === undefined ? undefined : parseRecording(b.recording);
+    if (recording === null) return out({error:'录音无效，请重新录制（最长 2 分钟、最大 2MB）。'},400);
     const val = (k: string, n: number) => text(b, k, n);
     const plan = val('plan', 20) || 'native', name = val('name', 60), role = 'learner', language = val('language', 20), level = val('level', 20), timezone = val('timezone', 80), goal = val('goal', 1500), ageBand = val('age_band', 20), lifeStage = val('life_stage', 40), location = val('location', 80), mbti = val('mbti', 20).toUpperCase(), contactPreference = val('contact_preference', 20);
-    if (!['native', 'everyday', 'professional'].includes(plan) || !['English', 'Chinese'].includes(language) || !['beginner', 'intermediate', 'advanced'].includes(level) || !name || !goal || b.consent !== true) return out({ error: '请完整填写必填项并同意资料用途。' }, 400);
+    if (!['native', 'everyday', 'professional'].includes(plan) || !isLearningLanguage(language) || !['beginner', 'intermediate', 'advanced'].includes(level) || !name || !goal || b.consent !== true) return out({ error: '请完整填写必填项并同意资料用途。' }, 400);
     if (!isStandardTimezone(timezone)) return out({ error: '请选择有效的 UTC 时区。' }, 400);
     if (!validSlots(b.availability_slots)) return out({ error: '请至少选择一个可稳定参加的时段，每段不少于两小时，最多八个。' }, 400);
     if (!['under18', '18-24', '25-34', '35-44', '45-54', '55plus', 'private'].includes(ageBand) || !['school', 'university', 'working', 'entrepreneur', 'other', 'private'].includes(lifeStage) || !location || !val('interests', 1000)) return out({ error: '请填写年龄段、学习或工作阶段、所在地区和感兴趣的话题。' }, 400);
@@ -46,8 +50,9 @@ async function save(req: Request, editing: boolean) {
       const result = await pilotTransaction(async () => {
         await db.prepare('UPDATE member_applications SET id=id WHERE user_id=?').run(u.userId);
         const nextStatus = await hasApplicationPayment(await workspaceRepository(),String(existing.id)) ? 'pending' : status;
-        const r = await db.prepare("UPDATE member_applications SET name=?,goal=?,level=?,timezone=?,availability=?,interests=?,contact=?,age_band=?,life_stage=?,location=?,mbti=?,partner_preferences=?,suggestion=?,availability_slots=?,contact_preference=?,updated=?,revision=revision+1,status=?,oral_level='',household=? WHERE user_id=? AND revision=? AND household IS NULL").run(name, goal, level, timezone, availability, val('interests', 1000), val('contact', 200), ageBand, lifeStage, location, mbti, val('partner_preferences', 800), val('suggestion', 1000), slots, contactPreference, now, nextStatus, null, u.userId, revision);
+        const r = await db.prepare("UPDATE member_applications SET name=?,goal=?,level=?,timezone=?,availability=?,interests=?,contact=?,age_band=?,life_stage=?,location=?,mbti=?,partner_preferences=?,suggestion=?,availability_slots=?,contact_preference=?,updated=?,revision=revision+1,status=?,household=? WHERE user_id=? AND revision=? AND household IS NULL").run(name, goal, level, timezone, availability, val('interests', 1000), val('contact', 200), ageBand, lifeStage, location, mbti, val('partner_preferences', 800), val('suggestion', 1000), slots, contactPreference, now, nextStatus, null, u.userId, revision);
         if (!r.changes) throw new Conflict();
+        if(recording) await saveRecording(await workspaceRepository(),String(existing.id),recording,now);
         return { status: nextStatus, household: null };
       }).catch(e => { if (e instanceof Conflict) return { error: '资料或分组已变化，请刷新后查看。', status: 409 }; throw e; });
       if ('error' in result) return out({ error: result.error }, result.status);
@@ -56,7 +61,9 @@ async function save(req: Request, editing: boolean) {
     if (existing) return out({ error: '你已提交过资料，请刷新后查看或补充。' }, 409);
     const result = await pilotTransaction(async () => {
       const nextStatus = status;
-      await db.prepare('INSERT INTO member_applications (id,user_id,email,name,role,language,goal,level,timezone,availability,interests,contact,plan,status,notes,created,age_band,life_stage,location,mbti,partner_preferences,suggestion,availability_slots,contact_preference,updated,household) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(randomUUID(), u.userId, u.email.toLowerCase(), name, role, language, goal, level, timezone, availability, val('interests', 1000), val('contact', 200), plan, nextStatus, '', now, ageBand, lifeStage, location, mbti, val('partner_preferences', 800), val('suggestion', 1000), slots, contactPreference, now, null);
+      const applicationId=randomUUID();
+      await db.prepare('INSERT INTO member_applications (id,user_id,email,name,role,language,goal,level,timezone,availability,interests,contact,plan,status,notes,created,age_band,life_stage,location,mbti,partner_preferences,suggestion,availability_slots,contact_preference,updated,household) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(applicationId, u.userId, u.email.toLowerCase(), name, role, language, goal, level, timezone, availability, val('interests', 1000), val('contact', 200), plan, nextStatus, '', now, ageBand, lifeStage, location, mbti, val('partner_preferences', 800), val('suggestion', 1000), slots, contactPreference, now, null);
+      if(recording) await saveRecording(await workspaceRepository(),applicationId,recording,now);
       return { status: nextStatus, household: null };
     });
     return out({ ok: true, revision: 0, status: result.status, paymentConfirmed: result.status === 'pending', household: result.household });

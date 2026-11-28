@@ -54,10 +54,10 @@ export default function AboutProfile({access,avatar=null,email,teamAccess,role,h
           {saved&&<div className="p-notice" role="status"><Check size={15}/>{tr("已保存。")}</div>}
           <div className="p-about-actions"><button className="p-button" disabled={busy}>{busy?tr("正在保存…"):tr("保存个人信息")} <Check size={15}/></button></div>
         </form>
-        <section className="p-card" style={{marginTop:28}}><h2>{tr("学习资料")}</h2>
+        {role!=='host'&&<section className="p-card" style={{marginTop:28}}><h2>{tr("学习资料")}</h2>
           {hasApplication?<><p>{status?tr(statusText[status]||'团队正在跟进'):''}{household?tr("。学习需要与可用时间的变更，请通过“给青鸟的建议”联系团队。"):tr("。学习目标、兴趣和可用时间可在加入资料中补充。")}</p><Link className="p-outline" href="/apply">{tr("查看我的加入资料 ")}<ArrowUpRight size={14}/></Link></>
           :<><p>{tr("还没有填写加入资料。先让青鸟团队认识你，再为你安排合适的小组。")}</p><Link className="p-button" href="/apply">{tr("填写加入资料 ")}<ArrowUpRight size={15}/></Link></>}
-        </section>
+        </section>}
       </main><div className="p-footer">IRIVA · A World of Voices. A Place to Belong.</div></div>
     </div>
   </div>;

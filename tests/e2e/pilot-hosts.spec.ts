@@ -5,7 +5,7 @@ import postgres from 'postgres';
 import { seedId } from '../../server/db/seed';
 import { defaultOrganizationId } from '../../domain/workspace';
 
-test('team adds Host, first email verification enters Host waiting page, matching opens household', async ({ browser }) => {
+for (const learningLanguage of ['English', 'Chinese']) test(`team adds Host and matches a ${learningLanguage} household; mixed languages are rejected`, async ({ browser }) => {
   if (process.env.PG_LOCAL_TEST !== '1' || !process.env.DATABASE_URL) throw new Error('Use disposable PostgreSQL harness --hosts.');
   const db = postgres(process.env.DATABASE_URL, { max: 1, ssl: false });
   const team = await browser.newContext(), host = await browser.newContext();
@@ -42,9 +42,17 @@ test('team adds Host, first email verification enters Host waiting page, matchin
     for (let i = 0; i < 4; i++) {
       const id = randomUUID(), user = randomUUID(), learnerEmail = `${user}@example.test`, now = new Date().toISOString(); ids.push(id);
       await db`INSERT INTO iriva.users (id,name,email,timezone,avatar,version,created_at,updated_at) VALUES (${user},${`Learner ${i}`},${learnerEmail},'UTC','',1,${now},${now})`;
-      await db`INSERT INTO iriva.member_applications (id,user_id,email,name,role,language,goal,level,timezone,availability,interests,contact,status,created) VALUES (${id},${user},${learnerEmail},${`Learner ${i}`},'learner','English','Speaking','intermediate','+08:00','Saturday','Books','','shortlist',${now})`;
+      await db`INSERT INTO iriva.member_applications (id,user_id,email,name,role,language,goal,level,timezone,availability,interests,contact,status,created) VALUES (${id},${user},${learnerEmail},${`Learner ${i}`},'learner',${learningLanguage},'Speaking','intermediate','+08:00','Saturday','Books','','shortlist',${now})`;
       await seedPaidApplication(db,id);
     }
+    const otherLanguage = learningLanguage === 'English' ? 'Chinese' : 'English';
+    await db`UPDATE iriva.member_applications SET language=${otherLanguage} WHERE id=${ids[0]}`;
+    await db`UPDATE iriva.application_orders SET language=${otherLanguage} WHERE application_id=${ids[0]}`;
+    const mixed = await team.request.post(`${origin}/api/team`, { headers, data: { action: 'match', ids, hostEmail: email, hostName: 'Emma', name: 'Mixed group', revisions: ids.map(id => ({ id, revision: 0 })) } });
+    expect(mixed.status()).toBe(409);
+    expect((await mixed.json()).error).toContain('同一种语言');
+    await db`UPDATE iriva.member_applications SET language=${learningLanguage} WHERE id=${ids[0]}`;
+    await db`UPDATE iriva.application_orders SET language=${learningLanguage} WHERE application_id=${ids[0]}`;
     const matched = await team.request.post(`${origin}/api/team`, { headers, data: { action: 'match', ids, hostEmail: email, hostName: 'Emma', name: 'Host flow Household', revisions: ids.map(id => ({ id, revision: 0 })) } });
     expect(matched.status(), await matched.text()).toBe(200);
     await hostPage.reload();

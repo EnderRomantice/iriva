@@ -10,3 +10,15 @@ export function translate(locale: Locale, text: string, values: Record<string, s
 export function persistLocale(locale: Locale) {
   document.cookie = `${LOCALE_COOKIE}=${locale}; Path=/; Max-Age=31536000; SameSite=Lax`;
 }
+
+/** Explicit preference wins; browser language only chooses the interface, never a course. */
+export function resolveLocale(preference?: string, acceptLanguage = ''): Locale {
+  if (preference === 'zh' || preference === 'en') return preference;
+  const languages = acceptLanguage.split(',').map((part, index) => {
+    const [tag, ...params] = part.trim().toLowerCase().split(';');
+    const quality = params.find(param => param.trim().startsWith('q='));
+    return {tag: tag.split('-')[0], quality: quality ? Number(quality.trim().slice(2)) : 1, index};
+  }).filter(item => Number.isFinite(item.quality) && item.quality > 0 && item.quality <= 1)
+    .sort((a, b) => b.quality - a.quality || a.index - b.index);
+  return languages.find(item => item.tag === 'zh' || item.tag === 'en')?.tag as Locale || 'en';
+}

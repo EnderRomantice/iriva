@@ -8,7 +8,7 @@ const LANGUAGES = [
 ] as const;
 
 /** 点地球图标：导航链接带着模糊滑出，语言选项从另一侧滑入，原位替换。 */
-export default function LanguageNav({ lang, children, onChange }: { onChange?: (lang: 'zh' | 'en') => void; lang: 'zh' | 'en'; children: ReactNode }) {
+export default function LanguageNav({ lang, children, onChange, hrefs }: { hrefs?: {zh:string;en:string}; onChange?: (lang: 'zh' | 'en') => void; lang: 'zh' | 'en'; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const id = useId();
@@ -23,7 +23,6 @@ export default function LanguageNav({ lang, children, onChange }: { onChange?: (
     return () => { document.removeEventListener('keydown', onKey); document.removeEventListener('pointerdown', onDown); };
   }, [open]);
 
-  useEffect(() => { persistLocale(lang); }, [lang]);
 
   const choose = (key: string, href: string) => {
     trigger.current?.focus();
@@ -37,7 +36,7 @@ export default function LanguageNav({ lang, children, onChange }: { onChange?: (
     <div className="lang-stage" data-page={open ? 'lang' : 'nav'}>
       <div className="lang-page lang-page-nav" aria-hidden={open} inert={open}>{children}</div>
       <div id={id} className="lang-page lang-options" role="group" aria-label={lang === 'en' ? 'Choose language' : '选择语言'} aria-hidden={!open} inert={!open}>
-        {LANGUAGES.map(l => <button key={l.key} type="button" lang={l.code} aria-pressed={l.key === lang} onClick={() => choose(l.key, l.href)}>{l.label}</button>)}
+        {LANGUAGES.map(l => <button key={l.key} type="button" lang={l.code} aria-pressed={l.key === lang} onClick={() => choose(l.key, hrefs?.[l.key] ?? l.href)}>{l.label}</button>)}
       </div>
     </div>
     <button ref={trigger} className="lang-trigger" type="button" aria-label={lang === 'en' ? 'Choose language' : '选择语言'} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
