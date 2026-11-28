@@ -188,3 +188,11 @@ SQLite 自动应用 `016_activity_reviews.sql`。PostgreSQL 发布前使用迁�
 配置 `OPENROUTER_API_KEY`，可选 `ORAL_ASSESSMENT_MODEL`（默认 `google/gemini-2.5-flash`）。通过 [OpenRouter Audio API](https://openrouter.ai/docs/guides/overview/multimodal/audio) 直接输入音频，模型须支持 WebM / MP4 / Ogg 和 Chat Completions API。请求限时 45 秒，失败不改动已保存评分。上线前须应用 `20261128084127_application_oral_grades.sql` 数据迁移；SQLite 启动时自动迁移。
 
 「IRIVA AI 评价」单独保存发音清晰度、流利度与连贯性、词汇、语法四个维度的等级、录音依据和判断理由，并说明综合评级依据、下一等级差距及样本局限，不覆盖人工跟进记录。修改普通资料保留评价，重新提交录音清空旧评价。新增字段迁移为 `20261128092026_oral_ai_evaluation.sql`。
+
+### Desktop notification subscription
+
+`/api/notifications/stream` uses an authenticated fetch/SSE connection with the existing per-tab organization header. Every snapshot rechecks notification access. The stream sends **counts and a content revision only**, never household data, chat history, partner pairs, or invitation lists. Notification text is fetched from `/api/notifications` when that page opens or changes; the same API includes a database COUNT of pending invitations.
+
+Same-process session creation and read-status updates wake subscribers immediately. The server reconciles notifications every 15 seconds for scheduled reminders and changes handled by another instance. Unchanged snapshots send only a heartbeat. Connections rotate after 50 seconds, reconnect automatically with bounded error backoff, and close when the browser tab is hidden. An unhealthy stream falls back to a notification-only read every 30 seconds (initial fallback after 5 seconds). No external Webhook is required or registered.
+
+The previous 20-second whole-Household reload is removed. Chat refresh runs only while the chat page and browser tab are visible. Partner pairs are fetched only when their application is explicitly opened. Initial workspace loading and explicit business actions still fetch the data needed by those actions.

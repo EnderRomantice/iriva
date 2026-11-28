@@ -1,3 +1,4 @@
+import {publishNotificationChanges} from '../../../server/notification-events';
 import {DomainError} from '../../../domain/commands';
 import {auditedOperation,canManage} from '../../../server/services/organization-access';
 import { workspaceRepository } from '../../../server/container';
@@ -139,6 +140,7 @@ export async function POST(req: Request) {
         for (const person of recipients) for (const r of [...(person.user_id === u.userId ? [] : [{ kind: 'published', due: now.toISOString() }]), ...reminderDue(when, now)])
           await d.prepare(insertNotification).run(randomUUID(), person.user_id, id, r.kind, r.due);
       });
+      publishNotificationChanges(recipients.map(person=>String(person.user_id)));
     } else return reply({ error: '无效操作。' }, 400);
     return reply({ ok: true });
   } catch (e) { if(e instanceof DomainError)return Response.json({error:e.message},{status:e.status});console.error(e); return reply({ error: '没能保存，请稍后重试。' }, 400); }

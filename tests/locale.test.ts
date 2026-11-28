@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {normalizeLocale,translate} from '../lib/locale';
 import ts from 'typescript';
+import {workspaceNavigation} from '../domain/workspace-navigation';
 import {readFileSync} from 'node:fs';
 
 test('locale defaults, interpolation, and unknown text preserve user input',()=>{
@@ -13,7 +14,7 @@ test('locale defaults, interpolation, and unknown text preserve user input',()=>
 });
 
 test('every literal UI translation in the team workspace has an English entry',()=>{
- const paths=['app/team/team.tsx','app/team/oral-evaluation.tsx','components/oral-audio-player.tsx','app/team/organization-switcher.tsx','app/team/sidebar.tsx','app/team/hosts.tsx','app/team/organization-panel.tsx','app/team/audit-log.tsx','components/reviews/workspace.tsx','components/workspace/sidebar.tsx','app/signin/form.tsx','app/team/page.tsx'];
+ const paths=['app/team/team.tsx','app/team/oral-evaluation.tsx','components/oral-audio-player.tsx','app/team/organization-switcher.tsx','components/workspace/shell.tsx','app/team/hosts.tsx','app/team/organization-panel.tsx','app/team/audit-log.tsx','components/reviews/workspace.tsx','components/workspace/sidebar.tsx','app/signin/form.tsx','app/team/page.tsx'];
  for(const path of paths){
   const source=ts.createSourceFile(path,readFileSync(path,'utf8'),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
   function visit(node:ts.Node){
@@ -38,7 +39,7 @@ test('public locale respects explicit preference and browser quality order', asy
 });
 
 test('shared Host and learner interface copy has English translations',()=>{
- const paths=['app/app/portal.tsx','app/app/learn-sidebar.tsx','app/app/account-menu.tsx','app/app/partners.tsx','app/app/practice-invites.tsx','app/app/notifications.tsx','app/app/household-avatar.tsx','app/app/skeleton.tsx','app/app/conversations.tsx','app/app/coach.tsx','app/about/profile.tsx','components/workspace/avatar-upload.tsx','components/workspace/skeletons.tsx','components/household/invite-code.tsx','components/chat/emoji-picker.tsx'];
+ const paths=['app/app/portal.tsx','components/workspace/sidebar.tsx','components/workspace/account-menu.tsx','app/app/partners.tsx','app/app/practice-invites.tsx','app/app/notifications.tsx','app/app/household-avatar.tsx','app/app/skeleton.tsx','app/app/conversations.tsx','app/app/coach.tsx','app/about/profile.tsx','components/workspace/avatar-upload.tsx','components/workspace/skeletons.tsx','components/household/invite-code.tsx','components/chat/emoji-picker.tsx'];
  for(const path of paths){
   const source=ts.createSourceFile(path,readFileSync(path,'utf8'),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
   function visit(node:ts.Node){
@@ -63,4 +64,14 @@ test('workspace dates and time zone options change language without changing tim
  assert.deepEqual(en.map(x=>x.value),zh.map(x=>x.value));
  assert.match(en.find(x=>x.value==='+08:00')!.label,/Beijing/);
  assert.ok(en.every(x=>!/[\p{Script=Han}]/u.test(x.label)));
+});
+
+ test('all role-based navigation labels are translated',()=>{
+ for(const role of ['learner','host','owner','admin','partner'] as const){
+  for(const section of workspaceNavigation(role)){
+   for(const label of [section.label,...section.items.map(item=>item.label)].filter(Boolean) as string[]){
+    assert.doesNotMatch(translate('en',label),/[\p{Script=Han}]/u,label);
+   }
+  }
+ }
 });

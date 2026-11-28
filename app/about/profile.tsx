@@ -1,5 +1,5 @@
 'use client';
-import {useLocale,LocaleSwitcher} from '../../components/locale-provider';
+import {useLocale} from '../../components/locale-provider';
 import {workspaceFetch as fetch} from '../../lib/workspace-fetch';
 import type {WorkspaceAccess} from '../../domain/workspace-access';
 import OrganizationSwitcher from '../team/organization-switcher';
@@ -7,8 +7,8 @@ import Link from 'next/link';
 import {useRouter} from 'next/navigation';
 import {FormEvent,useMemo,useState} from 'react';
 import {ArrowUpRight,Check} from 'lucide-react';
-import AccountMenu from '../app/account-menu';
-import LearnSidebar from '../app/learn-sidebar';
+import WorkspaceShell from '../../components/workspace/shell';
+import {isTeamRole} from '../../domain/workspace-access';
 import AvatarUpload,{postAvatar} from '../../components/workspace/avatar-upload';
 import {standardTimezones,timezoneLabel,timezoneOptions} from '../../lib/timezones';
 
@@ -26,11 +26,9 @@ export default function AboutProfile({access,avatar=null,email,teamAccess,role,h
   const sidebar={subtitle:household?tr("我的小组"):tr("从认识彼此开始"),household:!!household,host:role==='host',badge:0,title:household?.name||tr("我的 Household"),avatar:household?.avatar||null};
   const subtitle=role==='host'?'Host':household?tr("学习者"):tr("新伙伴");
   async function switchOrganization(organizationId:string){setBusy(true);try{const r=await fetch('/api/organizations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({organizationId})});const d=await r.json();if(!r.ok)throw new Error(d.error);location.assign('/app?org='+encodeURIComponent(organizationId))}catch(e){setError((e as Error).message);setBusy(false)}}
-  return <div className="portal workspace-ui">
-    <LearnSidebar organizationId={access?.organization.id} identity={access?.canSwitch?<OrganizationSwitcher current={household?{...access.organization,name:household.name,avatar:household.avatar}:access.organization} organizations={access.organizations} busy={busy} onSwitch={switchOrganization} settingsAvailable={!!household} onSettings={()=>router.push(home+'&tab=Household')}/>:undefined} state={sidebar} active="about" onSelect={id=>router.push(home+(id==='Home'?'':'&tab='+encodeURIComponent(id)))} teamAccess={teamAccess}/>
-
-    <div className="p-work"><div className="p-top"><nav className="p-crumb" aria-label={tr("当前位置")}><a href={home}>{household?.name||tr("我的 Household")}</a><span aria-hidden="true">/</span><b aria-current="page">{tr("个人信息")}</b></nav><div><LocaleSwitcher><AccountMenu organizationId={access?.organization.id} avatar={avatar} name={f.name} subtitle={subtitle} teamAccess={teamAccess} current="about"/></LocaleSwitcher></div></div>
-      <div className="p-panel"><main className="p-main p-about">
+  const workspaceRole=access?.organization.role||(role==='host'?'host':'learner');
+  const team=isTeamRole(workspaceRole);
+  return <WorkspaceShell role={workspaceRole} sidebar={{organizationId:access?.organization.id,title:team?access?.organization.name||tr('当前组织'):sidebar.title,subtitle:team?'':sidebar.subtitle,avatar:sidebar.avatar,identityId:!team&&sidebar.household?'Household':undefined,identity:access&&(team||access.canSwitch)?<OrganizationSwitcher current={!team&&household?{...access.organization,name:household.name,avatar:household.avatar}:access.organization} organizations={access.organizations} busy={busy} onSwitch={switchOrganization} settingsAvailable={team||!!household} onSettings={()=>router.push(home+'&tab='+encodeURIComponent(team?'团队权限':'Household'))}/>:undefined}} active="about" onSelect={id=>router.push(home+'&tab='+encodeURIComponent(id))} breadcrumb={<><a href={home}>{team?access?.organization.name:household?.name||tr('我的 Household')}</a><span aria-hidden="true">/</span><b aria-current="page">{tr('个人信息')}</b></>} account={{organizationId:access?.organization.id,avatar,name:f.name,subtitle:team?undefined:subtitle,current:'about'}} contentClassName="p-main p-about">
         <div className="p-welcome"><div><h1>{tr("个人信息")}</h1><p>{tr("伙伴看到的称呼、你的时区和联系方式，都可以在这里更新。")}</p></div></div>
         <form onSubmit={submit}>
           <section className="p-card"><h2>{tr("基本信息")}</h2><p>{tr("保存后，小组里显示的名字会同步更新。")}</p>
@@ -54,11 +52,9 @@ export default function AboutProfile({access,avatar=null,email,teamAccess,role,h
           {saved&&<div className="p-notice" role="status"><Check size={15}/>{tr("已保存。")}</div>}
           <div className="p-about-actions"><button className="p-button" disabled={busy}>{busy?tr("正在保存…"):tr("保存个人信息")} <Check size={15}/></button></div>
         </form>
-        {role!=='host'&&<section className="p-card" style={{marginTop:28}}><h2>{tr("学习资料")}</h2>
+        {!team&&role!=='host'&&<section className="p-card" style={{marginTop:28}}><h2>{tr("学习资料")}</h2>
           {hasApplication?<><p>{status?tr(statusText[status]||'团队正在跟进'):''}{household?tr("。学习需要与可用时间的变更，请通过“给青鸟的建议”联系团队。"):tr("。学习目标、兴趣和可用时间可在加入资料中补充。")}</p><Link className="p-outline" href="/apply">{tr("查看我的加入资料 ")}<ArrowUpRight size={14}/></Link></>
           :<><p>{tr("还没有填写加入资料。先让青鸟团队认识你，再为你安排合适的小组。")}</p><Link className="p-button" href="/apply">{tr("填写加入资料 ")}<ArrowUpRight size={15}/></Link></>}
         </section>}
-      </main><div className="p-footer">IRIVA · A World of Voices. A Place to Belong.</div></div>
-    </div>
-  </div>;
+  </WorkspaceShell>;
 }

@@ -1,5 +1,6 @@
 /** Shared signed-in workspace interface copy. User content is never translated. */
 export const workspaceEnglish:Record<string,string> = {
+  "工作空间导航": "Workspace navigation",
   "录音加载失败，请点击播放重试。": "Could not load the recording. Click play to retry.",
   "请再次点击播放录音。": "Click play again to listen.",
   "正在加载录音，点击取消": "Loading recording, click to cancel",

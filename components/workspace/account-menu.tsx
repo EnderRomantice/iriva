@@ -1,11 +1,11 @@
 'use client';
-import {useLocale} from '../../components/locale-provider';
+import {useLocale} from '../locale-provider';
 import Link from 'next/link';
 import {useEffect,useRef,useState} from 'react';
 import {ChevronDown,LogOut,UserRound,Home} from 'lucide-react';
 
 /** 右上角头像：点击展开账户菜单（个人信息 / 学习空间 / 退出登录）。 */
-export default function AccountMenu({name,subtitle,teamAccess=false,current,avatar=null,organizationId}:{name:string;subtitle?:string;teamAccess?:boolean;current?:'learn'|'about';avatar?:string|null;organizationId?:string}){const {t:tr}=useLocale();
+export default function AccountMenu({name,subtitle,teamAccess=false,current,avatar=null,organizationId,beforeLeave}:{name:string;subtitle?:string;teamAccess?:boolean;current?:'learn'|'about';avatar?:string|null;organizationId?:string;beforeLeave?:()=>boolean}){const {t:tr}=useLocale();
   const [open,setOpen]=useState(false),ref=useRef<HTMLDivElement>(null);
   useEffect(()=>{if(!open)return;
     const away=(e:PointerEvent)=>{if(!ref.current?.contains(e.target as Node))setOpen(false)};
@@ -21,10 +21,10 @@ export default function AccountMenu({name,subtitle,teamAccess=false,current,avat
     </button>
     {open&&<div className="p-account-menu" role="menu">
       <div className="p-account-head">{avatar?<span className="p-you has-image" aria-hidden="true"><img src={avatar} alt="" width={36} height={36}/></span>:<span className="p-you">{initial}</span>}<div><b>{name||'Welcome'}</b>{subtitle&&<small>{subtitle}</small>}</div></div>
-      {current!=='about'&&<Link role="menuitem" href={'/about'+(organizationId?'?org='+encodeURIComponent(organizationId):'')} onClick={()=>setOpen(false)}><UserRound size={16}/>{tr("个人信息")}</Link>}
-      {current!=='learn'&&<Link role="menuitem" href={'/app'+(organizationId?'?org='+encodeURIComponent(organizationId):'')} onClick={()=>setOpen(false)}><Home size={16}/>{tr("返回我的空间")}</Link>}
+      {current!=='about'&&<Link role="menuitem" href={'/about'+(organizationId?'?org='+encodeURIComponent(organizationId):'')} onClick={e=>{if(beforeLeave&&!beforeLeave()){e.preventDefault();return}setOpen(false)}}><UserRound size={16}/>{tr("个人信息")}</Link>}
+      {current!=='learn'&&<Link role="menuitem" href={'/app'+(organizationId?'?org='+encodeURIComponent(organizationId):'')} onClick={e=>{if(beforeLeave&&!beforeLeave()){e.preventDefault();return}setOpen(false)}}><Home size={16}/>{tr("返回我的空间")}</Link>}
       <hr/>
-      <a role="menuitem" href="/signout?return_to=%2F"><LogOut size={16}/>{tr("退出登录")}</a>
+      <a role="menuitem" href="/signout?return_to=%2F" onClick={e=>{if(beforeLeave&&!beforeLeave())e.preventDefault()}}><LogOut size={16}/>{tr("退出登录")}</a>
     </div>}
   </div>;
 }
