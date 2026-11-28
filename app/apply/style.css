@@ -40,6 +40,7 @@ html:has(.apply-success),body:has(.apply-success){background:color-mix(in oklab,
 .apply-button:hover{background:var(--primary-hover)}
 .apply-link{display:inline-flex;align-items:center;gap:8px;padding:12px 16px;border-radius:var(--radius);font-size:14px;color:var(--ink);background:var(--card);border:1px solid var(--line-strong)}
 .apply-link:hover{border-color:var(--line-control)}
+.apply-success .apply-switch-account{justify-self:end;padding:6px 0;font-size:12px;line-height:1.5;color:var(--muted);white-space:nowrap;text-decoration:none}.apply-switch-account:hover,.apply-switch-account:focus-visible{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
 @media(max-width:600px){.apply-success{margin-top:28px;gap:12px}.apply-status{padding:20px;gap:14px;flex-direction:column}.apply-status h1{font-size:22px}.apply-track{grid-template-columns:1fr;gap:14px;padding:20px}.apply-track li{grid-template-columns:28px 1fr;align-items:start;padding:0}.apply-track li p{padding-top:2px}.apply-track li::after{top:32px;bottom:-14px;left:13px;right:auto;width:2px;height:auto}.apply-cards{grid-template-columns:1fr;gap:12px}.apply-card{padding:20px}.apply-links>*{flex:1 1 100%;justify-content:center}}
 
 /* 所有身份共用的登录页。 */
