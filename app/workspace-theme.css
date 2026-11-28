@@ -92,7 +92,7 @@
 /* Sidebar rows: compact, instant hover, filled selection */
 .workspace-ui:is(.portal,.team-page) .workspace-sidebar nav{gap:18px}
 .workspace-ui .workspace-nav-group>small{font-size:11px;font-weight:600;letter-spacing:.2px;margin-bottom:4px}
-.workspace-ui:is(.portal,.team-page) .workspace-nav-group button{height:32px;padding:0 10px;margin:1px 0;border-radius:6px;gap:9px;font-size:14px;line-height:1;color:var(--ws-nav-ink);box-shadow:none;transition:none;user-select:none;-webkit-tap-highlight-color:transparent}
+.workspace-ui:is(.portal,.team-page) .workspace-nav-group button{height:32px;padding:0 10px;margin:1px 0;border-radius:6px;gap:9px;font-size:14px;line-height:1.5;color:var(--ws-nav-ink);box-shadow:none;transition:none;user-select:none;-webkit-tap-highlight-color:transparent}
 .workspace-ui:is(.portal,.team-page) .workspace-nav-group button:hover{background:var(--ws-row-hover);color:var(--ink)}
 .workspace-ui:is(.portal,.team-page) .workspace-nav-group button:active{background:var(--ws-row-press)}
 .workspace-ui:is(.portal,.team-page) .workspace-nav-group button.active,.workspace-ui:is(.portal,.team-page) .workspace-nav-group button.active:hover{background:var(--primary);color:var(--on-deep);font-weight:600;box-shadow:none}
