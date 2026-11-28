@@ -1,5 +1,8 @@
+import {oralAssessmentAvailable} from '../../../server/services/oral-assessment';
+import {oralGrades} from '../../../lib/oral-assessment';
+import {applicationPaymentStatusSql} from '../../../server/services/application-payments';
 import { matchingLanguage } from '../../../lib/learning-language';
-import {paidApplicationSql,hasApplicationPayment,syncApplicationPayment} from '../../../server/services/application-payments';
+import {paidApplicationSql,syncApplicationPayment} from '../../../server/services/application-payments';
 import {workspaceOrganizations} from '../../../server/services/workspace-access';
 import {randomUUID} from 'node:crypto';
 import { auditOperation, auditedOperation, canManage, saveOrganizationMember, removeOrganizationMember } from '../../../server/services/organization-access';
@@ -22,7 +25,7 @@ export async function GET() {
     const db = await pilotDb();
     const organizations=await workspaceOrganizations(await workspaceRepository(),u);
     const [applications, households, tasks, staff, placements, pairs, feedback, hosts, payments] = await Promise.all([
-      role==='admin'?db.prepare(`SELECT a.* FROM member_applications a WHERE a.organization_id=? AND (a.household IS NOT NULL OR a.role='host' OR ${paidApplicationSql}) ORDER BY a.created DESC LIMIT 500`).all(organizationId):Promise.resolve([]),
+      role==='admin'?db.prepare(`SELECT a.*, ${applicationPaymentStatusSql} AS payment_status FROM member_applications a WHERE a.organization_id=? ORDER BY a.created DESC LIMIT 500`).all(organizationId):Promise.resolve([]),
       db.prepare('SELECT id,name,week,theme AS topic,duration FROM households WHERE organization_id=? OR organization_id IN (SELECT id FROM organizations WHERE parent_id=?) ORDER BY name LIMIT 500').all(organizationId,organizationId),
       db.prepare('SELECT * FROM team_tasks WHERE organization_id=? ORDER BY done ASC,created DESC LIMIT 200').all(organizationId),
       role === 'admin' ? db.prepare('SELECT u.id,u.email,u.name,a.role FROM organization_access a JOIN users u ON u.id=a.user_id WHERE a.organization_id=? ORDER BY u.name LIMIT 200').all(organizationId) : Promise.resolve([]),
@@ -34,7 +37,7 @@ export async function GET() {
     ]);
     const num = (rows: unknown[]) => (rows as Row[]).map(r => ({ ...r, ...('revision' in r ? { revision: Number(r.revision) } : {}), ...('done' in r ? { done: Number(r.done) } : {}), ...('week' in r ? { week: Number(r.week), duration: Number(r.duration) } : {}) }));
     await auditOperation(await workspaceRepository(),ctx,'team.view');
-    return out({ organization:ctx.organization,organizations,hosts, feedback, payments: (payments as Row[]).map(p => ({ ...p, amount_minor: Number(p.amount_minor), refunded_minor: Number(p.refunded_minor) })), pairs, role, applications: num(applications), households: num(households), tasks: num(tasks), staff, placements });
+    return out({ oralAssessmentAvailable:oralAssessmentAvailable(), organization:ctx.organization,organizations,hosts, feedback, payments: (payments as Row[]).map(p => ({ ...p, amount_minor: Number(p.amount_minor), refunded_minor: Number(p.refunded_minor) })), pairs, role, applications: num(applications), households: num(households), tasks: num(tasks), staff, placements });
   } catch (e) { console.error(e); return out({ error: '暂时无法读取运营工作台。' }, 503); }
 }
 
@@ -53,15 +56,14 @@ export async function POST(req: Request) {
       try { await addPilotHost(await workspaceRepository(), b,organizationId); } catch (e) { return errorResponse(e); }
     } else if (action === 'review') {
       const status = val('status', 20);
-      if (!['pending', 'new', 'contacted', 'shortlist', 'hold', 'declined', 'interest'].includes(status)) return out({ error: '无效状态。' }, 400);
+      if (!['awaiting_payment', 'pending', 'new', 'contacted', 'shortlist', 'hold', 'declined', 'interest'].includes(status)) return out({ error: '无效状态。' }, 400);
       if (!Number.isInteger(b.revision) || (b.revision as number) < 0) return out({ error: '请刷新后读取最新资料。' }, 409);
       const oralLevel = val('oral_level', 20);
       if (oralLevel && !['beginner', 'intermediate', 'advanced'].includes(oralLevel)) return out({ error: '无效的口语确认结果。' }, 400);
       await db.prepare('UPDATE member_applications SET id=id WHERE id=? AND organization_id=?').run(id,organizationId);
-      if (!await hasApplicationPayment(await workspaceRepository(),id)) return out({ error: '学员需先完成套餐付款，才能进入待匹配队列。' },409);
-      const score=b.oral_score===undefined||b.oral_score===null?null:b.oral_score;
-      if(score!==null&&(!Number.isInteger(score)||Number(score)<0||Number(score)>100))return out({error:'口语评分须为 0–100 的整数。'},400);
-      const r = await db.prepare('UPDATE member_applications SET status=?,notes=?,oral_level=?,oral_notes=?,oral_score=?,oral_reviewed_at=?,oral_reviewer=?,revision=revision+1 WHERE id=? AND revision=? AND household IS NULL AND organization_id=?').run(status, val('notes', 3000), oralLevel, val('oral_notes', 1500), score, score!==null?new Date().toISOString():'',score!==null?u.email:'', id, b.revision, organizationId);
+      const grade=val('oral_grade',10);
+      if(grade&&!oralGrades.includes(grade as typeof oralGrades[number]))return out({error:'口语等级须为 D、C、B、A 或 A+。'},400);
+      const r = await db.prepare('UPDATE member_applications SET status=?,notes=?,oral_level=?,oral_notes=?,oral_score=NULL,oral_grade=?,oral_transcript=?,oral_ai_evaluation=?,oral_reviewed_at=?,oral_reviewer=?,revision=revision+1 WHERE id=? AND revision=? AND household IS NULL AND organization_id=?').run(status, val('notes', 3000), oralLevel, val('oral_notes', 1500), grade, val('oral_transcript',6000), val('oral_ai_evaluation',6000), grade?new Date().toISOString():'',grade?u.email:'', id, b.revision, organizationId);
       if (!r.changes) return out({ error: '资料或评分已更新，或申请已分组，请刷新后重试。' }, 409);
     } else if (action === 'payment') {
       const status = val('status', 20), household = val('household', 100), user = val('user', 100);

@@ -1,9 +1,10 @@
-import {seedPaidApplication} from './payment-helpers';
 import {test,expect,type BrowserContext} from '@playwright/test';
 import {createHash,randomBytes,randomUUID} from 'node:crypto';
 import postgres from 'postgres';
 import {seedId} from '../../server/db/seed';
 import {defaultOrganizationId} from '../../domain/workspace';
+
+test.use({launchOptions:{args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']}});
 
 test('record, submit, privately play, review and replace an English speaking sample',async({browser})=>{
  if(process.env.PG_LOCAL_TEST!=='1'||!process.env.DATABASE_URL)throw new Error('Use disposable PostgreSQL harness.');
@@ -17,8 +18,6 @@ test('record, submit, privately play, review and replace an English speaking sam
  }
  try{
   const learner=await session(),team=await session(true),other=await session(),page=await learner.newPage();
-  // A real MediaRecorder encodes a generated audio stream; no machine microphone is needed.
-  await page.addInitScript(()=>{navigator.mediaDevices.getUserMedia=async()=>{const audio=new AudioContext(),source=audio.createOscillator(),destination=audio.createMediaStreamDestination();source.connect(destination);source.start();return destination.stream}});
   await page.goto('/apply');
   await page.getByLabel('想学习哪种语言？').selectOption('English');
   await page.getByLabel('怎么称呼你？',{exact:true}).fill('Recording learner');
@@ -31,7 +30,7 @@ test('record, submit, privately play, review and replace an English speaking sam
   await expect(page.getByText('Please introduce yourself in English.',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'开始录音',exact:true}).click();
   await expect(page.getByRole('button',{name:'下一步'})).toBeDisabled();
-  await expect(page.getByRole('button',{name:/停止录音 · [1-9]/})).toBeVisible();
+  await expect(page.getByRole('button',{name:/停止录音 · [2-9]/})).toBeVisible();
   await page.getByRole('button',{name:/停止录音/}).click();
   await expect(page.getByLabel('试听口语录音')).toBeVisible();
   await page.getByLabel('目前的口语状态').selectOption('intermediate');
@@ -43,42 +42,126 @@ test('record, submit, privately play, review and replace an English speaking sam
   await page.setViewportSize({width:390,height:844});
   await page.screenshot({path:'test-results/oral-recorder-mobile.png',fullPage:true});
   await page.getByRole('button',{name:'下一步'}).click();
+  await expect(page.getByRole('checkbox',{name:/选填：同意团队/})).toHaveCount(0);
+  await expect(page.getByLabel('我同意青鸟团队使用这些资料',{exact:false})).toBeVisible();
   await page.getByLabel('我同意青鸟团队使用这些资料',{exact:false}).check();
+  const saveResponse=page.waitForResponse(r=>r.url().endsWith('/api/apply')&&r.request().method()==='POST');
   await page.getByRole('button',{name:'提交加入资料'}).click();
   await expect(page.getByRole('heading',{name:'资料已保存，请选择套餐并付款。'})).toBeVisible();
-  const own=(await (await learner.request.get('/api/apply')).json()).application,id=own.id;
-  await seedPaidApplication(db,id);
-  await db`UPDATE iriva.member_applications SET status='pending' WHERE id=${id}`;
+  let own=(await (await learner.request.get('/api/apply')).json()).application;const id=own.id;
+  expect((await (await saveResponse).json()).recording_updated).toBe(own.recording_updated);
+
   expect(own.recording_updated).toBeTruthy();expect(own).not.toHaveProperty('oral_score');
   const audio=await learner.request.get(`/api/apply/recording?id=${id}`);expect(audio.status()).toBe(200);expect(audio.headers()['content-type']).toBe('audio/webm');
   expect((await learner.request.get(`/api/apply/recording?id=${id}`,{headers:{Range:'bytes=0-9'}})).status()).toBe(206);
   expect((await other.request.get(`/api/apply/recording?id=${id}`)).status()).toBe(404);
+  // Edit unrelated profile fields without re-recording, then reload from the server.
+  const originalAudio=await audio.body(),originalVersion=own.recording_updated;
+  await page.getByRole('button',{name:'补充或修改资料'}).click();
+  await page.getByLabel('所在国家或地区',{exact:true}).fill('Hangzhou');
+  await page.getByRole('button',{name:'下一步'}).click();
+  await expect(page.getByLabel('试听口语录音')).toBeVisible();
+  await expect(page.getByText('录音已保存在后台，修改其他资料无需重新录制。',{exact:false})).toBeVisible();
+  await page.getByRole('button',{name:'下一步'}).click();
+  await page.getByLabel('我同意青鸟团队使用这些资料',{exact:false}).check();
+  const editResponse=page.waitForResponse(r=>r.url().endsWith('/api/apply')&&r.request().method()==='PATCH');
+  await page.getByRole('button',{name:'保存补充资料'}).click();
+  expect((await (await editResponse).json()).recording_updated).toBe(originalVersion);
+  await expect(page.getByLabel('已提交的口语录音')).toBeVisible();
+  await page.reload();await expect(page.getByLabel('已提交的口语录音')).toBeVisible();
+  own=(await (await learner.request.get('/api/apply')).json()).application;
+  expect(own.location).toBe('Hangzhou');expect(own.recording_updated).toBe(originalVersion);
+  expect(await (await learner.request.get(`/api/apply/recording?id=${id}`)).body()).toEqual(originalAudio);
+  expect(await (await team.request.get(`/api/apply/recording?id=${id}&org=${defaultOrganizationId}`)).body()).toEqual(originalAudio);
   const staffPage=await team.newPage();await staffPage.goto('/team');
   await staffPage.getByRole('button',{name:'申请与筛选',exact:true}).click();
+  await staffPage.getByLabel('付款状态',{exact:true}).selectOption('paid');
+  await expect(staffPage.getByRole('heading',{name:'Recording learner',exact:true})).toHaveCount(0);
+  await staffPage.getByLabel('付款状态',{exact:true}).selectOption('unpaid');
   await staffPage.getByLabel('录音评估状态').selectOption('pending');
   await staffPage.locator('article').filter({has:staffPage.getByRole('heading',{name:'Recording learner',exact:true})}).getByRole('button',{name:'查看与跟进 ↗'}).click();
   const player=staffPage.getByLabel('申请人口语录音');await expect(player).toBeVisible();
-  await player.evaluate(async(el:HTMLAudioElement)=>{await el.play();el.pause()});
-  await staffPage.getByLabel('口语评分（0–100）').fill('82');
+  let releaseAudio!:()=>void;const audioGate=new Promise<void>(resolve=>{releaseAudio=resolve});
+  await staffPage.route('**/api/apply/recording?**',async route=>{await audioGate;await route.continue()});
+  await player.getByRole('button',{name:'播放录音',exact:true}).click();
+  await expect(player.getByRole('button',{name:'正在加载录音，点击取消'})).toHaveAttribute('aria-busy','true');
+  await expect(player.locator('.oral-audio-spinner')).toBeVisible();
+  releaseAudio();
+  await expect(player.getByRole('button',{name:'暂停录音',exact:true})).toBeVisible();
+  expect(await player.locator('audio').evaluate((el:HTMLAudioElement)=>el.paused)).toBe(false);
+  await player.getByRole('button',{name:'暂停录音',exact:true}).click();
+  await staffPage.unroute('**/api/apply/recording?**');
+  await expect(staffPage.getByRole('button',{name:'手动启动 AI 识别与评分'})).toBeEnabled();
+  expect((await learner.request.post('/api/team/oral-assessment',{headers,data:{id,revision:own.revision,manual:true}})).status()).toBe(401);
+  await staffPage.getByLabel('口语等级（D–A+）').selectOption('A');
   await staffPage.getByLabel('口语跟进记录').fill('表达清晰，建议继续练习流利度。');
   await staffPage.getByLabel('跟进确认的口语水平').selectOption('intermediate');
   await staffPage.screenshot({path:'test-results/oral-review.png',fullPage:true});
   await staffPage.getByRole('button',{name:'保存跟进记录',exact:true}).click();
   await expect(staffPage.getByRole('dialog')).toHaveCount(0);
-  let [row]=await db`SELECT * FROM iriva.member_applications WHERE id=${id}`;expect(row.oral_score).toBe(82);expect(row.oral_reviewer).toBeTruthy();
-  const review={action:'review',id,revision:Number(row.revision),status:'new',oral_score:101};
+  let [row]=await db`SELECT * FROM iriva.member_applications WHERE id=${id}`;expect(row.oral_grade).toBe('A');expect(row.oral_reviewer).toBeTruthy();
+  const review={action:'review',id,revision:Number(row.revision),status:'new',oral_grade:'S'};
   expect((await team.request.post('/api/team',{headers,data:review})).status()).toBe(400);
-  expect((await team.request.post('/api/team',{headers,data:{...review,revision:0,oral_score:70}})).status()).toBe(409);
+  expect((await team.request.post('/api/team',{headers,data:{...review,revision:0,oral_grade:'B'}})).status()).toBe(409);
+  // Explicit click creates an editable preview; it is not persisted until Save.
+  let aiCalls=0,releaseAi!:()=>void;
+  const aiGate=new Promise<void>(resolve=>{releaseAi=resolve});
+  const evaluation=['AI 建议等级：B',...['发音清晰度','流利度与连贯性','词汇丰富度与准确性','语法与句式控制'].map(d=>`${d} · B\n录音依据：I enjoy reading.\n判断理由：能表达日常兴趣。`),'综合评级理由\n能表达日常兴趣，复杂句式证据有限。','更高等级还需要什么\n练习用不同句式解释原因。','评估局限\n短录音不能代表所有情境的表达能力。'].join('\n\n');
+  await staffPage.route('**/api/team/oral-assessment',async route=>{aiCalls++;await aiGate;await route.fulfill({json:{grade:'B',transcript:'I enjoy reading.',notes:evaluation,model:'test-audio'}})});
+  await staffPage.reload();await staffPage.getByRole('button',{name:'申请与筛选',exact:true}).click();
+  await staffPage.locator('article').filter({has:staffPage.getByRole('heading',{name:'Recording learner',exact:true})}).getByRole('button',{name:'查看与跟进 ↗'}).click();
+  expect(aiCalls).toBe(0);
+  await staffPage.getByRole('button',{name:'手动启动 AI 识别与评分'}).click();
+  const recognizing=staffPage.getByRole('button',{name:'正在识别',exact:true});
+  await expect(recognizing).toHaveAttribute('aria-busy','true');
+  await expect(recognizing.locator('span:last-child')).toHaveClass('team-ai-spinner');
+  await expect(recognizing).toBeDisabled();
+  releaseAi();
+  await expect(staffPage.getByLabel('口语等级（D–A+）')).toHaveValue('B');
+  await expect(staffPage.getByLabel('录音转写')).toHaveValue('I enjoy reading.');
+  expect((await db`SELECT oral_grade FROM iriva.member_applications WHERE id=${id}`)[0].oral_grade).toBe('A');
+  await staffPage.getByRole('button',{name:'保存跟进记录',exact:true}).click();await expect(staffPage.getByRole('dialog')).toHaveCount(0);
+  [row]=await db`SELECT * FROM iriva.member_applications WHERE id=${id}`;
+  expect(row.oral_grade).toBe('B');expect(row.oral_transcript).toBe('I enjoy reading.');expect(aiCalls).toBe(1);
+  expect(row.oral_ai_evaluation).toContain('综合评级理由');expect(row.oral_notes).toBe('表达清晰，建议继续练习流利度。');
+  await staffPage.reload();await staffPage.getByRole('button',{name:'申请与筛选',exact:true}).click();
+  await staffPage.locator('article').filter({has:staffPage.getByRole('heading',{name:'Recording learner',exact:true})}).getByRole('button',{name:'查看与跟进 ↗'}).click();
+  await expect(staffPage.getByRole('region',{name:'IRIVA AI 评价'})).toContainText('复杂句式证据有限');
+  const report=staffPage.getByRole('region',{name:'IRIVA AI 评价'});
+  await expect(report.locator('.team-ai-block--dimension')).toHaveCount(4);
+  await expect(report.getByRole('heading',{name:'综合评级理由'})).toBeVisible();
+  await staffPage.setViewportSize({width:1280,height:2400});
+  await report.screenshot({path:'test-results/iriva-ai-evaluation.png'});
+  await staffPage.setViewportSize({width:390,height:844});
+  await staffPage.setViewportSize({width:390,height:2600});
+  await report.screenshot({path:'test-results/iriva-ai-evaluation-mobile.png'});
+  await staffPage.setViewportSize({width:390,height:844});
+  expect(await report.evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
+  await staffPage.emulateMedia({reducedMotion:'reduce'});
+  expect(await report.locator('.t-stagger-line').first().evaluate(el=>getComputedStyle(el).transitionDuration)).toBe('0s');
+  await staffPage.unroute('**/api/team/oral-assessment');
+  await staffPage.route('**/api/team/oral-assessment',route=>route.fulfill({status:502,json:{error:'AI 服务暂不可用。'}}));
+  await staffPage.getByRole('button',{name:'手动启动 AI 识别与评分'}).click();
+  await expect(staffPage.getByRole('button',{name:'手动启动 AI 识别与评分'})).toBeEnabled();
+  await expect(report).toContainText('复杂句式证据有限');
+  await expect(staffPage.locator('.team-ai-spinner')).toHaveCount(0);
+  // Updating a profile must preserve both the audio and its existing assessment.
+  const beforeEdit={...row};
+  const profileOnly={...own,location:'Suzhou',revision:Number(row.revision),consent:true,availability_slots:[{day:6,start:'10:00',end:'12:00'}]};
+  expect((await learner.request.patch('/api/apply',{headers,data:profileOnly})).status()).toBe(200);
+  [row]=await db`SELECT * FROM iriva.member_applications WHERE id=${id}`;
+  for(const field of ['recording_updated','oral_grade','oral_transcript','oral_ai_evaluation','oral_notes','oral_reviewed_at','oral_reviewer'])expect(row[field]).toBe(beforeEdit[field]);
+  expect(await (await team.request.get(`/api/apply/recording?id=${id}&org=${defaultOrganizationId}`)).body()).toEqual(originalAudio);
   const [stored]=await db`SELECT * FROM iriva.application_recordings WHERE application_id=${id}`;
   const profile={...own,name:'Recording learner',revision:Number(row.revision),consent:true,availability_slots:[{day:6,start:'10:00',end:'12:00'}],recording:{data:stored.data_base64,type:stored.mime_type,duration:stored.duration}};
   expect((await learner.request.patch('/api/apply',{headers,data:profile})).status()).toBe(200);
-  [row]=await db`SELECT * FROM iriva.member_applications WHERE id=${id}`;expect(row.oral_score).toBeNull();expect(row.oral_notes).toBe('');expect(row.oral_level).toBe('');
+  [row]=await db`SELECT * FROM iriva.member_applications WHERE id=${id}`;expect(row.oral_score).toBeNull();expect(row.oral_grade).toBe('');expect(row.oral_transcript).toBe('');expect(row.oral_ai_evaluation).toBe('');expect(row.oral_notes).toBe('');expect(row.oral_level).toBe('');
   // Organization scope must still be enforced for a valid password-authenticated admin.
   const foreign=randomUUID();
   await db`INSERT INTO iriva.organizations(id,name,initials,color,version,created_at,updated_at) VALUES (${foreign},'Other','O','blue',1,${now},${now})`;
   await db`UPDATE iriva.member_applications SET organization_id=${foreign} WHERE id=${id}`;
   expect((await team.request.get(`/api/apply/recording?id=${id}&org=${defaultOrganizationId}`)).status()).toBe(404);
   // No recording or review fields are leaked through the learner-facing application response.
-  const final=(await (await learner.request.get('/api/apply')).json()).application;expect(final).not.toHaveProperty('oral_notes');
+  const final=(await (await learner.request.get('/api/apply')).json()).application;expect(final).not.toHaveProperty('oral_notes');expect(final).not.toHaveProperty('oral_ai_evaluation');
  }finally{await Promise.all(contexts.map(c=>c.close()));await db.end()}
 });

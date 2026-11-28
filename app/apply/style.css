@@ -58,4 +58,7 @@ html:has(.apply-success),body:has(.apply-success){background:color-mix(in oklab,
 .apply-oral li{margin:12px 0}
 .apply-oral li small{display:block;color:#666}
 .apply-oral audio,.apply-card audio{display:block;width:100%;max-width:100%}
-.apply-oral .apply-actions{flex-wrap:wrap}
+.apply-oral .apply-actions{flex-wrap:wrap;justify-content:flex-start;margin-top:20px}
+.apply-oral .apply-record-button{margin:0;min-height:48px;padding:12px 20px;gap:10px;font-size:16px;font-weight:700}
+.apply-record-button svg{flex-shrink:0}
+.apply-record-button:disabled{cursor:wait}

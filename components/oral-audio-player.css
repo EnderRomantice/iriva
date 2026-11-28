@@ -1,0 +1,13 @@
+.oral-audio-player{width:100%;min-width:0;margin:10px 0}
+.oral-audio-player>audio{display:none!important}
+.oral-audio-controls{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--tint)}
+.oral-audio-controls button{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:40px;height:40px;padding:0;border:0;border-radius:50%;background:var(--tint-strong);color:var(--ink);cursor:pointer;transition:background-color 150ms ease-in-out}
+.oral-audio-controls button:focus-visible,.oral-audio-progress input:focus-visible{outline:2px solid var(--green);outline-offset:3px}
+.oral-audio-controls .oral-audio-mute{width:32px;height:36px;background:transparent}
+.oral-audio-progress{display:flex;flex:1;min-width:0;flex-direction:column;gap:3px}
+.oral-audio-progress input[type=range]{width:100%;min-width:0;height:20px;padding:0;border:0;background:transparent;accent-color:var(--green);cursor:pointer}
+.oral-audio-progress>span{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;line-height:1.4}
+.oral-audio-spinner{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:oral-audio-spin 800ms linear infinite}
+.oral-audio-status{display:block;min-height:1.6em;margin-top:4px;font-size:12px;color:var(--muted);line-height:1.6}
+@keyframes oral-audio-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.oral-audio-spinner{animation:none}.oral-audio-controls button{transition:none}}

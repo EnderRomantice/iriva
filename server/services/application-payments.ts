@@ -78,3 +78,10 @@ export async function receiveApplicationRefund(repo: DatabaseRepository, o: Row)
     return !!a;
   });
 }
+
+/** Payment is independent from follow-up status, including manual household receipts. */
+export const applicationPaymentStatusSql = `CASE
+ WHEN a.household IS NOT NULL AND EXISTS(SELECT 1 FROM pilot_payments pp WHERE pp.household=a.household AND pp.user_id=a.user_id) THEN (SELECT pp.status FROM pilot_payments pp WHERE pp.household=a.household AND pp.user_id=a.user_id)
+ WHEN ${paidApplicationSql} THEN 'paid'
+ WHEN EXISTS(SELECT 1 FROM application_orders ao JOIN application_payments ap ON ap.order_id=ao.id WHERE ao.application_id=a.id AND ao.plan=a.plan AND ao.language=a.language AND ap.status='refunded') THEN 'refunded'
+ ELSE 'unpaid' END`;

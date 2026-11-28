@@ -13,5 +13,5 @@ export function parseRecording(value: unknown): OralRecording | null {
 /** Caller runs this in the same transaction as the application save. */
 export async function saveRecording(repo:DatabaseRepository,id:string,recording:OralRecording,now:string){
  await repo.db.prepare('INSERT INTO application_recordings (application_id,data_base64,mime_type,duration,updated) VALUES (?,?,?,?,?) ON CONFLICT(application_id) DO UPDATE SET data_base64=excluded.data_base64,mime_type=excluded.mime_type,duration=excluded.duration,updated=excluded.updated').run(id,recording.data,recording.type,recording.duration,now);
- await repo.db.prepare("UPDATE member_applications SET recording_updated=?,oral_score=NULL,oral_level='',oral_notes='',oral_reviewed_at='',oral_reviewer='' WHERE id=?").run(now,id);
+ await repo.db.prepare("UPDATE member_applications SET recording_updated=?,oral_score=NULL,oral_grade='',oral_transcript='',oral_ai_evaluation='',oral_level='',oral_notes='',oral_reviewed_at='',oral_reviewer='' WHERE id=?").run(now,id);
 }

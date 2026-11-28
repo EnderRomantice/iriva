@@ -1,0 +1,98 @@
+:root {
+  --stagger-dur: 500ms;
+  --stagger-distance: 12px;
+  --stagger-stagger: 40ms;
+  --stagger-blur: 3px;
+  --stagger-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Lines start translated down + blurred + invisible; .is-shown
+   on the parent flips them to their resting state. The second
+   line's transition-delay holds it back by --stagger-stagger
+   so the eye lands on the headline first. */
+.t-stagger-line {
+  display: block;
+  opacity: 0;
+  transform: translateY(var(--stagger-distance));
+  filter: blur(var(--stagger-blur));
+  transition:
+    opacity   var(--stagger-dur) var(--stagger-ease),
+    transform var(--stagger-dur) var(--stagger-ease),
+    filter    var(--stagger-dur) var(--stagger-ease);
+  will-change: transform, opacity, filter;
+}
+.t-stagger-line--2 { transition-delay: var(--stagger-stagger); }
+
+.t-stagger.is-shown .t-stagger-line {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+}
+/* Exit decouples from the stagger: same fade for every line,
+   no Y return, no blur — so the disappearance reads as a
+   single quiet fade instead of a reverse reveal. */
+.t-stagger.is-hiding .t-stagger-line {
+  opacity: 0;
+  transform: translateY(0);
+  filter: blur(0);
+  transition:
+    opacity 200ms ease,
+    transform 0s linear,
+    filter 0s linear;
+  transition-delay: 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-stagger-line { transition: none !important; }
+}
+
+:root {
+  --resize-dur: 300ms;
+  --resize-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.t-resize {
+  transition:
+    width  var(--resize-dur) var(--resize-ease),
+    height var(--resize-dur) var(--resize-ease);
+  will-change: width, height;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-resize { transition: none !important; }
+}
+
+/* Scoped presentation and motion tuning for the oral report. */
+.team-ai-evaluation{margin:22px 0;padding:20px;background:var(--tint);border:1px solid var(--line);border-radius:12px;--stagger-ease:ease-in-out}
+.team-ai-heading{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;margin-bottom:16px}
+.team-ai-heading h3{margin:0;font-size:16px}
+.team-ai-heading>span{color:var(--muted);font-size:12px}
+.team-ai-resize{overflow:hidden;overflow:clip}
+.team-ai-resize>div{display:flow-root}
+.team-ai-report{display:grid;gap:14px;padding:1px}
+.team-ai-block{min-width:0;padding:18px;background:var(--surface);border:1px solid var(--line);border-radius:9px}
+.team-ai-block-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.team-ai-block-heading h4{margin:0;font-size:14px;line-height:1.6;font-weight:600}
+.team-ai-grade{display:inline-flex;align-items:center;justify-content:center;min-width:34px;padding:3px 9px;border-radius:7px;background:var(--tint-strong);color:var(--green);font-size:16px;font-weight:600;flex-shrink:0}
+.team-ai-block--grade{background:var(--tint-strong);border-color:var(--line-strong)}
+.team-ai-block--grade .team-ai-block-heading{margin:0}
+.team-ai-block--grade .team-ai-grade{font-size:28px;padding:0 6px;line-height:1.3}
+.team-ai-evidence+.team-ai-evidence{margin-top:14px}
+.team-ai-evidence>span{display:block;margin-bottom:6px;font-size:12px;color:var(--muted)}
+.team-ai-block p,.team-ai-block blockquote{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.9}
+.team-ai-block blockquote{padding:10px 12px;border-left:2px solid var(--line-strong);background:var(--tint);border-radius:0 5px 5px 0}
+.team-ai-block--summary{padding-top:20px;padding-bottom:20px}
+.team-ai-footnote{color:var(--muted);font-size:12px;line-height:1.7;padding:2px 2px 4px}
+.team-ai-empty{min-height:120px;display:flex;flex-direction:column;justify-content:center;gap:18px;padding:18px 2px;color:var(--muted)}
+.team-ai-empty p{margin:0;line-height:1.8}
+.team-ai-placeholder{display:grid;gap:10px}
+.team-ai-placeholder span{height:8px;background:var(--line);border-radius:6px;width:92%}
+.team-ai-placeholder span:nth-child(2){width:76%}
+.team-ai-placeholder span:nth-child(3){width:58%}
+.team-oral .team-ai-trigger{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-width:215px;min-height:44px;padding:10px 16px;border:1px solid var(--line-strong);border-radius:8px;background:var(--tint-strong);color:var(--ink);transition:background-color 150ms ease-in-out,opacity 150ms ease-in-out}
+.team-oral .team-ai-trigger[aria-busy="true"]{opacity:1;cursor:progress}
+.team-ai-spinner{width:13px;height:13px;box-sizing:border-box;border:1.5px solid currentColor;border-right-color:transparent;border-radius:50%;animation:team-ai-spin 800ms linear infinite;flex-shrink:0}
+@keyframes team-ai-spin{to{transform:rotate(360deg)}}
+.team-ai-status{min-height:1.8em;margin:8px 0;color:var(--muted);font-size:13px}
+@media(max-width:600px){.team-ai-evaluation{padding:14px}.team-ai-block{padding:14px}.team-ai-block-heading{gap:8px}}
+@media(prefers-reduced-motion:reduce){.team-ai-spinner{animation:none}.team-oral .team-ai-trigger{transition:none}}

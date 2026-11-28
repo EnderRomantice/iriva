@@ -53,10 +53,11 @@ async function save(req: Request, editing: boolean) {
         const r = await db.prepare("UPDATE member_applications SET name=?,goal=?,level=?,timezone=?,availability=?,interests=?,contact=?,age_band=?,life_stage=?,location=?,mbti=?,partner_preferences=?,suggestion=?,availability_slots=?,contact_preference=?,updated=?,revision=revision+1,status=?,household=? WHERE user_id=? AND revision=? AND household IS NULL").run(name, goal, level, timezone, availability, val('interests', 1000), val('contact', 200), ageBand, lifeStage, location, mbti, val('partner_preferences', 800), val('suggestion', 1000), slots, contactPreference, now, nextStatus, null, u.userId, revision);
         if (!r.changes) throw new Conflict();
         if(recording) await saveRecording(await workspaceRepository(),String(existing.id),recording,now);
-        return { status: nextStatus, household: null };
+        const savedRecording = await db.prepare('SELECT updated FROM application_recordings WHERE application_id=?').get(String(existing.id)) as {updated:string}|undefined;
+        return { status: nextStatus, household: null, recording_updated: savedRecording?.updated || '' };
       }).catch(e => { if (e instanceof Conflict) return { error: '资料或分组已变化，请刷新后查看。', status: 409 }; throw e; });
       if ('error' in result) return out({ error: result.error }, result.status);
-      return out({ ok: true, revision: revision + 1, status: result.status, paymentConfirmed: result.status === 'pending', household: result.household });
+      return out({ ok: true, revision: revision + 1, status: result.status, paymentConfirmed: result.status === 'pending', household: result.household, recording_updated: result.recording_updated });
     }
     if (existing) return out({ error: '你已提交过资料，请刷新后查看或补充。' }, 409);
     const result = await pilotTransaction(async () => {
@@ -64,9 +65,10 @@ async function save(req: Request, editing: boolean) {
       const applicationId=randomUUID();
       await db.prepare('INSERT INTO member_applications (id,user_id,email,name,role,language,goal,level,timezone,availability,interests,contact,plan,status,notes,created,age_band,life_stage,location,mbti,partner_preferences,suggestion,availability_slots,contact_preference,updated,household) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(applicationId, u.userId, u.email.toLowerCase(), name, role, language, goal, level, timezone, availability, val('interests', 1000), val('contact', 200), plan, nextStatus, '', now, ageBand, lifeStage, location, mbti, val('partner_preferences', 800), val('suggestion', 1000), slots, contactPreference, now, null);
       if(recording) await saveRecording(await workspaceRepository(),applicationId,recording,now);
-      return { status: nextStatus, household: null };
+      const savedRecording = await db.prepare('SELECT updated FROM application_recordings WHERE application_id=?').get(applicationId) as {updated:string}|undefined;
+      return { status: nextStatus, household: null, recording_updated: savedRecording?.updated || '' };
     });
-    return out({ ok: true, revision: 0, status: result.status, paymentConfirmed: result.status === 'pending', household: result.household });
+    return out({ ok: true, revision: 0, status: result.status, paymentConfirmed: result.status === 'pending', household: result.household, recording_updated: result.recording_updated });
   } catch (e) { console.error(e); return out({ error: '资料未能保存，请稍后重试。' }, 503); }
 }
 export async function POST(req: Request) { return save(req, false); }

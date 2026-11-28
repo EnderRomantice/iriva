@@ -95,8 +95,8 @@ test('learners wait outside the workspace, must supply WeChat, and enter only af
     const team = await session(seedId(6), 'password');
     const own=(await (await api.get('/api/apply')).json()).application;
     const before=(await (await team.request.get('/api/team')).json()).applications;
-    expect(before.some((a:{user_id:string})=>a.user_id===first.id)).toBe(false);
-    expect((await team.request.post('/api/team',{headers,data:{action:'review',id:own.id,revision:own.revision,status:'shortlist'}})).status()).toBe(409);
+    expect(before.find((a:{user_id:string})=>a.user_id===first.id).payment_status).toBe('unpaid');
+    expect((await team.request.post('/api/team',{headers,data:{action:'review',id:own.id,revision:own.revision,status:'shortlist'}})).status()).toBe(200);
     expect((await api.post('/api/apply/checkout',{headers,data:{plan:'everyday'}})).status()).toBe(400);
     await expect(page.getByRole('radio',{name:/基础档/})).toBeDisabled();
     await expect(page.getByRole('radio',{name:/专业档/})).toBeDisabled();

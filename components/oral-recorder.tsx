@@ -1,5 +1,7 @@
 'use client';
+import OralAudioPlayer from './oral-audio-player';
 import {useEffect,useRef,useState} from 'react';
+import {Mic,Square} from 'lucide-react';
 import {recordingMaxBytes,recordingMaxSeconds,type OralRecording} from '../lib/oral-recording';
 
 type Props={value:OralRecording|undefined;onChange:(value:OralRecording|undefined)=>void;onBusyChange:(busy:boolean)=>void;saved?:string;disabled?:boolean};
@@ -41,8 +43,8 @@ export default function OralRecorder({value,onChange,onBusyChange,saved,disabled
   }catch(e){stream.current?.getTracks().forEach(t=>t.stop());if(mounted.current){setPhase('idle');setError((e as Error).name==='NotAllowedError'?'麦克风权限未开启。请在浏览器设置中允许麦克风后重试，也可以先提交资料。':(e as Error).name==='NotFoundError'?'没有检测到麦克风，请连接后重试。':(e as Error).message)}}
  }
  const src=value?`data:${value.type};base64,${value.data}`:saved?`/api/apply/recording?v=${encodeURIComponent(saved)}`:undefined;
- return <fieldset className="apply-oral"><legend>英文口语录音</legend><p><strong>Please introduce yourself in English.</strong><br/>请用英文介绍一下自己，再回答下面两到三个问题。</p><ol><li>What do you do, and where do you live?<small>你平时学习或做什么工作？住在哪个城市？</small></li><li>What do you enjoy doing in your free time, and why?<small>空闲时喜欢做什么？为什么？</small></li><li>Why do you want to improve your English?<small>为什么想提高英语？最希望在哪些场景用到？</small></li></ol><p className="apply-note">建议 1–2 分钟，最多 2 分钟。按自己的水平自然表达即可，不必准备完美答案。录音随资料提交，仅供你本人和青鸟团队试听、人工评估，不向其他学员公开。暂时不方便录音，也可以先提交资料。</p>
- {src&&<div><audio controls preload="metadata" src={src} aria-label="试听口语录音"/><p className="apply-note">{value?'新录音尚未提交，离开页面不会保存在草稿中。':'已提交的口语录音。'}重录后需提交资料才会替换原录音。</p></div>}
- <div className="apply-actions">{phase==='recording'?<button type="button" className="apply-button" onClick={stop}>停止录音 · {seconds} / 120 秒</button>:<button type="button" className="apply-secondary" disabled={busy||disabled} onClick={start}>{phase==='requesting'?'正在请求麦克风…':phase==='processing'?'正在处理录音…':src?'重新录制':'开始录音'}</button>}{value&&!busy&&<button type="button" className="apply-secondary" disabled={disabled} onClick={()=>onChange(undefined)}>撤销本次录音</button>}</div>
+ return <fieldset className="apply-oral"><legend>英文口语录音</legend><p><strong>Please introduce yourself in English.</strong><br/>请用英文介绍一下自己，再回答下面两到三个问题。</p><ol><li>What do you do, and where do you live?<small>你平时学习或做什么工作？住在哪个城市？</small></li><li>What do you enjoy doing in your free time, and why?<small>空闲时喜欢做什么？为什么？</small></li><li>Why do you want to improve your English?<small>为什么想提高英语？最希望在哪些场景用到？</small></li></ol><p className="apply-note">建议 1–2 分钟，最多 2 分钟。按自己的水平自然表达即可，不必准备完美答案。提交录音即同意青鸟团队试听、人工评估，并通过第三方 AI 服务转写和辅助评估口语水平。AI 由团队手动启动，录音不向其他学员公开。暂时不方便录音，也可以先提交资料。</p>
+ {src&&<div><OralAudioPlayer src={src} label="试听口语录音"/><p className="apply-note">{value?'新录音尚未提交，离开页面不会保存在草稿中。':'录音已保存在后台，修改其他资料无需重新录制。'}重录后需提交资料才会替换原录音。</p></div>}
+ <div className="apply-actions">{phase==='recording'?<button type="button" className="apply-button apply-record-button" onClick={stop}><Square size={18} fill="currentColor" aria-hidden="true"/>停止录音 · {seconds} / 120 秒</button>:<button type="button" className="apply-button apply-record-button" disabled={busy||disabled} aria-busy={busy} onClick={start}><Mic size={20} strokeWidth={2.25} aria-hidden="true"/>{phase==='requesting'?'正在请求麦克风…':phase==='processing'?'正在处理录音…':src?'重新录制':'开始录音'}</button>}{value&&!busy&&<button type="button" className="apply-secondary" disabled={disabled} onClick={()=>onChange(undefined)}>撤销本次录音</button>}</div>
  <p role="status" className="apply-note">{phase==='recording'?'正在录音，请说话；完成后点击停止。':''}</p>{error&&<p role="alert" className="apply-error">{error}</p>}</fieldset>
 }
